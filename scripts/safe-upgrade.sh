@@ -693,24 +693,24 @@ try:
         'same => n,Pickup(${ARG2}@ext-local&${ARG2}@from-internal&${ARG2}@from-did-direct&${ARG2}@ext-group)\n'
         'same => n,Return()'
     )
+    pickup_alias_re = re.compile(
+        r'exten\s*=>\s*_\*1X\.,1,NoOp\(--- Directed Pickup Alias to \* ---\)\s*\r?\n'
+        r'\s*same\s*=>\s*n,PickupChan\(PJSIP/\$\{EXTEN:2\}&SIP/\$\{EXTEN:2\}&Local/\$\{EXTEN:2\}@ext-local,p\)\s*\r?\n'
+        r'\s*same\s*=>\s*n,Pickup\(\$\{EXTEN:2\}@ext-local&\$\{EXTEN:2\}@from-internal&\$\{EXTEN:2\}@from-did-direct&\$\{EXTEN:2\}@ext-group\)\s*\r?\n'
+        r'\s*same\s*=>\s*n,Hangup\(\)\s*\r?\n'
+        r'\s*exten\s*=>\s*_\*8X\.,1,NoOp\(--- Directed Pickup Alias to \* ---\)\s*\r?\n'
+        r'\s*same\s*=>\s*n,PickupChan\(PJSIP/\$\{EXTEN:2\}&SIP/\$\{EXTEN:2\}&Local/\$\{EXTEN:2\}@ext-local,p\)\s*\r?\n'
+        r'\s*same\s*=>\s*n,Pickup\(\$\{EXTEN:2\}@ext-local&\$\{EXTEN:2\}@from-internal&\$\{EXTEN:2\}@from-did-direct&\$\{EXTEN:2\}@ext-group\)\s*\r?\n'
+        r'\s*same\s*=>\s*n,Hangup\(\)'
+    )
+    new_alias_block = (
+        'exten => _*1X.,1,Gosub(from-internal-custom,sokrat-directed-pickup,1(${EXTEN:1},${EXTEN:2}))\n'
+        'same => n,Hangup()\n'
+        'exten => _*8X.,1,Gosub(from-internal-custom,sokrat-directed-pickup,1(${EXTEN:1},${EXTEN:2}))\n'
+        'same => n,Hangup()\n\n'
+        + pickup_handler
+    )
     if 'exten => sokrat-directed-pickup,1,NoOp(--- Directed Pickup: target ${ARG1} (alias ${ARG2}) ---)' not in content:
-        pickup_alias_re = re.compile(
-            r'exten\s*=>\s*_\*1X\.,1,NoOp\(--- Directed Pickup Alias to \* ---\)\s*\r?\n'
-            r'\s*same\s*=>\s*n,PickupChan\(PJSIP/\$\{EXTEN:2\}&SIP/\$\{EXTEN:2\}&Local/\$\{EXTEN:2\}@ext-local,p\)\s*\r?\n'
-            r'\s*same\s*=>\s*n,Pickup\(\$\{EXTEN:2\}@ext-local&\$\{EXTEN:2\}@from-internal&\$\{EXTEN:2\}@from-did-direct&\$\{EXTEN:2\}@ext-group\)\s*\r?\n'
-            r'\s*same\s*=>\s*n,Hangup\(\)\s*\r?\n'
-            r'\s*exten\s*=>\s*_\*8X\.,1,NoOp\(--- Directed Pickup Alias to \* ---\)\s*\r?\n'
-            r'\s*same\s*=>\s*n,PickupChan\(PJSIP/\$\{EXTEN:2\}&SIP/\$\{EXTEN:2\}&Local/\$\{EXTEN:2\}@ext-local,p\)\s*\r?\n'
-            r'\s*same\s*=>\s*n,Pickup\(\$\{EXTEN:2\}@ext-local&\$\{EXTEN:2\}@from-internal&\$\{EXTEN:2\}@from-did-direct&\$\{EXTEN:2\}@ext-group\)\s*\r?\n'
-            r'\s*same\s*=>\s*n,Hangup\(\)'
-        )
-        new_alias_block = (
-            'exten => _*1X.,1,Gosub(from-internal-custom,sokrat-directed-pickup,1(${EXTEN:1},${EXTEN:2}))\n'
-            'same => n,Hangup()\n'
-            'exten => _*8X.,1,Gosub(from-internal-custom,sokrat-directed-pickup,1(${EXTEN:1},${EXTEN:2}))\n'
-            'same => n,Hangup()\n\n'
-            + pickup_handler
-        )
         content, patched = pickup_alias_re.subn(new_alias_block, content)
         if patched:
             print("  Patched *1<ext> / *8<ext> pickup aliases to prefer the full extension")

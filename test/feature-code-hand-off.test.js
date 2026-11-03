@@ -14,6 +14,7 @@ const {
     selectArgumentCodes,
     buildFeatureCodeBlock,
     patchExtensionsCustomConf,
+    patchLegacyPickupAliases,
     syncFeatureCodeHandOff
 } = require('../lib/feature-code-hand-off');
 
@@ -262,6 +263,53 @@ test('feature-code hand-off creates [from-internal-custom] when it is missing', 
     assert.ok(content.includes('[from-internal-custom]'), 'context created');
     assert.ok(content.includes('exten => *97,1,Goto(from-internal-additional,${EXTEN},1)'), 'literal hand-off present');
     fs.rmSync(path.dirname(file), { recursive: true, force: true });
+});
+
+function legacyOverrideDialplan() {
+    return [
+        '[from-internal-custom]',
+        'exten => _*1X.,1,NoOp(--- Directed Pickup Alias to * ---)',
+        'same => n,PickupChan(PJSIP/${EXTEN:2}&SIP/${EXTEN:2}&Local/${EXTEN:2}@ext-local,p)',
+        'same => n,Pickup(${EXTEN:2}@ext-local&${EXTEN:2}@from-internal&${EXTEN:2}@from-did-direct&${EXTEN:2}@ext-group)',
+        'same => n,Hangup()',
+        'exten => _*8X.,1,NoOp(--- Directed Pickup Alias to * ---)',
+        'same => n,PickupChan(PJSIP/${EXTEN:2}&SIP/${EXTEN:2}&Local/${EXTEN:2}@ext-local,p)',
+        'same => n,Pickup(${EXTEN:2}@ext-local&${EXTEN:2}@from-internal&${EXTEN:2}@from-did-direct&${EXTEN:2}@ext-group)',
+        'same => n,Hangup()',
+        ''
+    ].join('\n');
+}
+
+test('the legacy pickup alias block in extensions_override_issabel.conf is migrated', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sokrat-override-'));
+    const override = path.join(dir, 'extensions_override_issabel.conf');
+    fs.writeFileSync(override, legacyOverrideDialplan(), 'utf8');
+
+    const first = patchLegacyPickupAliases(override);
+    assert.equal(first.changed, true, 'the old block is replaced');
+    const content = fs.readFileSync(override, 'utf8');
+    assert.ok(content.includes('exten => _*1X.,1,Gosub(from-internal-custom,sokrat-directed-pickup,1(${EXTEN:1},${EXTEN:2}))'));
+    assert.ok(content.includes('exten => _*8X.,1,Gosub(from-internal-custom,sokrat-directed-pickup,1(${EXTEN:1},${EXTEN:2}))'));
+    assert.ok(!content.includes('NoOp(--- Directed Pickup Alias to * ---)'), 'old alias handler is gone');
+
+    const second = patchLegacyPickupAliases(override);
+    assert.equal(second.changed, false, 'second run is a no-op');
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('the sync migrates the override file when one is supplied', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sokrat-override-'));
+    const custom = path.join(dir, 'extensions_custom.conf');
+    const override = path.join(dir, 'extensions_override_issabel.conf');
+    fs.writeFileSync(custom, '[from-internal-custom]\n', 'utf8');
+    fs.writeFileSync(override, legacyOverrideDialplan(), 'utf8');
+
+    const pool = { query: async () => [[{ code: '*97' }]] };
+    const res = await syncFeatureCodeHandOff(pool, { filePath: custom, overrideFilePath: override });
+    assert.equal(res.overrideChanged, true, 'override migration is reported');
+    assert.equal(res.changed, true, 'a change in either file triggers a reload');
+    assert.ok(fs.readFileSync(override, 'utf8').includes('sokrat-directed-pickup,1(${EXTEN:1},${EXTEN:2})'));
+    fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test('feature-code hand-off reads the codes from Issabel featurecodes table', async () => {
