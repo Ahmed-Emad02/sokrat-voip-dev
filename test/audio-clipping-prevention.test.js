@@ -11,7 +11,7 @@ test('installers keep recording gain neutral and preserve jitter/ringback', () =
         assert.equal(text.includes('v(3)V(-1)'), false, `${name} must not apply 3x recording gain`);
         assert.match(text, /MIXMON_OPTS=.*v\(1\)V\(1\)/, `${name} must default to neutral recording gain`);
         assert.match(text, /^same => n,Set\(JITTERBUFFER\(adaptive\)=default\)$/m, `${name} must enable adaptive jitter buffer`);
-        assert.match(text, /Set\(DIAL_TRUNK_OPTIONS=\$\{DIAL_TRUNK_OPTIONS\}r\)/, `${name} must enable local ringback`);
+        assert.match(text, /Set\(DIAL_TRUNK_OPTIONS=\$\{STRREPLACE\(DIAL_TRUNK_OPTIONS,r\)\}R\)/, `${name} must allow carrier early media`);
         assert.match(text, /CALLER_DENOISE=off/, `${name} must default RNNoise off`);
         assert.match(text, /CALLER_AGC=off/, `${name} must default AGC off`);
         assert.match(text, /database put AMPUSER \{ext\}\/ai_denoise off/, `${name} must default new extensions to RNNoise off`);

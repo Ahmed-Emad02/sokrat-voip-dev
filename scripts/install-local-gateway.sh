@@ -65,6 +65,25 @@ if [ ! -s "$ADMIN_PASSWORD_FILE" ]; then
     (umask 077; head -c 18 /dev/urandom | base64 | tr -d '=\n' > "$ADMIN_PASSWORD_FILE")
 fi
 ADMIN_PASS=$(cat "$ADMIN_PASSWORD_FILE")
+LOCAL_PBX_ID_FILE="$ETC_DIR/local-pbx-id"
+if [ ! -s "$LOCAL_PBX_ID_FILE" ]; then
+    (umask 077; printf 'pbx_%s\n' "$(openssl rand -hex 8)" > "$LOCAL_PBX_ID_FILE")
+fi
+LOCAL_PBX_ID=$(cat "$LOCAL_PBX_ID_FILE")
+# Reuse the PBX id already present in the local control store.
+if [ -s "$DATA_DIR/control.json" ]; then
+    EXISTING_PBX_ID=$(python3 -c 'import json,sys; c=json.load(open(sys.argv[1])); print((c.get("pbx") or [{}])[0].get("id") or "")' "$DATA_DIR/control.json" 2>/dev/null || true)
+    if printf '%s' "$EXISTING_PBX_ID" | grep -Eq '^pbx_[a-f0-9]{16}$'; then
+        LOCAL_PBX_ID="$EXISTING_PBX_ID"
+        printf '%s\n' "$LOCAL_PBX_ID" > "$LOCAL_PBX_ID_FILE"
+    fi
+fi
+LOCAL_HOOK_FILE="$ETC_DIR/local-hook-token"
+if [ ! -s "$LOCAL_HOOK_FILE" ]; then
+    (umask 077; openssl rand -hex 32 > "$LOCAL_HOOK_FILE")
+fi
+LOCAL_HOOK_TOKEN=$(cat "$LOCAL_HOOK_FILE")
+LOCAL_HOOK_HASH=$(printf '%s' "$LOCAL_HOOK_TOKEN" | sha256sum | awk '{print $1}')
 ADMIN_HASH=$(printf '%s' "$ADMIN_PASS" | python3 -c '
 import os, base64, hashlib, sys
 pwd = sys.stdin.buffer.read()
@@ -105,6 +124,10 @@ SOKRAT_HEARTBEAT_ENABLED=true
 SOKRAT_HEARTBEAT_STALE_MS=180000
 SOKRAT_HEARTBEAT_TICK_MS=30000
 PBX_PROXY_CONFIG=/dev/null
+LOCAL_AUTO_APPROVE=true
+LOCAL_PBX_ID=${LOCAL_PBX_ID}
+LOCAL_SIP_AUTH=true
+PBX_AUTH_URL=http://127.0.0.1:8080
 EOF
 chmod 0600 "$ETC_DIR/gateway.env"
 
@@ -115,16 +138,60 @@ CONTROL_ADMIN_PASSWORD_HASH='${ADMIN_HASH}'
 TENANT_RUNTIME_FILE=/var/lib/sokrat-gateway/tenant-runtime.json
 SOKRAT_HEARTBEAT_ENABLED=true
 GOOGLE_APPLICATION_CREDENTIALS=/etc/sokrat/firebase-service-account.json
+LOCAL_AUTO_APPROVE=true
+LOCAL_PBX_ID=${LOCAL_PBX_ID}
+LOCAL_SIP_AUTH=true
+PBX_AUTH_URL=http://127.0.0.1:8080
 EOF
 chmod 0600 "$ETC_DIR/gateway-control.env"
 
-# Start from an empty control store; the tenant dashboard pairs the PBX.
+# Seed the local-only PBX identity. Cloud records are never copied here.
+NOW=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
 if [ ! -s "$DATA_DIR/control.json" ]; then
-    printf '%s\n' '{"schemaVersion":2,"pbx":[],"extensions":[],"enrollmentTokens":[],"devices":[],"audit":[]}' > "$DATA_DIR/control.json"
+    python3 - "$DATA_DIR/control.json" "$LOCAL_PBX_ID" "$NOW" <<'PYBOOT'
+import json, sys
+path, pbx_id, now = sys.argv[1:]
+record = {
+    "schemaVersion": 2,
+    "pbx": [{
+        "id": pbx_id,
+        "name": "local-pbx",
+        "wsURL": "ws://127.0.0.1:8088/ws",
+        "apiURL": "http://127.0.0.1:8095/",
+        "mediaIps": ["127.0.0.1"],
+        "enabled": True,
+        "management": {
+            "customer": "local",
+            "loginHostname": None,
+            "extensionPolicyRequired": False,
+            "approvalStatus": "approved",
+            "reviewedInstallationId": None
+        },
+        "createdAt": now,
+        "updatedAt": now
+    }],
+    "extensions": [],
+    "enrollmentTokens": [],
+    "devices": [],
+    "audit": []
+}
+with open(path, "w") as handle:
+    json.dump(record, handle, indent=2)
+PYBOOT
 fi
 if [ ! -s "$DATA_DIR/tenant-runtime.json" ]; then
-    printf '%s\n' '{"relays":{},"hookHashes":{}}' > "$DATA_DIR/tenant-runtime.json"
+    printf '{"relays":{},"hookHashes":{"%s":"%s"}}\n' "$LOCAL_PBX_ID" "$LOCAL_HOOK_HASH" > "$DATA_DIR/tenant-runtime.json"
+else
+    python3 -c 'import json,sys; p=sys.argv[1]; d=json.load(open(p)); d.setdefault("relays",{}); d.setdefault("hookHashes",{})[sys.argv[2]]=sys.argv[3]; json.dump(d,open(p,"w"),indent=2)' "$DATA_DIR/tenant-runtime.json" "$LOCAL_PBX_ID" "$LOCAL_HOOK_HASH"
 fi
+# PBX-side local hook. This is intentionally loopback-only.
+cat > "$ETC_DIR/local-gateway-hook.json" <<EOF
+{"gatewayUrl":"http://127.0.0.1:18080","pbxId":"${LOCAL_PBX_ID}","token":"${LOCAL_HOOK_TOKEN}"}
+EOF
+chmod 0640 "$ETC_DIR/local-gateway-hook.json"
+chown root:asterisk "$ETC_DIR/local-gateway-hook.json" 2>/dev/null || true
+install -m 0640 "$ETC_DIR/local-gateway-hook.json" /etc/sokrat/local-gateway-hook.json
+chown root:asterisk /etc/sokrat/local-gateway-hook.json 2>/dev/null || true
 
 # Build or load the multi-tenant image if it is not already present.
 if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then

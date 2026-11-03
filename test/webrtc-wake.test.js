@@ -197,9 +197,12 @@ config={'gatewayUrl':'https://gateway.example:7443','caFile':'/etc/frp/gateway-c
 calls=[]
 class Reply:
  status=200
+ closed=False
  def __enter__(self):return self
- def __exit__(self,*args):pass
- def read(self,size):return json.dumps(result).encode()
+ def __exit__(self,*args):self.closed=True
+ def read(self,size):
+  if self.closed:return b''
+  return json.dumps(result).encode()
 def opener(request,**kwargs):
  calls.append((request,kwargs));return Reply()
 args=['404','%2B442012345678','Caller%20Name','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa']
@@ -221,12 +224,13 @@ print('PASS')
 });
 
 test('dispatcher stdout is exactly one decision byte for Asterisk SHELL comparisons', () => {
-    const script = `import contextlib,importlib.util,io,stat,sys,types,unittest.mock as mock
+    const script = `import contextlib,importlib.util,io,json,stat,sys,types,unittest.mock as mock
 spec=importlib.util.spec_from_file_location('wake',${JSON.stringify(path.join(root, 'scripts/webrtc-wake-dispatch.py'))})
 wake=importlib.util.module_from_spec(spec);spec.loader.exec_module(wake)
 info=types.SimpleNamespace(st_mode=stat.S_IFREG|0o640,st_uid=0,st_size=2)
 dispatch_argv=['script','404','caller','name','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa']
-with mock.patch.object(wake.Path,'lstat',return_value=info), mock.patch.object(wake.Path,'read_text',return_value='{}'):
+central=json.dumps({'gatewayUrl':'https://gateway.example:7443','caFile':'/etc/frp/gateway-ca.crt','pbxId':'pbx_'+'a'*16,'token':'a'*64})
+with mock.patch.object(wake.Path,'lstat',return_value=info), mock.patch.object(wake.Path,'read_text',return_value=central):
  for decision,expected in [(True,'1'),(False,'0')]:
   output=io.StringIO()
   with mock.patch.object(wake,'dispatch',return_value=decision),mock.patch.object(sys,'argv',dispatch_argv),contextlib.redirect_stdout(output):wake.main()
@@ -300,12 +304,13 @@ print('PASS')
 });
 
 test('main routes two-arg cancel and emits correct stdout decision byte', () => {
-    const script = `import contextlib,importlib.util,io,stat,sys,types,unittest.mock as mock
+    const script = `import contextlib,importlib.util,io,json,stat,sys,types,unittest.mock as mock
 spec=importlib.util.spec_from_file_location('wake',${JSON.stringify(path.join(root, 'scripts/webrtc-wake-dispatch.py'))})
 wake=importlib.util.module_from_spec(spec);spec.loader.exec_module(wake)
 info=types.SimpleNamespace(st_mode=stat.S_IFREG|0o640,st_uid=0,st_size=2)
 cancel_argv=['script','223','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa']
-with mock.patch.object(wake.Path,'lstat',return_value=info), mock.patch.object(wake.Path,'read_text',return_value='{}'):
+central=json.dumps({'gatewayUrl':'https://gateway.example:7443','caFile':'/etc/frp/gateway-ca.crt','pbxId':'pbx_'+'a'*16,'token':'a'*64})
+with mock.patch.object(wake.Path,'lstat',return_value=info), mock.patch.object(wake.Path,'read_text',return_value=central):
  for decision,expected in [(True,'1'),(False,'0')]:
   output=io.StringIO()
   with mock.patch.object(wake,'cancel',return_value=decision),mock.patch.object(sys,'argv',cancel_argv),contextlib.redirect_stdout(output):wake.main()
