@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="<%= currentLang === 'ar' ? 'ar' : 'en' %>" dir="<%= isRtl ? 'rtl' : 'ltr' %>">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= isRtl ? 'تقرير لوحة المتابعة' : 'Dashboard Report' %> — Sokrat VoIP</title>
+    <script src="/js/echarts.min.js"></script>
+    <style>
+        :root {
+            --ink: #111827;
+            --muted: #6b7280;
+            --line: #d1d5db;
+            --panel: #f9fafb;
+            --accent: #dc2626;
+            --accent-2: #0ea5e9;
+            --accent-3: #10b981;
+            --accent-4: #8b5cf6;
+            --accent-5: #f59e0b;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            background: #e5e7eb;
+            color: var(--ink);
+            font-family: 'Cairo', 'Tahoma', 'Segoe UI', Arial, sans-serif;
+            font-size: 12px;
+            line-height: 1.45;
+        }
+        .page {
+            width: 1120px;
+            max-width: calc(100% - 32px);
+            margin: 20px auto;
+            background: #fff;
+            padding: 28px 32px;
+            box-shadow: 0 10px 30px rgba(0,0,0,.12);
+        }
+        .toolbar {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        .btn {
+            border: 1px solid var(--line);
+            background: #fff;
+            color: var(--ink);
+            border-radius: 8px;
+            padding: 8px 14px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .btn-primary {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #fff;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 24px;
+            border-bottom: 3px solid var(--accent);
+            padding-bottom: 14px;
+            margin-bottom: 16px;
+        }
+        .brand {
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: .16em;
+            color: var(--accent);
+            text-transform: uppercase;
+        }
+        h1 {
+            margin: 4px 0 2px;
+            font-size: 28px;
+            line-height: 1.15;
+        }
+        .subtitle { color: var(--muted); font-size: 12px; }
+        .meta {
+            text-align: <%= isRtl ? 'left' : 'right' %>;
+            color: var(--muted);
+            font-size: 11px;
+            white-space: nowrap;
+        }
+        .meta strong { color: var(--ink); }
+        .filter-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 8px;
+            margin-bottom: 18px;
+        }
+        .filter-item {
+            border: 1px solid var(--line);
+            background: var(--panel);
+            border-radius: 8px;
+            padding: 7px 9px;
+            min-width: 0;
+        }
+        .filter-item .k {
+            display: block;
+            font-size: 9px;
+            font-weight: 800;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: .08em;
+            margin-bottom: 2px;
+        }
+        .filter-item .v {
+            display: block;
+            font-size: 11px;
+            font-weight: 700;
+            overflow-wrap: anywhere;
+        }
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 10px;
+            margin-bottom: 18px;
+        }
+        .kpi {
+            border: 1px solid var(--line);
+            border-top: 4px solid var(--accent);
+            border-radius: 10px;
+            padding: 10px 12px;
+            background: #fff;
+        }
+        .kpi .label {
+            font-size: 10px;
+            font-weight: 800;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: .06em;
+        }
+        .kpi .value {
+            font-size: 24px;
+            font-weight: 900;
+            margin-top: 2px;
+        }
+        .kpi .hint { color: var(--muted); font-size: 10px; }
+        .section {
+            margin-top: 16px;
+            break-inside: avoid;
+        }
+        .section h2 {
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+            margin: 0 0 8px;
+            padding-bottom: 5px;
+            border-bottom: 1px solid var(--line);
+        }
+        .chart-row {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+        .chart-row.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .chart-card {
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            padding: 8px 10px 4px;
+            break-inside: avoid;
+        }
+        .chart {
+            width: 100%;
+            height: 220px;
+        }
+        .chart.tall { height: 260px; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+            margin-bottom: 8px;
+        }
+        th, td {
+            border: 1px solid var(--line);
+            padding: 5px 7px;
+            text-align: <%= isRtl ? 'right' : 'left' %>;
+            vertical-align: top;
+        }
+        th {
+            background: var(--panel);
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+        }
+        tr { break-inside: avoid; }
+        .muted { color: var(--muted); }
+        .empty {
+            border: 1px dashed var(--line);
+            border-radius: 10px;
+            padding: 22px;
+            text-align: center;
+            color: var(--muted);
+        }
+        .hour-grid {
+            display: grid;
+            grid-template-columns: repeat(8, minmax(0, 1fr));
+            gap: 4px;
+        }
+        .hour-cell {
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            padding: 5px 6px;
+            text-align: center;
+            background: var(--panel);
+        }
+        .hour-cell b { display: block; font-size: 11px; }
+        .hour-cell span { font-size: 10px; color: var(--muted); }
+        .footer {
+            margin-top: 18px;
+            padding-top: 10px;
+            border-top: 1px solid var(--line);
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            color: var(--muted);
+            font-size: 10px;
+        }
+        @page {
+            size: A4 landscape;
+            margin: 10mm;
+        }
+        @media print {
+            body { background: #fff; }
+            .page { width: auto; max-width: none; margin: 0; padding: 0; box-shadow: none; }
+            .no-print { display: none !important; }
+            .section { break-inside: avoid; }
+            .chart-card { break-inside: avoid; }
+            .kpi-grid { break-inside: avoid; }
+            thead { display: table-header-group; }
+            tr { break-inside: avoid; }
+        }
+    </style>
+</head>
+<body>
+<%
+    const L = isRtl ? {
+        title: 'تقرير لوحة المتابعة التنفيذية',
+        generated: 'تم الإنشاء',
+        range: 'الفترة',
+        filters: 'الفلاتر المطبقة',
+        extensions: 'التحويلات',
+        dispositions: 'الحالات',
+        direction: 'الاتجاه',
+        scope: 'نطاق المكالمة',
+        trunks: 'الخطوط',
+        duration: 'المدة',
+        searchSrc: 'بحث المصدر',
+        searchDst: 'بحث الهدف',
+        searchDid: 'بحث DID',
+        searchUid: 'بحث UniqueID',
+        totalCalls: 'إجمالي المكالمات',
+        answered: 'تم الرد',
+        answerRate: 'نسبة الرد',
+        noAnswer: 'لم يتم الرد',
+        busy: 'مشغول',
+        failed: 'فاشل / ازدحام',
+        talkTime: 'زمن المحادثات',
+        avgDuration: 'متوسط المدة',
+        inbound: 'واردة',
+        outbound: 'صادرة',
+        internal: 'داخلية',
+        external: 'خارجية',
+        trend: 'اتجاه حجم المكالمات',
+        hourly: 'توزيع المكالمات بالساعة',
+        topTalkers: 'أكثر المتحدثين',
+        dispositionChart: 'تصنيف المكالمات',
+        durationChart: 'مدة المكالمات',
+        scopeChart: 'نطاق المكالمات',
+        date: 'التاريخ',
+        total: 'الإجمالي',
+        calls: 'المكالمات',
+        disposition: 'الحالة',
+        count: 'العدد',
+        percentage: 'النسبة',
+        rank: 'الترتيب',
+        name: 'الاسم',
+        talkSeconds: 'ثواني المحادثة',
+        talkTimeCol: 'زمن المحادثة',
+        hour: 'الساعة',
+        bucket: 'الفئة',
+        scopeCol: 'النطاق',
+        empty: 'لا توجد مكالمات مطابقة للفلاتر المحددة.',
+        print: 'طباعة / حفظ PDF',
+        close: 'إغلاق',
+        footer: 'تم إنشاؤه بواسطة Sokrat VoIP',
+        all: 'الكل',
+        seconds: 'ثانية',
+        minutes: 'دقيقة'
+    } : {
+        title: 'Executive Dashboard Report',
+        generated: 'Generated',
+        range: 'Period',
+        filters: 'Applied Filters',
+        extensions: 'Extensions',
+        dispositions: 'Dispositions',
+        direction: 'Direction',
+        scope: 'Call Scope',
+        trunks: 'Trunks',
+        duration: 'Duration',
+        searchSrc: 'Source search',
+        searchDst: 'Destination search',
+        searchDid: 'DID search',
+        searchUid: 'UniqueID search',
+        totalCalls: 'Total Calls',
+        answered: 'Answered',
+        answerRate: 'Answer Rate',
+        noAnswer: 'No Answer',
+        busy: 'Busy',
+        failed: 'Failed / Congestion',
+        talkTime: 'Total Talk Time',
+        avgDuration: 'Avg. Duration',
+        inbound: 'Inbound',
+        outbound: 'Outbound',
+        internal: 'Internal',
+        external: 'External',
+        trend: 'Call Volume Trend',
+        hourly: 'Hourly Call Distribution',
+        topTalkers: 'Top Talkers',
+        dispositionChart: 'Call Disposition',
+        durationChart: 'Call Duration',
+        scopeChart: 'Call Scope',
+        date: 'Date',
+        total: 'Total',
+        calls: 'Calls',
+        disposition: 'Disposition',
+        count: 'Count',
+        percentage: 'Percentage',
+        rank: 'Rank',
+        name: 'Name',
+        talkSeconds: 'Talk Seconds',
+        talkTimeCol: 'Talk Time',
+        hour: 'Hour',
+        bucket: 'Bucket',
+        scopeCol: 'Scope',
+        empty: 'No calls match the selected filters.',
+        print: 'Print / Save as PDF',
+        close: 'Close',
+        footer: 'Generated by Sokrat VoIP',
+        all: 'All',
+        seconds: 'sec',
+        minutes: 'min'
+    };
+    const fmtPct = (v, total) => total ? (Math.round((v / total) * 1000) / 10) + '%' : '0%';
+    const fmtMin = (sec) => {
+        sec = Number(sec) || 0;
+        const m = Math.floor(sec / 60);
+        const s = sec % 60;
+        return m ? (m + ' ' + L.minutes + ' ' + s + ' ' + L.seconds) : (s + ' ' + L.seconds);
+    };
+    const extLabel = filters.targetExtension === 'ALL' ? L.all : filters.targetExtension.join(', ');
+    const statusLabel = filters.statusFilter === 'ALL' ? L.all : filters.statusFilter.join(', ');
+    const trunkLabel = (id) => {
+        if (id === 'INTERNAL') return L.internal;
+        const t = (availableTrunks || []).find(x => String(x.id) === String(id));
+        return t ? t.label : id;
+    };
+    const trunkSummary = filters.trunkFilter === 'ALL' ? L.all : filters.trunkFilter.map(trunkLabel).join(', ');
+    const durationSummary = (filters.durationMin || '0') + ' — ' + (filters.durationMax || '∞') + ' ' + filters.durationUnit;
+    const totalCalls = report.stats.totalCalls || 0;
+%>
+<div class="page" id="reportPage">
+    <div class="toolbar no-print">
+        <button type="button" class="btn btn-primary" onclick="window.print()"><%= L.print %></button>
+        <button type="button" class="btn" onclick="window.close()"><%= L.close %></button>
+    </div>
+
+    <div class="header">
+        <div>
+            <div class="brand">Sokrat VoIP</div>
+            <h1><%= L.title %></h1>
+            <div class="subtitle"><%= L.range %>: <strong><%= filters.startDate %> → <%= filters.endDate %></strong></div>
+        </div>
+        <div class="meta">
+            <div><%= L.generated %>: <strong><%= moment().format('YYYY-MM-DD HH:mm:ss') %></strong></div>
+            <div><%= L.totalCalls %>: <strong><%= totalCalls %></strong></div>
+        </div>
+    </div>
+
+    <div class="filter-grid">
+        <div class="filter-item"><span class="k"><%= L.extensions %></span><span class="v"><%= extLabel %></span></div>
+        <div class="filter-item"><span class="k"><%= L.dispositions %></span><span class="v"><%= statusLabel %></span></div>
+        <div class="filter-item"><span class="k"><%= L.direction %></span><span class="v"><%= filters.directionFilter %></span></div>
+        <div class="filter-item"><span class="k"><%= L.scope %></span><span class="v"><%= filters.callScopeFilter %></span></div>
+        <div class="filter-item"><span class="k"><%= L.trunks %></span><span class="v"><%= trunkSummary %></span></div>
+        <div class="filter-item"><span class="k"><%= L.duration %></span><span class="v"><%= durationSummary %></span></div>
+        <div class="filter-item"><span class="k"><%= L.searchSrc %></span><span class="v"><%= filters.searchSrc || '—' %></span></div>
+        <div class="filter-item"><span class="k"><%= L.searchDst %></span><span class="v"><%= filters.searchDst || '—' %></span></div>
+        <div class="filter-item"><span class="k"><%= L.searchDid %></span><span class="v"><%= filters.searchDid || '—' %></span></div>
+        <div class="filter-item"><span class="k"><%= L.searchUid %></span><span class="v"><%= filters.searchUniqueId || '—' %></span></div>
+    </div>
+
+    <% if (!totalCalls) { %>
+        <div class="empty"><%= L.empty %></div>
+    <% } else { %>
+        <div class="kpi-grid">
+            <div class="kpi" style="border-top-color: var(--accent);"><div class="label"><%= L.totalCalls %></div><div class="value"><%= totalCalls %></div></div>
+            <div class="kpi" style="border-top-color: var(--accent-3);"><div class="label"><%= L.answered %></div><div class="value"><%= report.stats.answeredCalls %></div><div class="hint"><%= fmtPct(report.stats.answeredCalls, totalCalls) %> <%= L.answerRate %></div></div>
+            <div class="kpi" style="border-top-color: var(--accent-2);"><div class="label"><%= L.talkTime %></div><div class="value"><%= report.stats.totalTalkMin %> <span style="font-size:12px;"><%= L.minutes %></span></div><div class="hint"><%= report.stats.totalTalkSec %> <%= L.seconds %></div></div>
+            <div class="kpi" style="border-top-color: var(--accent-4);"><div class="label"><%= L.avgDuration %></div><div class="value"><%= fmtMin(report.stats.avgTalkSec) %></div></div>
+            <div class="kpi" style="border-top-color: var(--accent-2);"><div class="label"><%= L.inbound %></div><div class="value"><%= report.stats.inboundCount %></div><div class="hint"><%= report.stats.inboundMin %> <%= L.minutes %></div></div>
+            <div class="kpi" style="border-top-color: var(--accent-5);"><div class="label"><%= L.outbound %></div><div class="value"><%= report.stats.outboundCount %></div><div class="hint"><%= report.stats.outboundMin %> <%= L.minutes %></div></div>
+            <div class="kpi" style="border-top-color: var(--accent-4);"><div class="label"><%= L.internal %></div><div class="value"><%= report.stats.internalCount %></div><div class="hint"><%= report.stats.internalMin %> <%= L.minutes %></div></div>
+            <div class="kpi" style="border-top-color: var(--accent);"><div class="label"><%= L.external %></div><div class="value"><%= report.stats.externalCount %></div><div class="hint"><%= report.stats.externalMin %> <%= L.minutes %></div></div>
+            <div class="kpi" style="border-top-color: var(--accent);"><div class="label"><%= L.noAnswer %></div><div class="value"><%= report.stats.noAnswerCalls %></div></div>
+            <div class="kpi" style="border-top-color: var(--accent-5);"><div class="label"><%= L.busy %></div><div class="value"><%= report.stats.busyCalls %></div></div>
+            <div class="kpi" style="border-top-color: var(--accent);"><div class="label"><%= L.failed %></div><div class="value"><%= report.stats.failedCalls %></div></div>
+            <div class="kpi" style="border-top-color: var(--accent-3);"><div class="label"><%= L.answerRate %></div><div class="value"><%= fmtPct(report.stats.answeredCalls, totalCalls) %></div></div>
+        </div>
+
+        <div class="section">
+            <h2><%= L.trend %></h2>
+            <div class="chart-card"><div id="trendChart" class="chart tall"></div></div>
+        </div>
+
+        <div class="chart-row">
+            <div class="section">
+                <h2><%= L.hourly %></h2>
+                <div class="chart-card"><div id="hourlyChart" class="chart"></div></div>
+            </div>
+            <div class="section">
+                <h2><%= L.topTalkers %></h2>
+                <div class="chart-card"><div id="topTalkersChart" class="chart"></div></div>
+            </div>
+        </div>
+
+        <div class="chart-row three">
+            <div class="section">
+                <h2><%= L.dispositionChart %></h2>
+                <div class="chart-card"><div id="dispositionChart" class="chart"></div></div>
+            </div>
+            <div class="section">
+                <h2><%= L.durationChart %></h2>
+                <div class="chart-card"><div id="durationChart" class="chart"></div></div>
+            </div>
+            <div class="section">
+                <h2><%= L.scopeChart %></h2>
+                <div class="chart-card"><div id="scopeChart" class="chart"></div></div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2><%= L.trend %></h2>
+            <table>
+                <thead><tr><th><%= L.date %></th><th><%= L.total %></th><th><%= L.inbound %></th><th><%= L.outbound %></th><th><%= L.internal %></th></tr></thead>
+                <tbody>
+                    <% report.trendData.forEach(r => { %>
+                        <tr><td><%= r.date %></td><td><%= r.total %></td><td><%= r.inbound || 0 %></td><td><%= r.outbound || 0 %></td><td><%= r.internal || 0 %></td></tr>
+                    <% }); %>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="chart-row">
+            <div class="section">
+                <h2><%= L.dispositionChart %></h2>
+                <table>
+                    <thead><tr><th><%= L.disposition %></th><th><%= L.count %></th><th><%= L.percentage %></th></tr></thead>
+                    <tbody>
+                        <% report.dispositionData.forEach(r => { %>
+                            <tr><td><%= r.name %></td><td><%= r.value %></td><td><%= fmtPct(r.value, totalCalls) %></td></tr>
+                        <% }); %>
+                    </tbody>
+                </table>
+            </div>
+            <div class="section">
+                <h2><%= L.topTalkers %></h2>
+                <table>
+                    <thead><tr><th><%= L.rank %></th><th><%= L.name %></th><th><%= L.calls %></th><th><%= L.talkTimeCol %></th></tr></thead>
+                    <tbody>
+                        <% report.topTalkers.forEach((r, i) => { %>
+                            <tr><td><%= i + 1 %></td><td><%= r.name %></td><td><%= r.calls %></td><td><%= fmtMin(r.talkSec) %></td></tr>
+                        <% }); %>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2><%= L.hourly %></h2>
+            <div class="hour-grid">
+                <% report.hourlyData.forEach(r => { %>
+                    <div class="hour-cell"><b><%= r.hour %>:00</b><span><%= r.calls %> <%= L.calls %></span></div>
+                <% }); %>
+            </div>
+        </div>
+
+        <div class="chart-row">
+            <div class="section">
+                <h2><%= L.durationChart %></h2>
+                <table>
+                    <thead><tr><th><%= L.bucket %></th><th><%= L.count %></th><th><%= L.percentage %></th></tr></thead>
+                    <tbody>
+                        <% report.durationData.forEach(r => { %>
+                            <tr><td><%= r.name %></td><td><%= r.value %></td><td><%= fmtPct(r.value, report.stats.answeredCalls) %></td></tr>
+                        <% }); %>
+                    </tbody>
+                </table>
+            </div>
+            <div class="section">
+                <h2><%= L.scopeChart %></h2>
+                <table>
+                    <thead><tr><th><%= L.scopeCol %></th><th><%= L.count %></th><th><%= L.percentage %></th></tr></thead>
+                    <tbody>
+                        <% report.scopeData.forEach(r => { %>
+                            <tr><td><%= r.name %></td><td><%= r.value %></td><td><%= fmtPct(r.value, totalCalls) %></td></tr>
+                        <% }); %>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    <% } %>
+
+    <div class="footer">
+        <span><%= L.footer %></span>
+        <span><%= moment().format('YYYY-MM-DD HH:mm:ss') %></span>
+    </div>
+</div>
+
+<script>
+    const REPORT = <%- JSON.stringify(report).replace(/</g, '\\u003c') %>;
+    const AUTO_PRINT = <%- JSON.stringify(autoPrint) %>;
+    const IS_RTL = <%- JSON.stringify(isRtl) %>;
+    const TEXT = {
+        total: <%- JSON.stringify(L.total) %>,
+        inbound: <%- JSON.stringify(L.inbound) %>,
+        outbound: <%- JSON.stringify(L.outbound) %>,
+        internal: <%- JSON.stringify(L.internal) %>,
+        calls: <%- JSON.stringify(L.calls) %>,
+        minutes: <%- JSON.stringify(L.minutes) %>
+    };
+    const COLORS = ['#dc2626', '#0ea5e9', '#10b981', '#8b5cf6', '#f59e0b', '#ec4899', '#14b8a6', '#6366f1'];
+
+    function baseText() {
+        return {
+            color: '#111827',
+            fontFamily: "'Cairo', 'Tahoma', 'Segoe UI', Arial, sans-serif",
+            fontSize: 11
+        };
+    }
+
+    function initCharts() {
+        if (typeof echarts === 'undefined') return Promise.resolve();
+
+        const charts = [];
+
+        const trendEl = document.getElementById('trendChart');
+        if (trendEl) {
+            const chart = echarts.init(trendEl, null, { renderer: 'canvas' });
+            chart.setOption({
+                animation: false,
+                color: COLORS,
+                textStyle: baseText(),
+                tooltip: { trigger: 'axis' },
+                legend: { top: 0, textStyle: baseText() },
+                grid: { left: 44, right: 20, top: 36, bottom: 34 },
+                xAxis: { type: 'category', data: REPORT.trendData.map(r => r.date), axisLabel: { color: '#6b7280' } },
+                yAxis: { type: 'value', axisLabel: { color: '#6b7280' }, splitLine: { lineStyle: { color: '#e5e7eb' } } },
+                series: [
+                    { name: TEXT.total, type: 'line', smooth: true, symbolSize: 5, data: REPORT.trendData.map(r => r.total), lineStyle: { width: 2 } },
+                    { name: TEXT.inbound, type: 'bar', data: REPORT.trendData.map(r => r.inbound || 0), barMaxWidth: 14 },
+                    { name: TEXT.outbound, type: 'bar', data: REPORT.trendData.map(r => r.outbound || 0), barMaxWidth: 14 }
+                ]
+            });
+            charts.push(chart);
+        }
+
+        const hourlyEl = document.getElementById('hourlyChart');
+        if (hourlyEl) {
+            const chart = echarts.init(hourlyEl, null, { renderer: 'canvas' });
+            chart.setOption({
+                animation: false,
+                color: [COLORS[1]],
+                textStyle: baseText(),
+                tooltip: { trigger: 'axis' },
+                grid: { left: 40, right: 14, top: 18, bottom: 30 },
+                xAxis: { type: 'category', data: REPORT.hourlyData.map(r => r.hour), axisLabel: { color: '#6b7280', interval: 2 } },
+                yAxis: { type: 'value', axisLabel: { color: '#6b7280' }, splitLine: { lineStyle: { color: '#e5e7eb' } } },
+                series: [{ type: 'bar', data: REPORT.hourlyData.map(r => r.calls), barMaxWidth: 14 }]
+            });
+            charts.push(chart);
+        }
+
+        const talkEl = document.getElementById('topTalkersChart');
+        if (talkEl) {
+            const chart = echarts.init(talkEl, null, { renderer: 'canvas' });
+            const names = REPORT.topTalkers.map(r => r.name);
+            const values = REPORT.topTalkers.map(r => Math.round((r.talkSec / 60) * 10) / 10);
+            chart.setOption({
+                animation: false,
+                color: [COLORS[2]],
+                textStyle: baseText(),
+                tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+                grid: { left: 110, right: 22, top: 10, bottom: 26 },
+                xAxis: { type: 'value', axisLabel: { color: '#6b7280' }, splitLine: { lineStyle: { color: '#e5e7eb' } } },
+                yAxis: { type: 'category', data: names, inverse: true, axisLabel: { color: '#374151', width: 100, overflow: 'truncate' } },
+                series: [{ type: 'bar', data: values, barMaxWidth: 12 }]
+            });
+            charts.push(chart);
+        }
+
+        function pie(id, data, colorIndex) {
+            const el = document.getElementById(id);
+            if (!el) return null;
+            const chart = echarts.init(el, null, { renderer: 'canvas' });
+            chart.setOption({
+                animation: false,
+                color: COLORS.slice(colorIndex),
+                textStyle: baseText(),
+                tooltip: { trigger: 'item' },
+                legend: { bottom: 0, textStyle: baseText() },
+                series: [{
+                    type: 'pie',
+                    radius: ['45%', '70%'],
+                    center: ['50%', '44%'],
+                    avoidLabelOverlap: true,
+                    label: { color: '#374151', formatter: '{b}: {c}' },
+                    data: data
+                }]
+            });
+            charts.push(chart);
+            return chart;
+        }
+        pie('dispositionChart', REPORT.dispositionData, 0);
+        pie('durationChart', REPORT.durationData, 2);
+        pie('scopeChart', REPORT.scopeData, 1);
+
+        return Promise.all(charts.map(c => new Promise(resolve => {
+            if (c && typeof c.on === 'function') {
+                c.on('finished', resolve);
+                setTimeout(resolve, 700);
+            } else {
+                resolve();
+            }
+        })));
+    }
+
+    window.addEventListener('load', () => {
+        initCharts().then(() => {
+            if (AUTO_PRINT) setTimeout(() => window.print(), 500);
+        });
+    });
+</script>
+</body>
+</html>

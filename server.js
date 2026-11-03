@@ -6208,316 +6208,548 @@ app.post('/groups/permissions', async (req, res) => {
     }
 });
 
+// --- DASHBOARD FILTER / REPORT HELPERS ---
+async function parseDashboardFilters(req) {
+    const username = req.session ? req.session.username : null;
+    let userPrefs = (req.session && req.session.userPreferences) ? req.session.userPreferences : null;
+    if (!userPrefs && username) {
+        try {
+            userPrefs = await getUserPreferences(username, req.session.userId);
+            if (req.session) req.session.userPreferences = userPrefs;
+        } catch (_) {}
+    }
+    const dashDefaults = userPrefs?.defaultFilters?.dashboard || null;
+
+    const hasExplicitFilters = Boolean(req.query.startDate || req.query.endDate || req.query.targetExtension || req.query.statusFilter || req.query.directionFilter || req.query.callScopeFilter || req.query.durationMin || req.query.durationMax || req.query.durationFrom || req.query.durationTo || req.query.searchSrc || req.query.searchDst || req.query.searchDid || req.query.searchUniqueId);
+
+    let startDate, endDate;
+    if (hasExplicitFilters) {
+        startDate = req.query.startDate ? moment(req.query.startDate).format('YYYY-MM-DD HH:mm:ss') : moment().startOf('day').format('YYYY-MM-DD HH:mm:ss');
+        endDate = req.query.endDate ? moment(req.query.endDate).format('YYYY-MM-DD HH:mm:ss') : moment().endOf('day').format('YYYY-MM-DD HH:mm:ss');
+    } else if (dashDefaults && dashDefaults.datePreset) {
+        const range = computePresetDateRange(dashDefaults.datePreset);
+        startDate = range.startDate;
+        endDate = range.endDate;
+    } else {
+        startDate = moment().startOf('day').format('YYYY-MM-DD HH:mm:ss');
+        endDate = moment().endOf('day').format('YYYY-MM-DD HH:mm:ss');
+    }
+
+    const scopedExts = getUserScopedExtensions(req);
+    let selectedExtensions = hasExplicitFilters ? req.query.targetExtension : (dashDefaults?.targetExtension || req.query.targetExtension);
+    if (scopedExts && scopedExts.length > 0) {
+        if (!selectedExtensions || selectedExtensions === 'ALL' || (Array.isArray(selectedExtensions) && selectedExtensions.includes('ALL'))) {
+            selectedExtensions = scopedExts;
+        } else {
+            const arr = Array.isArray(selectedExtensions) ? selectedExtensions : [selectedExtensions];
+            selectedExtensions = arr.filter(e => scopedExts.includes(e));
+            if (selectedExtensions.length === 0) selectedExtensions = scopedExts;
+        }
+    } else {
+        if (!selectedExtensions) selectedExtensions = ['ALL'];
+        else if (!Array.isArray(selectedExtensions)) selectedExtensions = [selectedExtensions];
+    }
+    if (selectedExtensions.length > 1 && selectedExtensions.includes('ALL')) {
+        selectedExtensions = selectedExtensions.filter(e => e !== 'ALL');
+    }
+    const targetExtensionFilter = selectedExtensions.includes('ALL') ? 'ALL' : selectedExtensions;
+
+    let selectedStatuses = hasExplicitFilters ? req.query.statusFilter : (dashDefaults?.statusFilter || req.query.statusFilter);
+    if (!selectedStatuses) selectedStatuses = ['ALL'];
+    else if (!Array.isArray(selectedStatuses)) selectedStatuses = [selectedStatuses];
+    if (selectedStatuses.length > 1 && selectedStatuses.includes('ALL')) {
+        selectedStatuses = selectedStatuses.filter(s => s !== 'ALL');
+    }
+    const statusFilterList = selectedStatuses.includes('ALL') ? 'ALL' : selectedStatuses;
+
+    const directionFilter = hasExplicitFilters ? (req.query.directionFilter || 'ALL') : (dashDefaults?.directionFilter || 'ALL');
+    const callScopeFilter = hasExplicitFilters ? (req.query.callScopeFilter || 'ALL') : (dashDefaults?.callScopeFilter || 'ALL');
+    const durationMin = (req.query.durationMin !== undefined ? req.query.durationMin : (req.query.durationFrom || '')).toString().trim();
+    const durationMax = (req.query.durationMax !== undefined ? req.query.durationMax : (req.query.durationTo || '')).toString().trim();
+    const durationUnit = ['s', 'm', 'h'].includes(String(req.query.durationUnit || '').toLowerCase()) ? String(req.query.durationUnit).toLowerCase() : 's';
+
+    let selectedTrunks = hasExplicitFilters ? req.query.trunkFilter : (dashDefaults?.trunkFilter || req.query.trunkFilter);
+    if (!selectedTrunks) selectedTrunks = ['ALL'];
+    else if (!Array.isArray(selectedTrunks)) selectedTrunks = [selectedTrunks];
+    if (selectedTrunks.length > 1 && selectedTrunks.includes('ALL')) {
+        selectedTrunks = selectedTrunks.filter(t => t !== 'ALL');
+    }
+    const trunkFilterList = selectedTrunks.includes('ALL') ? 'ALL' : selectedTrunks;
+
+    const { trunks: dashTrunksList, dongles: dashDonglesList, availableTrunks } = await getAvailableTrunksAndDongles();
+
+    return {
+        username: username || 'dashboard user',
+        startDate,
+        endDate,
+        targetExtensionFilter,
+        statusFilterList,
+        directionFilter,
+        callScopeFilter,
+        durationMin,
+        durationMax,
+        durationUnit,
+        trunkFilterList,
+        dashTrunksList,
+        dashDonglesList,
+        availableTrunks,
+        scopedExts,
+        searchSrc: req.query.searchSrc || '',
+        searchDst: req.query.searchDst || '',
+        searchDid: req.query.searchDid || '',
+        searchUniqueId: req.query.searchUniqueId || ''
+    };
+}
+
+function buildCdrFilterClauses(filters, dashDonglesList, dashTrunksList) {
+    let clause = '';
+    let params = [];
+
+    if (filters.targetExtensionFilter !== 'ALL') {
+        const exts = filters.targetExtensionFilter;
+        const regexpPattern = exts.map(e => e.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+        clause += " AND (c.src IN (?) OR c.dst IN (?) OR c.cnum IN (?) OR c.channel REGEXP CONCAT('^[A-Za-z0-9_]+/(', ?, ')([^0-9]|$)') OR c.dstchannel REGEXP CONCAT('^[A-Za-z0-9_]+/(', ?, ')([^0-9]|$)'))";
+        params.push(exts, exts, exts, regexpPattern, regexpPattern);
+    }
+    if (filters.searchSrc) {
+        clause += " AND c.src LIKE ?";
+        params.push(`%${filters.searchSrc}%`);
+    }
+    if (filters.searchDst) {
+        clause += " AND c.dst LIKE ?";
+        params.push(`%${filters.searchDst}%`);
+    }
+    if (filters.searchDid) {
+        clause += " AND c.did LIKE ?";
+        params.push(`%${filters.searchDid}%`);
+    }
+    if (filters.searchUniqueId) {
+        clause += " AND c.uniqueid LIKE ?";
+        params.push(`%${filters.searchUniqueId}%`);
+    }
+    if (filters.statusFilterList !== 'ALL') {
+        let statusesToMatch = [...filters.statusFilterList];
+        if (statusesToMatch.includes('FAILED') && !statusesToMatch.includes('CONGESTION')) {
+            statusesToMatch.push('CONGESTION');
+        }
+        clause += ` AND ((${CDR_DISPOSITION_SQL}) IN (?) OR ('FAILED' IN (?) AND (${CDR_DISPOSITION_SQL}) = 'CONGESTION'))`;
+        params.push(statusesToMatch, filters.statusFilterList);
+    }
+    if (filters.directionFilter !== 'ALL') {
+        clause += ` AND ${CDR_DIRECTION_CASE} = ?`;
+        params.push(filters.directionFilter);
+    }
+    if (filters.callScopeFilter !== 'ALL') {
+        clause += ` AND ${CDR_CALL_SCOPE_CASE} = ?`;
+        params.push(filters.callScopeFilter);
+    }
+    if (filters.trunkFilterList !== 'ALL') {
+        const tf = buildTrunkFilterSql(filters.trunkFilterList, dashDonglesList, dashTrunksList);
+        if (tf.clause) {
+            clause += tf.clause;
+            params.push(...tf.params);
+        }
+    }
+    const df = buildDurationRangeFilterSql(filters.durationMin, filters.durationMax, filters.durationUnit);
+    if (df.clause) {
+        clause += df.clause;
+        params.push(...df.params);
+    }
+
+    return { clause, params };
+}
+
+function buildDashboardCdrQuery(filters, res) {
+    const cdrSource = buildCdrSource(res.locals.federationScope);
+    const extra = buildCdrFilterClauses(filters, filters.dashDonglesList, filters.dashTrunksList);
+    const query = `
+        SELECT c.src, c.dst, c.billsec, ${CDR_DISPOSITION_SQL} as disposition, c.channel, c.dstchannel, c.calldate, c.did, c.uniqueid, COALESCE(u.name, NULLIF(TRIM(c.cnam), ''), 'No Name') as src_name
+        FROM ${cdrSource.table} c
+        LEFT JOIN ${tables.users} u ON c.src = u.extension
+        WHERE c.calldate BETWEEN ? AND ?
+        ${cdrSource.filtersSql}
+        ${cdrSource.nodeFilterSql}
+        ${extra.clause}
+    `;
+    return {
+        query,
+        queryParams: [filters.startDate, filters.endDate, ...cdrSource.nodeFilterParams, ...extra.params],
+        cdrSource
+    };
+}
+
+function buildDetailedCdrQuery(filters, res) {
+    const cdrSource = buildCdrSource(res.locals.federationScope);
+    const extra = buildCdrFilterClauses(filters, filters.dashDonglesList, filters.dashTrunksList);
+    const nodeColumns = cdrSource.isUnion ? ', c.node_site_code, c.node_name, c.is_local' : '';
+    const query = `
+        SELECT c.calldate, c.src, c.dst, c.dcontext, c.lastdata, c.duration, c.billsec,
+        ${CDR_DISPOSITION_SQL} as disposition, c.uniqueid, c.recordingfile, c.channel, c.dstchannel, c.did, c.userfield,
+        COALESCE(u.name, NULLIF(TRIM(c.cnam), ''), 'No Name') as src_name,
+        ${CDR_DIRECTION_CASE} as direction, ${CDR_CALL_SCOPE_CASE} as call_scope${nodeColumns}
+        FROM ${cdrSource.table} c
+        LEFT JOIN ${tables.users} u ON c.src = u.extension
+        WHERE c.calldate BETWEEN ? AND ?
+        ${cdrSource.filtersSql}
+        ${cdrSource.nodeFilterSql}
+        ${extra.clause}
+        ORDER BY c.calldate DESC
+    `;
+    return {
+        query,
+        queryParams: [filters.startDate, filters.endDate, ...cdrSource.nodeFilterParams, ...extra.params],
+        cdrSource
+    };
+}
+
+function computeDashboardReport(rows, effectiveRoster = []) {
+    const stats = {
+        totalCalls: 0,
+        inboundCount: 0,
+        outboundCount: 0,
+        internalCount: 0,
+        externalCount: 0,
+        inboundMin: 0,
+        outboundMin: 0,
+        internalTalkSec: 0,
+        externalTalkSec: 0,
+        internalMin: 0,
+        externalMin: 0,
+        answeredCalls: 0,
+        noAnswerCalls: 0,
+        busyCalls: 0,
+        failedCalls: 0,
+        totalTalkSec: 0
+    };
+    const employeeMetrics = {};
+    effectiveRoster.forEach(emp => {
+        employeeMetrics[emp.extension] = { extension: emp.extension, name: emp.name, totalCalls: 0, totalTalkSec: 0, uniqueNumbers: new Set() };
+    });
+
+    rows.forEach(row => {
+        stats.totalCalls++;
+        const sec = parseInt(row.billsec) || 0;
+        const callClass = classifyCdr(row);
+
+        if (callClass.call_scope === 'INTERNAL') {
+            stats.internalCount++;
+            if (row.disposition === 'ANSWERED') stats.internalTalkSec += sec;
+        } else {
+            stats.externalCount++;
+            if (row.disposition === 'ANSWERED') stats.externalTalkSec += sec;
+        }
+
+        if (callClass.direction === 'OUTBOUND') {
+            stats.outboundCount++;
+            if (row.disposition === 'ANSWERED') stats.outboundMin += sec;
+        } else if (callClass.direction === 'INBOUND') {
+            stats.inboundCount++;
+            if (row.disposition === 'ANSWERED') stats.inboundMin += sec;
+        }
+
+        const disp = row.disposition;
+        if (disp === 'ANSWERED') {
+            stats.answeredCalls++;
+            stats.totalTalkSec += sec;
+        } else if (disp === 'NO ANSWER') {
+            stats.noAnswerCalls++;
+        } else if (disp === 'BUSY') {
+            stats.busyCalls++;
+        } else if (disp === 'FAILED' || disp === 'CONGESTION') {
+            stats.failedCalls++;
+        }
+
+        const extsInvolved = new Set();
+        if (row.src) extsInvolved.add(String(row.src).trim());
+        if (row.dst) extsInvolved.add(String(row.dst).trim());
+        if (row.dstchannel) {
+            const pickedUp = getExtensionFromChannel(row.dstchannel);
+            if (pickedUp) extsInvolved.add(pickedUp);
+        }
+        if (row.channel) {
+            const srcChanExt = getExtensionFromChannel(row.channel);
+            if (srcChanExt) extsInvolved.add(srcChanExt);
+        }
+
+        extsInvolved.forEach(ext => {
+            if (employeeMetrics[ext]) {
+                employeeMetrics[ext].totalCalls++;
+                employeeMetrics[ext].totalTalkSec += (row.disposition === 'ANSWERED' ? sec : 0);
+                const counterpart = (ext === row.src) ? row.dst : row.src;
+                if (counterpart) employeeMetrics[ext].uniqueNumbers.add(counterpart);
+            }
+        });
+    });
+
+    stats.inboundMin = Math.round(stats.inboundMin / 60);
+    stats.outboundMin = Math.round(stats.outboundMin / 60);
+    stats.internalMin = Math.round(stats.internalTalkSec / 60);
+    stats.externalMin = Math.round(stats.externalTalkSec / 60);
+    stats.totalTalkMin = Math.round(stats.totalTalkSec / 60);
+    stats.avgTalkSec = stats.answeredCalls ? Math.round(stats.totalTalkSec / stats.answeredCalls) : 0;
+
+    const trendMap = {};
+    const dispCounts = {};
+    const hourlyMap = {};
+    const hourlyByDayMap = {};
+    const durationCounts = { short: 0, medium: 0, long: 0 };
+
+    rows.forEach(row => {
+        const day = moment(row.calldate).format('YYYY-MM-DD');
+        trendMap[day] = trendMap[day] || { total: 0, inbound: 0, outbound: 0 };
+        trendMap[day].total++;
+        const callClass = classifyCdr(row);
+        if (callClass.direction === 'OUTBOUND') trendMap[day].outbound++;
+        else if (callClass.direction === 'INBOUND') trendMap[day].inbound++;
+        else trendMap[day].internal = (trendMap[day].internal || 0) + 1;
+
+        const disp = row.disposition || 'UNKNOWN';
+        dispCounts[disp] = (dispCounts[disp] || 0) + 1;
+
+        const hour = moment(row.calldate).format('H');
+        hourlyMap[hour] = (hourlyMap[hour] || 0) + 1;
+        hourlyByDayMap[day] = hourlyByDayMap[day] || {};
+        hourlyByDayMap[day][hour] = (hourlyByDayMap[day][hour] || 0) + 1;
+
+        if (row.disposition === 'ANSWERED') {
+            const sec = parseInt(row.billsec) || 0;
+            if (sec < 30) durationCounts.short++;
+            else if (sec <= 180) durationCounts.medium++;
+            else durationCounts.long++;
+        }
+    });
+
+    const trendData = Object.entries(trendMap)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([date, d]) => ({ date, ...d }));
+
+    const dispositionData = Object.entries(dispCounts).map(([name, value]) => ({ name, value }));
+
+    const hourlyData = Array.from({ length: 24 }, (_, i) => ({
+        hour: String(i).padStart(2, '0'),
+        calls: hourlyMap[String(i)] || 0
+    }));
+
+    const hourlyByDay = {};
+    Object.keys(hourlyByDayMap).sort().forEach(day => {
+        hourlyByDay[day] = Array.from({ length: 24 }, (_, i) => ({
+            hour: String(i).padStart(2, '0'),
+            calls: (hourlyByDayMap[day] && hourlyByDayMap[day][String(i)]) || 0
+        }));
+    });
+
+    const topTalkers = Object.values(employeeMetrics)
+        .sort((a, b) => b.totalTalkSec - a.totalTalkSec)
+        .slice(0, 10)
+        .map(e => ({ name: e.name + ' (' + e.extension + ')', talkSec: e.totalTalkSec, calls: e.totalCalls }));
+
+    const durationData = [
+        { name: 'Short (<30s)', value: durationCounts.short },
+        { name: 'Medium (30s-3m)', value: durationCounts.medium },
+        { name: 'Long (>3m)', value: durationCounts.long }
+    ];
+
+    const scopeData = [
+        { name: 'Internal', value: stats.internalCount },
+        { name: 'External', value: stats.externalCount }
+    ];
+
+    return { stats, employeeMetrics, trendData, dispositionData, hourlyData, hourlyByDay, topTalkers, durationData, scopeData };
+}
+
+async function buildDashboardExcelBuffer({ report, filters, rows, cdrSource, dashTrunksList, dashDonglesList }) {
+    if (!XLSX) throw new Error('XLSX module is unavailable');
+    const wb = XLSX.utils.book_new();
+    const addSheet = (name, aoa, widths) => {
+        const ws = XLSX.utils.aoa_to_sheet(aoa);
+        if (Array.isArray(widths)) ws['!cols'] = widths.map(w => ({ wch: w }));
+        XLSX.utils.book_append_sheet(wb, ws, String(name).slice(0, 31));
+    };
+    const pct = (value, total) => total ? `${Math.round((value / total) * 1000) / 10}%` : '0%';
+    const trunkLabel = (id) => {
+        if (id === 'INTERNAL') return 'Internal';
+        const t = (filters.availableTrunks || []).find(x => String(x.id) === String(id));
+        return t ? t.label : id;
+    };
+    const extLabel = filters.targetExtensionFilter === 'ALL'
+        ? 'All extensions'
+        : filters.targetExtensionFilter.join(', ');
+    const statusLabel = filters.statusFilterList === 'ALL'
+        ? 'All dispositions'
+        : filters.statusFilterList.join(', ');
+    const trunkSummary = filters.trunkFilterList === 'ALL'
+        ? 'All trunks'
+        : filters.trunkFilterList.map(trunkLabel).join(', ');
+    const durationSummary = `${filters.durationMin || '0'} - ${filters.durationMax || '∞'} ${filters.durationUnit}`;
+
+    const summary = [
+        ['Sokrat VoIP — Dashboard Report'],
+        ['Generated at', moment().format('YYYY-MM-DD HH:mm:ss')],
+        ['Generated by', (filters.username || 'dashboard user')],
+        ['Date range', `${filters.startDate} → ${filters.endDate}`],
+        ['Extensions', extLabel],
+        ['Dispositions', statusLabel],
+        ['Direction', filters.directionFilter],
+        ['Call scope', filters.callScopeFilter],
+        ['Trunks', trunkSummary],
+        ['Duration', durationSummary],
+        ['Search source', filters.searchSrc || '—'],
+        ['Search destination', filters.searchDst || '—'],
+        ['Search DID', filters.searchDid || '—'],
+        ['Search UniqueID', filters.searchUniqueId || '—'],
+        [],
+        ['KPI', 'Value'],
+        ['Total calls', report.stats.totalCalls],
+        ['Answered calls', report.stats.answeredCalls],
+        ['Answer rate', pct(report.stats.answeredCalls, report.stats.totalCalls)],
+        ['No answer', report.stats.noAnswerCalls],
+        ['Busy', report.stats.busyCalls],
+        ['Failed / congestion', report.stats.failedCalls],
+        ['Total talk time (seconds)', report.stats.totalTalkSec],
+        ['Total talk time (minutes)', report.stats.totalTalkMin],
+        ['Average call duration (seconds)', report.stats.avgTalkSec],
+        ['Inbound calls', report.stats.inboundCount],
+        ['Outbound calls', report.stats.outboundCount],
+        ['Internal calls', report.stats.internalCount],
+        ['External calls', report.stats.externalCount],
+        ['Inbound minutes', report.stats.inboundMin],
+        ['Outbound minutes', report.stats.outboundMin],
+        ['Internal minutes', report.stats.internalMin],
+        ['External minutes', report.stats.externalMin]
+    ];
+    addSheet('Summary', summary, [34, 42]);
+
+    const trendRows = [['Date', 'Total', 'Inbound', 'Outbound', 'Internal']];
+    report.trendData.forEach(r => trendRows.push([r.date, r.total, r.inbound || 0, r.outbound || 0, r.internal || 0]));
+    addSheet('Trend', trendRows, [14, 10, 10, 10, 10]);
+
+    const dispositionRows = [['Disposition', 'Count', 'Percentage']];
+    report.dispositionData.forEach(r => dispositionRows.push([r.name, r.value, pct(r.value, report.stats.totalCalls)]));
+    addSheet('Disposition', dispositionRows, [28, 12, 14]);
+
+    const hourlyRows = [['Hour', 'Calls']];
+    report.hourlyData.forEach(r => hourlyRows.push([r.hour, r.calls]));
+    addSheet('Hourly', hourlyRows, [10, 10]);
+
+    const hourlyDayRows = [['Date', ...Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'))]];
+    Object.keys(report.hourlyByDay).sort().forEach(day => {
+        hourlyDayRows.push([day, ...report.hourlyByDay[day].map(r => r.calls)]);
+    });
+    addSheet('Hourly by Day', hourlyDayRows, [14, ...Array(24).fill(6)]);
+
+    const topRows = [['Rank', 'Name', 'Calls', 'Talk seconds', 'Talk time']];
+    report.topTalkers.forEach((r, i) => {
+        const mins = Math.floor(r.talkSec / 60);
+        const secs = r.talkSec % 60;
+        topRows.push([i + 1, r.name, r.calls, r.talkSec, `${mins}m ${secs}s`]);
+    });
+    addSheet('Top Talkers', topRows, [8, 34, 10, 14, 14]);
+
+    const employeeRows = [['Extension', 'Name', 'Calls', 'Talk seconds', 'Unique numbers']];
+    Object.values(report.employeeMetrics)
+        .sort((a, b) => b.totalTalkSec - a.totalTalkSec)
+        .forEach(e => employeeRows.push([e.extension, e.name, e.totalCalls, e.totalTalkSec, e.uniqueNumbers.size]));
+    addSheet('Employee Metrics', employeeRows, [12, 30, 10, 14, 14]);
+
+    const durationRows = [['Bucket', 'Count', 'Percentage']];
+    report.durationData.forEach(r => durationRows.push([r.name, r.value, pct(r.value, report.stats.answeredCalls)]));
+    addSheet('Duration', durationRows, [24, 12, 14]);
+
+    const scopeRows = [['Scope', 'Count', 'Percentage']];
+    report.scopeData.forEach(r => scopeRows.push([r.name, r.value, pct(r.value, report.stats.totalCalls)]));
+    addSheet('Scope', scopeRows, [16, 12, 14]);
+
+    const filterRows = [
+        ['Filter', 'Value'],
+        ['Date range', `${filters.startDate} → ${filters.endDate}`],
+        ['Extensions', extLabel],
+        ['Dispositions', statusLabel],
+        ['Direction', filters.directionFilter],
+        ['Call scope', filters.callScopeFilter],
+        ['Trunks', trunkSummary],
+        ['Duration', durationSummary],
+        ['Search source', filters.searchSrc || '—'],
+        ['Search destination', filters.searchDst || '—'],
+        ['Search DID', filters.searchDid || '—'],
+        ['Search UniqueID', filters.searchUniqueId || '—']
+    ];
+    addSheet('Filters', filterRows, [24, 60]);
+
+    let ringGroupSet = new Set();
+    try {
+        const [rgRows] = await pool.query('SELECT grpnum FROM `asterisk`.`ringgroups`');
+        rgRows.forEach(r => ringGroupSet.add(String(r.grpnum)));
+    } catch (_) {}
+    let extMap = new Map();
+    try {
+        const [uRows] = await pool.query('SELECT extension, name FROM `asterisk`.`users`');
+        uRows.forEach(u => extMap.set(String(u.extension), String(u.name || '')));
+    } catch (_) {}
+    const contactMap = await getContactPhoneMap();
+
+    const EXPORT_CALLS_LIMIT = 50000;
+    const calls = rows.slice(0, EXPORT_CALLS_LIMIT);
+    const callRows = [['Date/Time', 'Source', 'Destination', 'DID', 'Trunk / Line', 'Duration (Sec)', 'Billsec (Sec)', 'Disposition', 'Direction', 'Call Scope', 'Channel', 'Destination Channel', 'Unique ID', ...(cdrSource.isUnion ? ['PBX'] : [])]];
+    for (const row of calls) {
+        const formattedSrc = formatSource(row, extMap, contactMap);
+        const formattedDst = formatDestination(row, ringGroupSet, true, extMap, contactMap);
+        const trk = resolveTrunkForCdr(row, dashTrunksList, dashDonglesList);
+        callRows.push([
+            moment(row.calldate).format('YYYY-MM-DD HH:mm:ss'),
+            formattedSrc,
+            formattedDst,
+            String(row.did || '').trim(),
+            String(trk.name || '-'),
+            Number(row.duration) || 0,
+            Number(row.billsec) || 0,
+            String(row.disposition || ''),
+            String(row.direction || classifyCdr(row).direction || ''),
+            String(row.call_scope || classifyCdr(row).call_scope || 'EXTERNAL'),
+            String(row.channel || ''),
+            String(row.dstchannel || ''),
+            String(row.uniqueid || ''),
+            ...(cdrSource.isUnion ? [String(row.node_site_code || '')] : [])
+        ]);
+    }
+    if (rows.length > EXPORT_CALLS_LIMIT) {
+        callRows.push([]);
+        callRows.push([`Truncated: showing ${EXPORT_CALLS_LIMIT} of ${rows.length} calls. Narrow the date range for a complete file.`]);
+    }
+    addSheet('Calls', callRows, [20, 24, 24, 18, 22, 14, 14, 16, 12, 12, 34, 34, 24, ...(cdrSource.isUnion ? [10] : [])]);
+
+    return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+}
+
 // --- ROUTE 1: LANDING DASHBOARD ---
 app.get('/', async (req, res) => {
     try {
-        const username = req.session ? req.session.username : null;
-        let userPrefs = (req.session && req.session.userPreferences) ? req.session.userPreferences : null;
-        if (!userPrefs && username) {
-            try {
-                userPrefs = await getUserPreferences(username, req.session.userId);
-                if (req.session) req.session.userPreferences = userPrefs;
-            } catch (_) {}
-        }
-        const dashDefaults = userPrefs?.defaultFilters?.dashboard || null;
-
-        const hasExplicitFilters = Boolean(req.query.startDate || req.query.endDate || req.query.targetExtension || req.query.statusFilter || req.query.directionFilter || req.query.callScopeFilter || req.query.durationMin || req.query.durationMax || req.query.durationFrom || req.query.durationTo || req.query.searchSrc || req.query.searchDst || req.query.searchDid || req.query.searchUniqueId);
-
-        let startDate, endDate;
-        if (hasExplicitFilters) {
-            startDate = req.query.startDate ? moment(req.query.startDate).format('YYYY-MM-DD HH:mm:ss') : moment().startOf('day').format('YYYY-MM-DD HH:mm:ss');
-            endDate = req.query.endDate ? moment(req.query.endDate).format('YYYY-MM-DD HH:mm:ss') : moment().endOf('day').format('YYYY-MM-DD HH:mm:ss');
-        } else if (dashDefaults && dashDefaults.datePreset) {
-            const range = computePresetDateRange(dashDefaults.datePreset);
-            startDate = range.startDate;
-            endDate = range.endDate;
-        } else {
-            startDate = moment().startOf('day').format('YYYY-MM-DD HH:mm:ss');
-            endDate = moment().endOf('day').format('YYYY-MM-DD HH:mm:ss');
-        }
-
-        const scopedExts = getUserScopedExtensions(req);
-        let selectedExtensions = hasExplicitFilters ? req.query.targetExtension : (dashDefaults?.targetExtension || req.query.targetExtension);
-        if (scopedExts && scopedExts.length > 0) {
-            if (!selectedExtensions || selectedExtensions === 'ALL' || (Array.isArray(selectedExtensions) && selectedExtensions.includes('ALL'))) {
-                selectedExtensions = scopedExts;
-            } else {
-                const arr = Array.isArray(selectedExtensions) ? selectedExtensions : [selectedExtensions];
-                selectedExtensions = arr.filter(e => scopedExts.includes(e));
-                if (selectedExtensions.length === 0) selectedExtensions = scopedExts;
-            }
-        } else {
-            if (!selectedExtensions) selectedExtensions = ['ALL'];
-            else if (!Array.isArray(selectedExtensions)) selectedExtensions = [selectedExtensions];
-        }
-        if (selectedExtensions.length > 1 && selectedExtensions.includes('ALL')) {
-            selectedExtensions = selectedExtensions.filter(e => e !== 'ALL');
-        }
-        const targetExtensionFilter = selectedExtensions.includes('ALL') ? 'ALL' : selectedExtensions;
-
-        let selectedStatuses = hasExplicitFilters ? req.query.statusFilter : (dashDefaults?.statusFilter || req.query.statusFilter);
-        if (!selectedStatuses) selectedStatuses = ['ALL'];
-        else if (!Array.isArray(selectedStatuses)) selectedStatuses = [selectedStatuses];
-        if (selectedStatuses.length > 1 && selectedStatuses.includes('ALL')) {
-            selectedStatuses = selectedStatuses.filter(s => s !== 'ALL');
-        }
-        const statusFilterList = selectedStatuses.includes('ALL') ? 'ALL' : selectedStatuses;
-
-        const directionFilter = hasExplicitFilters ? (req.query.directionFilter || 'ALL') : (dashDefaults?.directionFilter || 'ALL');
-        const callScopeFilter = hasExplicitFilters ? (req.query.callScopeFilter || 'ALL') : (dashDefaults?.callScopeFilter || 'ALL');
-        const durationMin = (req.query.durationMin !== undefined ? req.query.durationMin : (req.query.durationFrom || '')).toString().trim();
-        const durationMax = (req.query.durationMax !== undefined ? req.query.durationMax : (req.query.durationTo || '')).toString().trim();
-        const durationUnit = ['s', 'm', 'h'].includes(String(req.query.durationUnit || '').toLowerCase()) ? String(req.query.durationUnit).toLowerCase() : 's';
-        
-        let selectedTrunks = hasExplicitFilters ? req.query.trunkFilter : (dashDefaults?.trunkFilter || req.query.trunkFilter);
-        if (!selectedTrunks) selectedTrunks = ['ALL'];
-        else if (!Array.isArray(selectedTrunks)) selectedTrunks = [selectedTrunks];
-        if (selectedTrunks.length > 1 && selectedTrunks.includes('ALL')) {
-            selectedTrunks = selectedTrunks.filter(t => t !== 'ALL');
-        }
-        const trunkFilterList = selectedTrunks.includes('ALL') ? 'ALL' : selectedTrunks;
-
-        const { trunks: dashTrunksList, dongles: dashDonglesList, availableTrunks } = await getAvailableTrunksAndDongles();
-        const searchSrc = req.query.searchSrc || '';
-        const searchDst = req.query.searchDst || '';
-        const searchDid = req.query.searchDid || '';
-        const searchUniqueId = req.query.searchUniqueId || '';
-
-        const directionCase = CDR_DIRECTION_CASE;
-        const callScopeCase = CDR_CALL_SCOPE_CASE;
-        const cdrSource = buildCdrSource(res.locals.federationScope);
-        let query = `
-            SELECT c.src, c.dst, c.billsec, ${CDR_DISPOSITION_SQL} as disposition, c.channel, c.dstchannel, c.calldate, c.did, c.uniqueid, COALESCE(u.name, NULLIF(TRIM(c.cnam), ''), 'No Name') as src_name
-            FROM ${cdrSource.table} c
-            LEFT JOIN ${tables.users} u ON c.src = u.extension
-            WHERE c.calldate BETWEEN ? AND ?
-            ${cdrSource.filtersSql}
-            ${cdrSource.nodeFilterSql}
-        `;
-        let queryParams = [startDate, endDate, ...cdrSource.nodeFilterParams];
-
-        if (targetExtensionFilter !== 'ALL') {
-            const exts = targetExtensionFilter;
-            const regexpPattern = exts.map(e => e.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
-            const clause = " AND (c.src IN (?) OR c.dst IN (?) OR c.cnum IN (?) OR c.channel REGEXP CONCAT('^[A-Za-z0-9_]+/(', ?, ')([^0-9]|$)') OR c.dstchannel REGEXP CONCAT('^[A-Za-z0-9_]+/(', ?, ')([^0-9]|$)'))";
-            query += clause;
-            queryParams.push(exts, exts, exts, regexpPattern, regexpPattern);
-        }
-        if (searchSrc) {
-            query += " AND c.src LIKE ?";
-            queryParams.push(`%${searchSrc}%`);
-        }
-        if (searchDst) {
-            query += " AND c.dst LIKE ?";
-            queryParams.push(`%${searchDst}%`);
-        }
-        if (searchDid) {
-            query += " AND c.did LIKE ?";
-            queryParams.push(`%${searchDid}%`);
-        }
-        if (searchUniqueId) {
-            query += " AND c.uniqueid LIKE ?";
-            queryParams.push(`%${searchUniqueId}%`);
-        }
-        if (statusFilterList !== 'ALL') {
-            let statusesToMatch = [...statusFilterList];
-            if (statusesToMatch.includes('FAILED') && !statusesToMatch.includes('CONGESTION')) {
-                statusesToMatch.push('CONGESTION');
-            }
-            query += ` AND ((${CDR_DISPOSITION_SQL}) IN (?) OR ('FAILED' IN (?) AND (${CDR_DISPOSITION_SQL}) = 'CONGESTION'))`;
-            queryParams.push(statusesToMatch, statusFilterList);
-        }
-        if (directionFilter !== 'ALL') {
-            query += ` AND ${directionCase} = ?`;
-            queryParams.push(directionFilter);
-        }
-        if (callScopeFilter !== 'ALL') {
-            query += ` AND ${callScopeCase} = ?`;
-            queryParams.push(callScopeFilter);
-        }
-        if (trunkFilterList !== 'ALL') {
-            const tf = buildTrunkFilterSql(trunkFilterList, dashDonglesList, dashTrunksList);
-            if (tf.clause) {
-                query += tf.clause;
-                queryParams.push(...tf.params);
-            }
-        }
-        {
-            const df = buildDurationRangeFilterSql(durationMin, durationMax, durationUnit);
-            if (df.clause) {
-                query += df.clause;
-                queryParams.push(...df.params);
-            }
-        }
-
+        const filters = await parseDashboardFilters(req);
+        const { query, queryParams } = buildDashboardCdrQuery(filters, res);
         const [rows] = await pool.query(query, queryParams);
-
-        const stats = {
-            totalCalls: 0,
-            inboundCount: 0,
-            outboundCount: 0,
-            internalCount: 0,
-            externalCount: 0,
-            inboundMin: 0,
-            outboundMin: 0,
-            internalTalkSec: 0,
-            externalTalkSec: 0,
-            internalMin: 0,
-            externalMin: 0,
-            answeredCalls: 0,
-            noAnswerCalls: 0,
-            busyCalls: 0,
-            failedCalls: 0,
-            totalTalkSec: 0
-        };
-        const employeeMetrics = {};
-        const effectiveRoster = (scopedExts && scopedExts.length > 0) ? (res.locals.roster || []).filter(e => scopedExts.includes(e.extension)) : (res.locals.roster || []);
-        effectiveRoster.forEach(emp => {
-            employeeMetrics[emp.extension] = { extension: emp.extension, name: emp.name, totalCalls: 0, totalTalkSec: 0, uniqueNumbers: new Set() };
-        });
-
-        rows.forEach(row => {
-            stats.totalCalls++;
-            const sec = parseInt(row.billsec) || 0;
-            const callClass = classifyCdr(row);
-
-            if (callClass.call_scope === 'INTERNAL') {
-                stats.internalCount++;
-                if (row.disposition === 'ANSWERED') stats.internalTalkSec += sec;
-            } else {
-                stats.externalCount++;
-                if (row.disposition === 'ANSWERED') stats.externalTalkSec += sec;
-            }
-
-            if (callClass.direction === 'OUTBOUND') {
-                stats.outboundCount++;
-                if (row.disposition === 'ANSWERED') stats.outboundMin += sec;
-            } else if (callClass.direction === 'INBOUND') {
-                stats.inboundCount++;
-                if (row.disposition === 'ANSWERED') stats.inboundMin += sec;
-            }
-
-            const disp = row.disposition;
-            if (disp === 'ANSWERED') {
-                stats.answeredCalls++;
-                stats.totalTalkSec += sec;
-            } else if (disp === 'NO ANSWER') {
-                stats.noAnswerCalls++;
-            } else if (disp === 'BUSY') {
-                stats.busyCalls++;
-            } else if (disp === 'FAILED' || disp === 'CONGESTION') {
-                stats.failedCalls++;
-            }
-
-            const extsInvolved = new Set();
-            if (row.src) extsInvolved.add(String(row.src).trim());
-            if (row.dst) extsInvolved.add(String(row.dst).trim());
-            if (row.dstchannel) {
-                const pickedUp = getExtensionFromChannel(row.dstchannel);
-                if (pickedUp) extsInvolved.add(pickedUp);
-            }
-            if (row.channel) {
-                const srcChanExt = getExtensionFromChannel(row.channel);
-                if (srcChanExt) extsInvolved.add(srcChanExt);
-            }
-
-            extsInvolved.forEach(ext => {
-                if (employeeMetrics[ext]) {
-                    employeeMetrics[ext].totalCalls++;
-                    employeeMetrics[ext].totalTalkSec += (row.disposition === 'ANSWERED' ? sec : 0);
-                    const counterpart = (ext === row.src) ? row.dst : row.src;
-                    if (counterpart) employeeMetrics[ext].uniqueNumbers.add(counterpart);
-                }
-            });
-        });
-        stats.inboundMin = Math.round(stats.inboundMin / 60);
-        stats.outboundMin = Math.round(stats.outboundMin / 60);
-        stats.internalMin = Math.round(stats.internalTalkSec / 60);
-        stats.externalMin = Math.round(stats.externalTalkSec / 60);
-        stats.totalTalkMin = Math.round(stats.totalTalkSec / 60);
-        stats.avgTalkSec = stats.answeredCalls ? Math.round(stats.totalTalkSec / stats.answeredCalls) : 0;
-        const trendMap = {};
-        const dispCounts = {};
-        const hourlyMap = {};
-        const hourlyByDayMap = {};
-        const durationCounts = { short: 0, medium: 0, long: 0 };
-        rows.forEach(row => {
-            const day = moment(row.calldate).format('YYYY-MM-DD');
-            trendMap[day] = trendMap[day] || { total: 0, inbound: 0, outbound: 0 };
-            trendMap[day].total++;
-            const callClass = classifyCdr(row);
-            if (callClass.direction === 'OUTBOUND') trendMap[day].outbound++;
-            else if (callClass.direction === 'INBOUND') trendMap[day].inbound++;
-            else trendMap[day].internal = (trendMap[day].internal || 0) + 1;
-            const disp = row.disposition || 'UNKNOWN';
-            dispCounts[disp] = (dispCounts[disp] || 0) + 1;
-
-            const hour = moment(row.calldate).format('H');
-            hourlyMap[hour] = (hourlyMap[hour] || 0) + 1;
-            hourlyByDayMap[day] = hourlyByDayMap[day] || {};
-            hourlyByDayMap[day][hour] = (hourlyByDayMap[day][hour] || 0) + 1;
-
-            if (row.disposition === 'ANSWERED') {
-                const sec = parseInt(row.billsec) || 0;
-                if (sec < 30) durationCounts.short++;
-                else if (sec <= 180) durationCounts.medium++;
-                else durationCounts.long++;
-            }
-        });
-
-        const trendData = Object.entries(trendMap)
-            .sort(([a], [b]) => a.localeCompare(b))
-            .map(([date, d]) => ({ date, ...d }));
-
-        const dispositionData = Object.entries(dispCounts).map(([name, value]) => ({ name, value }));
-
-        const hourlyData = Array.from({ length: 24 }, (_, i) => ({
-            hour: String(i).padStart(2, '0'),
-            calls: hourlyMap[String(i)] || 0
-        }));
-
-        const hourlyByDay = {};
-        Object.keys(hourlyByDayMap).sort().forEach(day => {
-            hourlyByDay[day] = Array.from({ length: 24 }, (_, i) => ({
-                hour: String(i).padStart(2, '0'),
-                calls: (hourlyByDayMap[day] && hourlyByDayMap[day][String(i)]) || 0
-            }));
-        });
-
-        const topTalkers = Object.values(employeeMetrics)
-            .sort((a, b) => b.totalTalkSec - a.totalTalkSec)
-            .slice(0, 10)
-            .map(e => ({ name: e.name + ' (' + e.extension + ')', talkSec: e.totalTalkSec, calls: e.totalCalls }));
-
-        const durationData = [
-            { name: 'Short (<30s)', value: durationCounts.short },
-            { name: 'Medium (30s-3m)', value: durationCounts.medium },
-            { name: 'Long (>3m)', value: durationCounts.long }
-        ];
-
-        const scopeData = [
-            { name: 'Internal', value: stats.internalCount },
-            { name: 'External', value: stats.externalCount }
-        ];
+        const effectiveRoster = (filters.scopedExts && filters.scopedExts.length > 0)
+            ? (res.locals.roster || []).filter(e => filters.scopedExts.includes(e.extension))
+            : (res.locals.roster || []);
+        const report = computeDashboardReport(rows, effectiveRoster);
+        const { stats, trendData, dispositionData, hourlyData, hourlyByDay, topTalkers, durationData, scopeData } = report;
 
         res.render('dashboard', {
             stats,
-            availableTrunks,
+            availableTrunks: filters.availableTrunks,
             filters: {
-                startDate,
-                endDate,
-                targetExtension: targetExtensionFilter,
-                statusFilter: statusFilterList,
-                searchSrc,
-                searchDst,
-                searchDid,
-                searchUniqueId,
-                directionFilter,
-                callScopeFilter,
-                durationMin,
-                durationMax,
-                durationUnit,
-                trunkFilter: trunkFilterList
+                startDate: filters.startDate,
+                endDate: filters.endDate,
+                targetExtension: filters.targetExtensionFilter,
+                statusFilter: filters.statusFilterList,
+                searchSrc: filters.searchSrc,
+                searchDst: filters.searchDst,
+                searchDid: filters.searchDid,
+                searchUniqueId: filters.searchUniqueId,
+                directionFilter: filters.directionFilter,
+                callScopeFilter: filters.callScopeFilter,
+                durationMin: filters.durationMin,
+                durationMax: filters.durationMax,
+                durationUnit: filters.durationUnit,
+                trunkFilter: filters.trunkFilterList
             },
             moment,
             trendData: JSON.stringify(trendData),
@@ -6533,6 +6765,90 @@ app.get('/', async (req, res) => {
             statusChipClass
         });
     } catch (error) { res.status(500).send("Dashboard Error: " + error.message); }
+});
+
+// --- DASHBOARD EXPORTS ---
+app.get('/dashboard/export', requireAuth, requireActionPermission('cdr-export'), async (req, res) => {
+    try {
+        const format = String(req.query.format || 'xlsx').toLowerCase();
+        if (format !== 'xlsx') {
+            return res.status(400).json({ success: false, error: 'Unsupported dashboard export format.' });
+        }
+        if (!XLSX) {
+            return res.status(503).json({ success: false, error: 'Excel export is unavailable on this server.' });
+        }
+
+        const filters = await parseDashboardFilters(req);
+        const { query, queryParams, cdrSource } = buildDetailedCdrQuery(filters, res);
+        const [rows] = await pool.query(query, queryParams);
+        const effectiveRoster = (filters.scopedExts && filters.scopedExts.length > 0)
+            ? (res.locals.roster || []).filter(e => filters.scopedExts.includes(e.extension))
+            : (res.locals.roster || []);
+        const report = computeDashboardReport(rows, effectiveRoster);
+        const buffer = await buildDashboardExcelBuffer({
+            report,
+            filters,
+            rows,
+            cdrSource,
+            dashTrunksList: filters.dashTrunksList,
+            dashDonglesList: filters.dashDonglesList
+        });
+        const stamp = moment().format('YYYYMMDD_HHmmss');
+        res.setHeader('Cache-Control', 'no-store');
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename="sokrat-dashboard_${stamp}.xlsx"`);
+        return res.send(buffer);
+    } catch (error) {
+        console.error('Dashboard export error:', error);
+        return res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.get('/dashboard/report', requireAuth, requireActionPermission('cdr-export'), async (req, res) => {
+    try {
+        const filters = await parseDashboardFilters(req);
+        const { query, queryParams } = buildDashboardCdrQuery(filters, res);
+        const [rows] = await pool.query(query, queryParams);
+        const effectiveRoster = (filters.scopedExts && filters.scopedExts.length > 0)
+            ? (res.locals.roster || []).filter(e => filters.scopedExts.includes(e.extension))
+            : (res.locals.roster || []);
+        const report = computeDashboardReport(rows, effectiveRoster);
+        res.render('dashboard-report', {
+            report: {
+                stats: report.stats,
+                trendData: report.trendData,
+                dispositionData: report.dispositionData,
+                hourlyData: report.hourlyData,
+                topTalkers: report.topTalkers,
+                durationData: report.durationData,
+                scopeData: report.scopeData
+            },
+            filters: {
+                startDate: filters.startDate,
+                endDate: filters.endDate,
+                targetExtension: filters.targetExtensionFilter,
+                statusFilter: filters.statusFilterList,
+                searchSrc: filters.searchSrc,
+                searchDst: filters.searchDst,
+                searchDid: filters.searchDid,
+                searchUniqueId: filters.searchUniqueId,
+                directionFilter: filters.directionFilter,
+                callScopeFilter: filters.callScopeFilter,
+                durationMin: filters.durationMin,
+                durationMax: filters.durationMax,
+                durationUnit: filters.durationUnit,
+                trunkFilter: filters.trunkFilterList
+            },
+            availableTrunks: filters.availableTrunks,
+            autoPrint: String(req.query.autoprint || '1') !== '0',
+            moment,
+            currentLang: res.locals.currentLang || 'en',
+            isRtl: (res.locals.currentLang || 'en') === 'ar'
+        });
+    } catch (error) {
+        console.error('Dashboard report error:', error);
+        return res.status(500).send('Dashboard Report Error: ' + error.message);
+    }
 });
 
 // Helper to format Destination field for inbound/USSD/Ring Groups calls
