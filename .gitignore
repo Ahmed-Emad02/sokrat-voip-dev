@@ -11,3 +11,6 @@ backups/
 *.bak_*
 __pycache__/
 *.pyc
+
+# Never commit bundled credentials
+installer-bundle/secrets/
