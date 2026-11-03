@@ -38,6 +38,27 @@ test('backend/install_db.sql has full schema parity for extension scoping, dongl
     assert.match(sql, /CREATE TABLE IF NOT EXISTS `crm_call_telemetry`/, 'install_db.sql must define crm_call_telemetry table');
 });
 
+test('installers enable open voicemail by default without overriding an explicit choice', () => {
+    for (const file of ['install.sh', 'installer-bundle/install-sokrat.sh']) {
+        const script = fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
+        assert.match(
+            script,
+            /^SOKRAT_VOICEMAIL_OPEN_ACCESS=true$/m,
+            `${file} must write the open-voicemail default into a new .env`
+        );
+        assert.match(
+            script,
+            /grep -q '\^SOKRAT_VOICEMAIL_OPEN_ACCESS=' "\$INSTALL_DIR\/\.env"/,
+            `${file} must backfill the setting in an existing .env`
+        );
+        assert.match(
+            script,
+            /echo 'SOKRAT_VOICEMAIL_OPEN_ACCESS=true' >> "\$INSTALL_DIR\/\.env"/,
+            `${file} must append only when the setting is missing`
+        );
+    }
+});
+
 test('install.sh contains schema migrations, rnnoise builds, and inbound blacklist dialplan', () => {
     const installPath = path.join(__dirname, '..', 'install.sh');
     assert.ok(fs.existsSync(installPath), 'install.sh must exist');

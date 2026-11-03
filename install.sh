@@ -862,6 +862,11 @@ if [ -f "$INSTALL_DIR/.env" ]; then
         echo "ROOT_PASSWORD=${GEN_ROOT_PASS}" >> /etc/sokrat-root-credential.txt
         chmod 600 /etc/sokrat-root-credential.txt
     fi
+    # Open voicemail is the default for new and re-run installs. Preserve an
+    # explicit operator choice (including false).
+    if ! grep -q '^SOKRAT_VOICEMAIL_OPEN_ACCESS=' "$INSTALL_DIR/.env"; then
+        echo 'SOKRAT_VOICEMAIL_OPEN_ACCESS=true' >> "$INSTALL_DIR/.env"
+    fi
     echo "  .env AMI credentials updated ($AMPMGR_USER)"
 else
     GEN_ROOT_PASS="Admin@123"
@@ -884,6 +889,7 @@ SMTP_HOST=localhost
 SMTP_PORT=25
 SMTP_FROM=noreply@sokrat-voip.local
 ROOT_PASSWORD_HASH=${GEN_ROOT_HASH}
+SOKRAT_VOICEMAIL_OPEN_ACCESS=true
 EOF
     echo "ROOT_USER=root" > /etc/sokrat-root-credential.txt
     echo "ROOT_PASSWORD=${GEN_ROOT_PASS}" >> /etc/sokrat-root-credential.txt
