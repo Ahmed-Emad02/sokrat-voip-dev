@@ -86,10 +86,10 @@ collect_dongle_count() {
     local default_count=1
 
     if [[ -n "${NUM_DONGLES:-}" ]]; then
-        if [[ "$NUM_DONGLES" =~ ^([1-9]|1[0-9]|2[0-5])$ ]]; then
+        if [[ "$NUM_DONGLES" =~ ^([0-9]|1[0-9]|2[0-5])$ ]]; then
             return 0
         fi
-        echo "Error: NUM_DONGLES must be a number between 1 and 25." >&2
+        echo "Error: NUM_DONGLES must be a number between 0 and 25." >&2
         return 1
     fi
 
@@ -107,7 +107,7 @@ collect_dongle_count() {
     fi
 
     while true; do
-        printf "Enter the number of GSM dongles to activate on this server (1-25) [default: %s]: " "$default_count"
+        printf "Enter the number of GSM dongles to activate on this server (0-25, 0 = none) [default: %s]: " "$default_count"
         if ! IFS= read -r -u "$input_fd" user_val; then
             if [[ "$input_fd" -eq 3 ]]; then
                 exec 3>&-
@@ -122,12 +122,12 @@ collect_dongle_count() {
             NUM_DONGLES=$default_count
             break
         fi
-        if [[ "$user_val" =~ ^([1-9]|1[0-9]|2[0-5])$ ]]; then
+        if [[ "$user_val" =~ ^([0-9]|1[0-9]|2[0-5])$ ]]; then
             NUM_DONGLES=$user_val
             break
         fi
 
-        echo "Invalid input '$user_val'. Please enter a number between 1 and 25."
+        echo "Invalid input '$user_val'. Please enter a number between 0 and 25."
     done
 
     if [[ "$input_fd" -eq 3 ]]; then

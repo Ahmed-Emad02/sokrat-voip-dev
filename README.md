@@ -45,10 +45,12 @@ bash install-sokrat.sh
 > **Note on Interactive Prompts**: The installer immediately asks 3 setup questions at the very start:
 > 1. `Apply default setup (10 extensions 101-110, ring group 601, general inbound route)? [y/N]`
 > 2. `Enter the client name for this server [default: sokrat]:`
-> 3. `Enter the number of GSM dongles to activate on this server (1-25) [default: 1]:`
+> 3. `Enter the number of GSM dongles to activate on this server (0-25, 0 = none) [default: 1]:`
 > 
 > Answers are stored in `/var/lib/sokrat/install-inputs.env` so you answer once in the first 5 seconds, and the rest runs unattended. For zero-touch headless automation, you can also pre-seed these variables:
 > `CLIENT_NAME=myclient NUM_DONGLES=4 DEFAULT_SETUP=yes curl -fsSL .../bootstrap.sh | bash`
+>
+> Use `NUM_DONGLES=0` for a server that has no GSM dongles (for example, a pure SIP/WebRTC PBX).
 
 ### Option B: Quick Online Install (Existing Issabel 5 Server)
 ```bash

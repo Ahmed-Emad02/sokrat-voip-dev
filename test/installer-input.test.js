@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
+const { execFileSync } = require('child_process');
 
 const REPO = path.join(__dirname, '..');
 
@@ -55,7 +56,7 @@ test('the questions are worded the same everywhere', () => {
     const bootstrap = read('bootstrap.sh');
     const prompts = [
         'Enter the client name for this server [default: %s]: ',
-        'Enter the number of GSM dongles to activate on this server (1-25) [default: %s]: ',
+        'Enter the number of GSM dongles to activate on this server (0-25, 0 = none) [default: %s]: ',
         'Apply default setup (10 extensions 101-110, ring group 601, general inbound route)? [y/N]: '
     ];
     for (const prompt of prompts) {
@@ -72,4 +73,15 @@ test('the answers are only asked when they are missing', () => {
     assert.ok(content.includes('if [[ -n "${CLIENT_NAME:-}" ]]; then'), 'an existing client name is kept');
     assert.ok(content.includes('if [[ -n "${NUM_DONGLES:-}" ]]; then'), 'an existing dongle count is kept');
     assert.ok(content.includes('if [[ -n "${DEFAULT_SETUP:-}" ]]; then'), 'an existing default setup is kept');
+});
+
+test('zero dongles is accepted for servers without GSM hardware', () => {
+    const script = `source "${SHARED}"; NUM_DONGLES=0; collect_dongle_count; printf '%s' "$NUM_DONGLES"`;
+    const out = execFileSync('bash', ['-c', script], { encoding: 'utf8' });
+    assert.equal(out, '0');
+});
+
+test('the dongle count stays capped at 25', () => {
+    const script = `source "${SHARED}"; NUM_DONGLES=26; collect_dongle_count`;
+    assert.throws(() => execFileSync('bash', ['-c', script], { stdio: 'pipe' }));
 });
