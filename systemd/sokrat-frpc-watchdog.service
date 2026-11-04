@@ -1,0 +1,12 @@
+[Unit]
+Description=Sokrat FRP reconnect watchdog
+After=network-online.target frpc.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/sokrat-frpc-watchdog.sh
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true

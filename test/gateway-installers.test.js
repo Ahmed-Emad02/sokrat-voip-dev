@@ -259,3 +259,15 @@ test('route and ring-group mutations wait for a real Asterisk apply', () => {
     assert.match(groupBody, /applied: reloadRes\.success/);
     assert.match(groupBody, /reloadError: reloadRes\.error/);
 });
+
+test('FRP watchdog tolerates transient probes and backs off after restart', () => {
+    const script = path.join(root, 'scripts/sokrat-frpc-watchdog.sh');
+    assert.equal(fs.existsSync(script), true);
+    assert.equal(spawnSync('bash', ['-n', script]).status, 0);
+    const text = fs.readFileSync(script, 'utf8');
+    assert.match(text, /timeout 8/);
+    assert.match(text, /failures\/3/);
+    assert.match(text, /-lt 90/);
+    const timer = fs.readFileSync(path.join(root, 'systemd/sokrat-frpc-watchdog.timer'), 'utf8');
+    assert.match(timer, /OnUnitActiveSec=30s/);
+});

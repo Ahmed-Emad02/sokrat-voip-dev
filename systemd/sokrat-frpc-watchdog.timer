@@ -1,0 +1,11 @@
+[Unit]
+Description=Check Sokrat FRP connectivity every 30 seconds
+
+[Timer]
+OnBootSec=15s
+OnUnitActiveSec=30s
+AccuracySec=1s
+Persistent=true
+
+[Install]
+WantedBy=timers.target
