@@ -1841,6 +1841,16 @@ function can(tab) {
     }
 
     /* Compact settings launcher and flyout */
+    @keyframes settingsLauncherPop {
+        0% { transform: scale(1); }
+        28% { transform: scale(0.94); }
+        62% { transform: scale(1.03); }
+        100% { transform: scale(1); }
+    }
+    @keyframes settingsGearTurn {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(180deg); }
+    }
     .settings-launcher {
         align-items: center;
         background: transparent !important;
@@ -1860,6 +1870,9 @@ function can(tab) {
         border-color: var(--border-accent) !important;
         color: var(--text-primary) !important;
     }
+    .settings-launcher.settings-launcher-animating {
+        animation: settingsLauncherPop 320ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
     .settings-launcher-icon {
         align-items: center;
         background: var(--bg-selected);
@@ -1878,6 +1891,9 @@ function can(tab) {
         width: 1rem !important;
         margin: 0;
     }
+    .settings-launcher.settings-launcher-animating > svg:first-child {
+        animation: settingsGearTurn 420ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
     .settings-launcher-label {
         flex: 1;
         font-size: 0.75rem;
@@ -1888,8 +1904,14 @@ function can(tab) {
         color: var(--text-muted);
         transition: transform 160ms ease;
     }
-    .settings-launcher[aria-expanded="true"] .settings-launcher-chevron {
+    #appSidebar .settings-launcher[aria-expanded="true"] .settings-launcher-chevron {
         transform: rotate(180deg);
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .settings-launcher.settings-launcher-animating,
+        .settings-launcher.settings-launcher-animating > svg:first-child {
+            animation: none;
+        }
     }
     .settings-menu {
         z-index: 150 !important;
@@ -3055,6 +3077,7 @@ function can(tab) {
                 settingsMenu.style.maxHeight = (window.innerHeight - 2 * gap) + 'px';
             }
             function setSettingsMenuOpen(isOpen) {
+                const wasOpen = settingsMenu.classList.contains('visible');
                 if (isOpen) {
                     settingsMenu.classList.add('visible');
                     settingsMenu.classList.remove('invisible', 'opacity-0', 'scale-95');
@@ -3066,6 +3089,12 @@ function can(tab) {
                 }
                 settingsMenu.style.pointerEvents = isOpen ? 'auto' : 'none';
                 settingsBtn.setAttribute('aria-expanded', String(isOpen));
+                if (wasOpen !== isOpen) {
+                    // Replay the launcher feedback on both open and close.
+                    settingsBtn.classList.remove('settings-launcher-animating');
+                    void settingsBtn.offsetWidth;
+                    settingsBtn.classList.add('settings-launcher-animating');
+                }
             }
             settingsBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
