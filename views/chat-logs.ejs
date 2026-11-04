@@ -107,7 +107,7 @@ const canExportLogs = typeof canExport !== 'undefined' && canExport;
 
         <div class="mb-4 flex items-start justify-between gap-4 flex-wrap">
             <div>
-                <h2 class="text-2xl font-extrabold tracking-tight m-0"><%= t.title %> <span style="color: var(--chat-accent);"><%= t.subtitle %></span></h2>
+                <h2 class="text-2xl font-vibrant-display text-[var(--text-primary)] tracking-tight m-0" data-bicolor-header="true"><%- typeof formatBicolorHeader === 'function' ? formatBicolorHeader(t.title, t.subtitle) : (t.title + (t.subtitle ? ' ' + t.subtitle : '')) %></h2>
                 <p class="text-xs mt-1" style="color: var(--chat-muted);"><%= t.desc %></p>
             </div>
             <div class="flex items-center gap-2 flex-wrap">

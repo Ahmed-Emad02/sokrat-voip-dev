@@ -431,6 +431,27 @@ function can(tab) {
         font-size: 13px !important;
     }
 
+    /* Bicolor Typography - Word Split Styling */
+    .bicolor-word {
+        display: inline-block;
+        white-space: nowrap;
+    }
+    .bicolor-first {
+        color: var(--text-primary) !important;
+        transition: color 0.15s ease-in-out;
+    }
+    .bicolor-second {
+        color: var(--accent-color, #ef4444) !important;
+        transition: color 0.15s ease-in-out;
+    }
+    .light-theme .bicolor-second {
+        color: var(--accent-color, #b91c1c) !important;
+    }
+    .font-vibrant-display {
+        font-weight: 900 !important;
+        letter-spacing: -0.01em;
+    }
+
     /* Header tabs sizing and weight upgrades */
     .nav-item {
         padding: 0.75rem 0.9rem !important;
@@ -7332,5 +7353,65 @@ async function migrateGatewayTunnel() {
     }
 }
 window.migrateGatewayTunnel = migrateGatewayTunnel;
+
+// ── Bicolor Header Typography Enhancer ─────────────────────────────────────
+function splitBicolorWord(word) {
+    if (!word) return '';
+    const isArabic = /[\u0600-\u06FF]/.test(word);
+    let chars;
+    if (typeof Intl !== 'undefined' && Intl.Segmenter) {
+        chars = Array.from(new Intl.Segmenter(isArabic ? 'ar' : 'en', { granularity: 'grapheme' }).segment(word)).map(s => s.segment);
+    } else {
+        chars = Array.from(word);
+    }
+    const len = chars.length;
+    if (len <= 1) {
+        return '<span class="bicolor-word inline-block whitespace-nowrap"><span class="bicolor-first">' + word + '</span></span>';
+    }
+    const mid = Math.ceil(len / 2);
+    let first = chars.slice(0, mid).join('');
+    let second = chars.slice(mid).join('');
+    if (isArabic) {
+        first += '\u200D';
+        second = '\u200D' + second;
+    }
+    return '<span class="bicolor-word inline-block whitespace-nowrap"><span class="bicolor-first">' + first + '</span><span class="bicolor-second">' + second + '</span></span>';
+}
+
+function formatBicolorText(text) {
+    if (!text || typeof text !== 'string') return text || '';
+    return text.split(/([\s\u2013\u2014\-]+)/).map(function(token) {
+        if (/^[\s\u2013\u2014\-]+$/.test(token)) {
+            return token;
+        }
+        return splitBicolorWord(token);
+    }).join('');
+}
+
+function enhanceBicolorHeaders() {
+    try {
+        const headers = document.querySelectorAll('h2.font-vibrant-display, h1.font-vibrant-display, [data-bicolor-header="true"]');
+        headers.forEach(function(el) {
+            if (el.hasAttribute('data-bicolor-enhanced') || el.querySelector('.bicolor-word')) {
+                el.setAttribute('data-bicolor-enhanced', 'true');
+                return;
+            }
+            const rawText = el.textContent ? el.textContent.trim() : '';
+            if (!rawText) return;
+            el.innerHTML = formatBicolorText(rawText);
+            el.setAttribute('data-bicolor-enhanced', 'true');
+        });
+    } catch (_) {}
+}
+
+window.splitBicolorWord = splitBicolorWord;
+window.formatBicolorText = formatBicolorText;
+window.enhanceBicolorHeaders = enhanceBicolorHeaders;
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', enhanceBicolorHeaders);
+} else {
+    enhanceBicolorHeaders();
+}
 
 </script>

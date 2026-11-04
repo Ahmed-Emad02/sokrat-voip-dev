@@ -192,7 +192,7 @@
             <!-- Page Header -->
             <div class="flex items-center justify-between">
                 <div>
-                    <h1 class="text-2xl font-black text-[var(--text-primary)]"><%= currentLang === 'ar' ? 'تكامل CRM' : 'Laravel CRM Integration' %></h1>
+                    <h1 class="text-2xl font-vibrant-display text-[var(--text-primary)] tracking-tight" data-bicolor-header="true"><%- typeof formatBicolorHeader === 'function' ? formatBicolorHeader(currentLang === 'ar' ? 'تكامل CRM' : 'Laravel CRM Integration') : (currentLang === 'ar' ? 'تكامل CRM' : 'Laravel CRM Integration') %></h1>
                     <p class="text-xs text-[var(--text-secondary)] mt-1"><%= currentLang === 'ar' ? 'إدارة الاقتران والتراخيص والتحكم في الوصول لـ CRM' : 'Manage paired CRM clients, single-use pairing codes, and access permissions' %></p>
                 </div>
                 <button id="btnGeneratePairingCode" class="btn-primary px-4 py-2.5 text-xs uppercase font-bold tracking-wider flex items-center gap-2">

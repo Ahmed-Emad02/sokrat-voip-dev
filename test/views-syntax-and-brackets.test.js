@@ -10,10 +10,13 @@ const vm = require('vm');
 const viewsDir = path.join(__dirname, '../views');
 
 const moment = require('moment');
+const { formatBicolorText, formatBicolorHeader } = require('../lib/bicolor-text');
 
 function createDummyData(filename, lang = 'en') {
     const baseName = path.basename(filename, '.ejs');
     return {
+        formatBicolorText,
+        formatBicolorHeader,
         activeTab: baseName,
         currentLang: lang,
         activeLang: lang,

@@ -184,8 +184,8 @@
             <!-- Page Header -->
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                    <h1 class="text-2xl md:text-3xl font-black tracking-tight flex items-center gap-2">
-                        <span><%= isRtl ? 'إدارة المستخدمين والصلاحيات' : 'User & Access Control' %></span>
+                    <h1 class="text-2xl md:text-3xl font-vibrant-display text-[var(--text-primary)] tracking-tight flex items-center gap-2" data-bicolor-header="true">
+                        <span><%- typeof formatBicolorHeader === 'function' ? formatBicolorHeader(isRtl ? 'إدارة المستخدمين والصلاحيات' : 'User & Access Control') : (isRtl ? 'إدارة المستخدمين والصلاحيات' : 'User & Access Control') %></span>
                     </h1>
                 </div>
             </div>
