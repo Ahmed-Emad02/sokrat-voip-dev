@@ -8,7 +8,7 @@ const words = {
         src: "Source", dst: "Destination", did: "DID Number", uid: "Unique ID",
         trunk: "Trunk / Line", allTrunks: "All Trunks", trunkInternal: "Internal Only (No Trunk)",
         duration: "Duration", unitSec: "sec", unitMin: "min", unitHour: "hrs", durFrom: "From", durTo: "To",
-        moreFilters: "More Filters", lessFilters: "Fewer Filters", reset: "Reset Filters",
+        moreFilters: "More Filters", lessFilters: "Fewer Filters", filters: "Filters", hideFilters: "Hide Filters", reset: "Reset Filters",
         btn: "Apply Filters", thTime: "Timestamp", thId: "UniqueID", thSrc: "Source", thDst: "Destination", thDid: "DID",
         thName: "Name", thAir: "Airtime", thState: "State", thDir: "Dir", thScope: "Scope", thRec: "Recording", thActions: "Actions", noData: "No matching call records.",
         play: "Play", download: "Download", noAudio: "No Audio", footerLeft: "Call records", footerRight: "Total records:",
@@ -23,7 +23,7 @@ const words = {
         src: "المصدر", dst: "الوجهة", did: "رقم DID", uid: "المعرف الفريد",
         trunk: "خط الربط / الشريحة", allTrunks: "جميع خطوط الربط", trunkInternal: "داخلي فقط (بدون خط)",
         duration: "مدة المكالمة", unitSec: "ثانية", unitMin: "دقيقة", unitHour: "ساعة", durFrom: "من", durTo: "إلى",
-        moreFilters: "المزيد من الفلاتر", lessFilters: "إخفاء الفلاتر", reset: "إعادة ضبط",
+        moreFilters: "المزيد من الفلاتر", lessFilters: "إخفاء الفلاتر", filters: "الفلاتر", hideFilters: "إخفاء الفلاتر", reset: "إعادة ضبط",
         btn: "تطبيق فلاتر البحث", thTime: "التوقيت", thId: "المعرف", thSrc: "المصدر", thDst: "الوجهة", thDid: "DID",
         thName: "الاسم", thAir: "مدة المكالمة", thState: "الحالة", thDir: "اتجاه", thScope: "النطاق", thRec: "التسجيل", thActions: "الإجراءات", noData: "لم يتم العثور على سجلات مكالمات مطابقة.",
         play: "تشغيل", download: "تحميل", noAudio: "لا يوجد صوت", footerLeft: "نشاط تدفق البيانات", footerRight: "إجمالي السجلات المحسوبة:",
@@ -138,6 +138,10 @@ function fmtDur(s) {
             border: none !important;
             border-width: 0 !important;
             box-shadow: none !important;
+        }
+        #cdrFilterForm.filters-collapsed .filter-action-bar {
+            padding-top: 0;
+            border-top-color: transparent;
         }
         /* Unified Filter Typography */
         #cdrFilterForm label,
@@ -411,12 +415,65 @@ function fmtDur(s) {
             </div>
         </div>
 
+        <%
+            // Single collapsible filter body: rows 1-3 are hidden together.
+            // Scoped users always have their allowed extensions selected, so
+            // that permission scope is not counted as an "active" filter.
+            let cdrScopedExts = null;
+            if (typeof userExtensions !== 'undefined' && Array.isArray(userExtensions) && userExtensions.length > 0) {
+                cdrScopedExts = userExtensions;
+            } else if (typeof userExtension !== 'undefined' && userExtension) {
+                cdrScopedExts = String(userExtension).split(',').map(e => e.trim()).filter(Boolean);
+            }
+            const cdrIsScopedUser = Boolean(cdrScopedExts && cdrScopedExts.length > 0 && (typeof isSuperAdmin !== 'undefined' && !isSuperAdmin));
+            const cdrSelectedExtsForActive = Array.isArray(filters.targetExtension)
+                ? filters.targetExtension
+                : (filters.targetExtension && filters.targetExtension !== 'ALL' ? [filters.targetExtension] : ['ALL']);
+            const cdrIsPrimaryExtActive = !cdrIsScopedUser && !(cdrSelectedExtsForActive.includes('ALL') || cdrSelectedExtsForActive.length === 0);
+
+            const cdrSelectedStatusesForActive = Array.isArray(filters.statusFilter)
+                ? filters.statusFilter
+                : (filters.statusFilter && filters.statusFilter !== 'ALL' ? [filters.statusFilter] : ['ALL']);
+            const cdrIsPrimaryStatusActive = !(cdrSelectedStatusesForActive.includes('ALL') || cdrSelectedStatusesForActive.length === 0);
+
+            const cdrDefaultStart = moment().startOf('day').format('YYYY-MM-DD HH:mm:ss');
+            const cdrDefaultEnd = moment().endOf('day').format('YYYY-MM-DD HH:mm:ss');
+            const cdrIsPrimaryDateActive = moment(filters.startDate).format('YYYY-MM-DD HH:mm:ss') !== cdrDefaultStart
+                || moment(filters.endDate).format('YYYY-MM-DD HH:mm:ss') !== cdrDefaultEnd;
+
+            let selectedTrk = Array.isArray(filters.trunkFilter) ? filters.trunkFilter : (filters.trunkFilter && filters.trunkFilter !== 'ALL' ? [filters.trunkFilter] : ['ALL']);
+            let isAllTrk = selectedTrk.includes('ALL') || selectedTrk.length === 0;
+            let isTrunkActive = !isAllTrk;
+            let isDurationActive = Boolean((filters.durationMin && String(filters.durationMin).trim() !== '') || (filters.durationMax && String(filters.durationMax).trim() !== ''));
+            let cdrHasActiveSecondary = (filters.directionFilter && filters.directionFilter !== 'ALL') ||
+                                        (filters.callScopeFilter && filters.callScopeFilter !== 'ALL') ||
+                                        isTrunkActive ||
+                                        isDurationActive ||
+                                        (filters.searchSrc && filters.searchSrc.trim() !== '') ||
+                                        (filters.searchDst && filters.searchDst.trim() !== '') ||
+                                        (filters.searchDid && filters.searchDid.trim() !== '') ||
+                                        (filters.searchUniqueId && filters.searchUniqueId.trim() !== '');
+            let cdrActiveSecondaryCount = 0;
+            if (filters.directionFilter && filters.directionFilter !== 'ALL') cdrActiveSecondaryCount++;
+            if (filters.callScopeFilter && filters.callScopeFilter !== 'ALL') cdrActiveSecondaryCount++;
+            if (isTrunkActive) cdrActiveSecondaryCount++;
+            if (isDurationActive) cdrActiveSecondaryCount++;
+            if (filters.searchSrc && filters.searchSrc.trim() !== '') cdrActiveSecondaryCount++;
+            if (filters.searchDst && filters.searchDst.trim() !== '') cdrActiveSecondaryCount++;
+            if (filters.searchDid && filters.searchDid.trim() !== '') cdrActiveSecondaryCount++;
+            if (filters.searchUniqueId && filters.searchUniqueId.trim() !== '') cdrActiveSecondaryCount++;
+
+            const cdrActivePrimaryCount = (cdrIsPrimaryExtActive ? 1 : 0) + (cdrIsPrimaryStatusActive ? 1 : 0) + (cdrIsPrimaryDateActive ? 1 : 0);
+            const activeFilterCount = cdrActivePrimaryCount + cdrActiveSecondaryCount;
+            const hasActiveFilters = activeFilterCount > 0;
+        %>
         <!-- Compact Balanced Filter Form -->
-        <form id="cdrFilterForm" action="/cdr" method="GET" class="mb-4 flex flex-col relative z-30 bg-transparent border-0 border-none shadow-none">
+        <form id="cdrFilterForm" action="/cdr" method="GET" class="mb-4 flex flex-col relative z-30 bg-transparent border-0 border-none shadow-none <%= hasActiveFilters ? '' : 'filters-collapsed' %>">
             <input type="hidden" name="lang" value="<%= currentLang %>">
             <input type="hidden" name="page" value="1">
             
             
+            <div id="cdrFilterBody" class="<%= hasActiveFilters ? '' : 'hidden' %> overflow-hidden"<%= hasActiveFilters ? '' : ' inert' %>>
             <!-- Row 1: Primary Filters (4-column responsive grid) -->
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 mb-2.5 filter-grid-row1">
                 <div>
@@ -520,34 +577,8 @@ function fmtDur(s) {
                 </div>
             </div>
 
-            <!-- Row 2 & 3: Secondary / Advanced Filters in Collapsible Drawer -->
-            <% 
-                let selectedTrk = Array.isArray(filters.trunkFilter) ? filters.trunkFilter : (filters.trunkFilter && filters.trunkFilter !== 'ALL' ? [filters.trunkFilter] : ['ALL']);
-                let isAllTrk = selectedTrk.includes('ALL') || selectedTrk.length === 0;
-                let isTrunkActive = !isAllTrk;
-
-                let isDurationActive = Boolean((filters.durationMin && String(filters.durationMin).trim() !== '') || (filters.durationMax && String(filters.durationMax).trim() !== ''));
-
-                let cdrHasActiveSecondary = (filters.directionFilter && filters.directionFilter !== 'ALL') ||
-                                           (filters.callScopeFilter && filters.callScopeFilter !== 'ALL') ||
-                                           isTrunkActive ||
-                                           isDurationActive ||
-                                           (filters.searchSrc && filters.searchSrc.trim() !== '') ||
-                                           (filters.searchDst && filters.searchDst.trim() !== '') ||
-                                           (filters.searchDid && filters.searchDid.trim() !== '') ||
-                                           (filters.searchUniqueId && filters.searchUniqueId.trim() !== '');
-
-                let cdrActiveSecondaryCount = 0;
-                if (filters.directionFilter && filters.directionFilter !== 'ALL') cdrActiveSecondaryCount++;
-                if (filters.callScopeFilter && filters.callScopeFilter !== 'ALL') cdrActiveSecondaryCount++;
-                if (isTrunkActive) cdrActiveSecondaryCount++;
-                if (isDurationActive) cdrActiveSecondaryCount++;
-                if (filters.searchSrc && filters.searchSrc.trim() !== '') cdrActiveSecondaryCount++;
-                if (filters.searchDst && filters.searchDst.trim() !== '') cdrActiveSecondaryCount++;
-                if (filters.searchDid && filters.searchDid.trim() !== '') cdrActiveSecondaryCount++;
-                if (filters.searchUniqueId && filters.searchUniqueId.trim() !== '') cdrActiveSecondaryCount++;
-            %>
-            <div id="cdrSecondaryFilters" class="<%= cdrHasActiveSecondary ? '' : 'hidden' %> overflow-hidden">
+            <!-- Rows 2 & 3: secondary filters, shown inside the same body -->
+            <div id="cdrSecondaryFilters">
                 <div class="pb-2.5">
                     <!-- Row 2: Routing, Line & Duration Filters (4-column responsive grid) -->
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 mb-2.5 filter-grid-row2">
@@ -646,8 +677,10 @@ function fmtDur(s) {
                 </div>
             </div>
 
+            </div>
+
             <!-- Bottom Action Bar -->
-            <div class="flex flex-wrap sm:flex-nowrap items-center justify-between gap-2.5 sm:gap-3 pt-2 border-t border-[var(--border-primary)]/50">
+            <div id="cdrFilterActionBar" class="filter-action-bar flex flex-wrap sm:flex-nowrap items-center justify-between gap-2.5 sm:gap-3 pt-2 border-t border-[var(--border-primary)]/50">
                 <div class="flex items-center gap-2 w-full sm:w-auto">
                     <a href="/cdr?lang=<%= currentLang %>" class="filter-action-btn flex-1 sm:flex-none h-8 inline-flex items-center justify-center" title="<%= t.reset %>">
                         <svg class="w-3.5 h-3.5 shrink-0 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -655,15 +688,15 @@ function fmtDur(s) {
                         </svg>
                         <span><%= t.reset %></span>
                     </a>
-                    <button type="button" id="cdrToggleMoreBtn" onclick="toggleCdrMoreFilters()" class="filter-action-btn flex-1 sm:flex-none h-8 inline-flex items-center justify-center" title="<%= cdrHasActiveSecondary ? t.lessFilters : t.moreFilters %>">
+                    <button type="button" id="cdrToggleMoreBtn" onclick="toggleCdrFilters()" class="filter-action-btn flex-1 sm:flex-none h-8 inline-flex items-center justify-center" title="<%= hasActiveFilters ? t.hideFilters : t.filters %>" aria-expanded="<%= hasActiveFilters ? 'true' : 'false' %>" aria-controls="cdrFilterBody">
                         <svg id="cdrToggleMoreFilterIcon" class="w-3.5 h-3.5 shrink-0 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
                         </svg>
-                        <span id="cdrToggleMoreLabel"><%= cdrHasActiveSecondary ? t.lessFilters : t.moreFilters %></span>
-                        <svg id="cdrToggleMoreIcon" class="w-3.5 h-3.5 transition-transform duration-200 <%= cdrHasActiveSecondary ? 'rotate-180' : '' %>" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
-                        <% if (cdrActiveSecondaryCount > 0) { %>
+                        <span id="cdrToggleMoreLabel"><%= hasActiveFilters ? t.hideFilters : t.filters %></span>
+                        <svg id="cdrToggleMoreIcon" class="w-3.5 h-3.5 transition-transform duration-200 <%= hasActiveFilters ? 'rotate-180' : '' %>" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+                        <% if (activeFilterCount > 0) { %>
                             <span class="inline-flex items-center px-1.5 py-0.2 text-[10px] font-bold rounded-full bg-[var(--accent-color)]/20 text-[var(--accent-color)] border border-[var(--accent-color)]/30 ms-0.5">
-                                <%= cdrActiveSecondaryCount %> <%= isRtl ? 'نشط' : 'Active' %>
+                                <%= activeFilterCount %> <%= isRtl ? 'نشط' : 'Active' %>
                             </span>
                         <% } %>
                     </button>
@@ -1408,12 +1441,14 @@ function syncStatusChecklistUI() {
             syncStatusChecklistUI();
             syncTrunkChecklistUI();
 
-            const cdrHasServerActiveSecondary = <%= cdrHasActiveSecondary ? 'true' : 'false' %>;
-            if (!cdrHasServerActiveSecondary) {
+            const cdrHasServerActiveFilters = <%= hasActiveFilters ? 'true' : 'false' %>;
+            if (cdrHasServerActiveFilters) {
+                setCdrFilterUi(true);
+            } else {
                 try {
                     const savedCdrExpanded = localStorage.getItem('cdr_filters_expanded');
                     if (savedCdrExpanded === 'true') {
-                        toggleCdrMoreFilters(true, true);
+                        toggleCdrFilters(true, true);
                     }
                 } catch (e) {}
             }
@@ -1838,134 +1873,157 @@ function syncStatusChecklistUI() {
         })();
 
         // Expandable Filters Mechanism for Call History
-        function toggleCdrMoreFilters(forcedState, immediate) {
-            const drawer = document.getElementById('cdrSecondaryFilters');
+        const cdrFilterLabels = {
+            collapsed: <%- JSON.stringify(t.filters) %>,
+            expanded: <%- JSON.stringify(t.hideFilters) %>
+        };
+
+        function setCdrFilterUi(expanded) {
+            const form = document.getElementById('cdrFilterForm');
+            const body = document.getElementById('cdrFilterBody');
+            const btn = document.getElementById('cdrToggleMoreBtn');
             const label = document.getElementById('cdrToggleMoreLabel');
             const icon = document.getElementById('cdrToggleMoreIcon');
-            if (!drawer) return;
+            if (form) form.classList.toggle('filters-collapsed', !expanded);
+            if (body) {
+                if (expanded) body.removeAttribute('inert');
+                else body.setAttribute('inert', '');
+            }
+            if (btn) {
+                btn.setAttribute('aria-expanded', String(expanded));
+                btn.title = expanded ? cdrFilterLabels.expanded : cdrFilterLabels.collapsed;
+            }
+            if (label) label.textContent = expanded ? cdrFilterLabels.expanded : cdrFilterLabels.collapsed;
+            if (icon) icon.classList.toggle('rotate-180', expanded);
+        }
 
-            const isCurrentlyHidden = drawer.classList.contains('hidden') || drawer.style.display === 'none' || drawer.offsetHeight === 0;
+        function toggleCdrFilters(forcedState, immediate) {
+            const body = document.getElementById('cdrFilterBody');
+            const btn = document.getElementById('cdrToggleMoreBtn');
+            if (!body) return;
+
+            const isCurrentlyHidden = body.classList.contains('hidden') || body.style.display === 'none' || body.offsetHeight === 0;
             const expand = (typeof forcedState === 'boolean') ? forcedState : isCurrentlyHidden;
 
             if (expand) {
-                if (!drawer.classList.contains('hidden') && drawer.offsetHeight > 0 && !drawer.dataset.animating) {
+                if (!body.classList.contains('hidden') && body.offsetHeight > 0 && !body.dataset.animating) {
+                    setCdrFilterUi(true);
                     return;
                 }
 
+                setCdrFilterUi(true);
+
                 if (immediate) {
-                    drawer.classList.remove('hidden');
-                    drawer.style.display = 'block';
-                    drawer.style.maxHeight = 'none';
-                    drawer.style.opacity = '1';
-                    drawer.style.overflow = 'visible';
-                    drawer.style.transition = 'none';
-                    if (label) label.textContent = <%- JSON.stringify(t.lessFilters) %>;
-                    if (icon) icon.classList.add('rotate-180');
+                    body.classList.remove('hidden');
+                    body.style.display = 'block';
+                    body.style.maxHeight = 'none';
+                    body.style.opacity = '1';
+                    body.style.overflow = 'visible';
+                    body.style.transition = 'none';
                     try { localStorage.setItem('cdr_filters_expanded', 'true'); } catch (e) {}
                     return;
                 }
 
-                drawer.dataset.animating = 'true';
-                drawer.classList.remove('hidden');
-                drawer.style.display = 'block';
-                drawer.style.overflow = 'hidden';
-                drawer.style.transition = 'none';
-                drawer.style.maxHeight = '0px';
-                drawer.style.opacity = '0';
+                body.dataset.animating = 'true';
+                body.classList.remove('hidden');
+                body.style.display = 'block';
+                body.style.overflow = 'hidden';
+                body.style.transition = 'none';
+                body.style.maxHeight = '0px';
+                body.style.opacity = '0';
 
-                const targetHeight = drawer.scrollHeight;
-                void drawer.offsetHeight;
+                const targetHeight = body.scrollHeight;
+                void body.offsetHeight;
 
-                drawer.style.transition = 'max-height 0.28s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.22s ease-out';
+                body.style.transition = 'max-height 0.28s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.22s ease-out';
 
                 requestAnimationFrame(() => {
-                    drawer.style.maxHeight = targetHeight + 'px';
-                    drawer.style.opacity = '1';
+                    body.style.maxHeight = targetHeight + 'px';
+                    body.style.opacity = '1';
                 });
 
                 let finished = false;
                 const finishExpand = () => {
                     if (finished) return;
                     finished = true;
-                    delete drawer.dataset.animating;
-                    drawer.style.transition = 'none';
-                    drawer.style.maxHeight = 'none';
-                    drawer.style.overflow = 'visible';
+                    delete body.dataset.animating;
+                    body.style.transition = 'none';
+                    body.style.maxHeight = 'none';
+                    body.style.overflow = 'visible';
                 };
 
                 const onEnd = (e) => {
-                    if (e && (e.target !== drawer || e.propertyName !== 'max-height')) return;
-                    drawer.removeEventListener('transitionend', onEnd);
+                    if (e && (e.target !== body || e.propertyName !== 'max-height')) return;
+                    body.removeEventListener('transitionend', onEnd);
                     finishExpand();
                 };
-                drawer.addEventListener('transitionend', onEnd);
+                body.addEventListener('transitionend', onEnd);
                 setTimeout(finishExpand, 350);
 
-                if (label) label.textContent = <%- JSON.stringify(t.lessFilters) %>;
-                if (icon) icon.classList.add('rotate-180');
                 try { localStorage.setItem('cdr_filters_expanded', 'true'); } catch (e) {}
             } else {
-                if (drawer.classList.contains('hidden') && !drawer.dataset.animating) {
+                if (body.classList.contains('hidden') && !body.dataset.animating) {
+                    setCdrFilterUi(false);
                     return;
                 }
 
+                const startHeight = body.offsetHeight || body.scrollHeight;
+                if (body.contains(document.activeElement) && btn) btn.focus();
+                document.querySelectorAll('#cdrFilterForm .checklist-menu').forEach(menu => menu.classList.add('hidden'));
+                setCdrFilterUi(false);
+
                 if (immediate) {
-                    drawer.classList.add('hidden');
-                    drawer.style.display = '';
-                    drawer.style.maxHeight = '';
-                    drawer.style.opacity = '';
-                    drawer.style.overflow = '';
-                    drawer.style.transition = '';
-                    if (label) label.textContent = <%- JSON.stringify(t.moreFilters) %>;
-                    if (icon) icon.classList.remove('rotate-180');
+                    body.classList.add('hidden');
+                    body.style.display = '';
+                    body.style.maxHeight = '';
+                    body.style.opacity = '';
+                    body.style.overflow = '';
+                    body.style.transition = '';
                     try { localStorage.setItem('cdr_filters_expanded', 'false'); } catch (e) {}
                     return;
                 }
 
-                drawer.dataset.animating = 'true';
-                drawer.style.overflow = 'hidden';
+                body.dataset.animating = 'true';
+                body.style.overflow = 'hidden';
+                body.style.transition = 'none';
+                body.style.maxHeight = startHeight + 'px';
+                body.style.opacity = '1';
 
-                const startHeight = drawer.offsetHeight || drawer.scrollHeight;
-                drawer.style.transition = 'none';
-                drawer.style.maxHeight = startHeight + 'px';
-                drawer.style.opacity = '1';
+                void body.offsetHeight;
 
-                void drawer.offsetHeight;
-
-                drawer.style.transition = 'max-height 0.26s cubic-bezier(0.2, 0, 0, 1), opacity 0.2s ease-in';
+                body.style.transition = 'max-height 0.26s cubic-bezier(0.2, 0, 0, 1), opacity 0.2s ease-in';
 
                 requestAnimationFrame(() => {
-                    drawer.style.maxHeight = '0px';
-                    drawer.style.opacity = '0';
+                    body.style.maxHeight = '0px';
+                    body.style.opacity = '0';
                 });
 
                 let finished = false;
                 const finishCollapse = () => {
                     if (finished) return;
                     finished = true;
-                    delete drawer.dataset.animating;
-                    drawer.classList.add('hidden');
-                    drawer.style.display = '';
-                    drawer.style.maxHeight = '';
-                    drawer.style.opacity = '';
-                    drawer.style.overflow = '';
-                    drawer.style.transition = '';
+                    delete body.dataset.animating;
+                    body.classList.add('hidden');
+                    body.style.display = '';
+                    body.style.maxHeight = '';
+                    body.style.opacity = '';
+                    body.style.overflow = '';
+                    body.style.transition = '';
                 };
 
                 const onEnd = (e) => {
-                    if (e && (e.target !== drawer || e.propertyName !== 'max-height')) return;
-                    drawer.removeEventListener('transitionend', onEnd);
+                    if (e && (e.target !== body || e.propertyName !== 'max-height')) return;
+                    body.removeEventListener('transitionend', onEnd);
                     finishCollapse();
                 };
-                drawer.addEventListener('transitionend', onEnd);
+                body.addEventListener('transitionend', onEnd);
                 setTimeout(finishCollapse, 320);
 
-                if (label) label.textContent = <%- JSON.stringify(t.moreFilters) %>;
-                if (icon) icon.classList.remove('rotate-180');
                 try { localStorage.setItem('cdr_filters_expanded', 'false'); } catch (e) {}
             }
         }
-        window.toggleCdrMoreFilters = toggleCdrMoreFilters;
+        window.toggleCdrFilters = toggleCdrFilters;
+        window.toggleCdrMoreFilters = toggleCdrFilters;
 
         window.openCdrColumnsModal = openCdrColumnsModal;
         window.closeCdrColumnsModal = closeCdrColumnsModal;

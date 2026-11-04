@@ -28,8 +28,8 @@ const defaultData = {
         }
     ],
     filters: {
-        startDate: '2026-10-18 00:00:00',
-        endDate: '2026-10-18 23:59:59',
+        startDate: moment().startOf('day').format('YYYY-MM-DD HH:mm:ss'),
+        endDate: moment().endOf('day').format('YYYY-MM-DD HH:mm:ss'),
         targetExtension: 'ALL',
         statusFilter: 'ALL',
         directionFilter: 'ALL',
@@ -61,10 +61,13 @@ test('Call History renders visible Row 1 and expandable drawer with rows 2-3 and
     assert.ok(html.includes('id="targetExtensionSelect"'), 'Must contain targetExtensionSelect');
     assert.ok(html.includes('id="statusFilterSelect"'), 'Must contain statusFilterSelect');
 
-    // Collapsible Drawer (hidden by default when secondary filters are empty)
-    assert.ok(html.includes('id="cdrSecondaryFilters" class="hidden'), 'Secondary drawer must be hidden by default');
-    assert.ok(html.includes('filter-grid-row2'), 'Row 2 grid is inside the drawer');
-    assert.ok(html.includes('filter-grid-row3'), 'Row 3 grid is inside the drawer');
+    // Collapsible body now contains all three rows.
+    assert.ok(html.includes('id="cdrFilterBody" class="hidden'), 'cdrFilterBody must be hidden by default');
+    assert.ok(html.includes('id="cdrSecondaryFilters"'), 'secondary rows are nested in the body');
+    assert.ok(html.indexOf('id="cdrFilterBody"') < html.indexOf('filter-grid-row1'), 'Row 1 is inside the body');
+    assert.ok(html.indexOf('filter-grid-row1') < html.indexOf('id="cdrFilterActionBar"'), 'body closes before the action bar');
+    assert.ok(html.includes('filter-grid-row2'), 'Row 2 grid is inside the body');
+    assert.ok(html.includes('filter-grid-row3'), 'Row 3 grid is inside the body');
 
     // Row 2 Routing / Line / Duration (from - to)
     assert.ok(html.includes('id="cdrDirectionFilter"'), 'Must contain cdrDirectionFilter in drawer');
@@ -83,7 +86,7 @@ test('Call History renders visible Row 1 and expandable drawer with rows 2-3 and
 
     // Action Bar toggle button
     assert.ok(html.includes('id="cdrToggleMoreBtn"'), 'Must contain cdrToggleMoreBtn');
-    assert.ok(html.includes('More Filters'), 'Must display More Filters label when collapsed');
+    assert.ok(html.includes('id="cdrToggleMoreLabel">Filters<'), 'Must display Filters label when collapsed');
     assert.ok(html.includes('id="cdrDurationUnit"'), 'Must render cdrDurationUnit select');
     assert.ok(html.includes('value="s"'), 'Contains seconds option');
     assert.ok(html.includes('value="m"'), 'Contains minutes option');
@@ -104,7 +107,7 @@ test('Call History renders filter panel in Arabic with localized labels and dura
     assert.ok(html.includes('ساعة'), 'Must render Arabic hours unit option');
     assert.ok(html.includes('placeholder="من"'), 'Arabic placeholder for duration from');
     assert.ok(html.includes('placeholder="إلى"'), 'Arabic placeholder for duration to');
-    assert.ok(html.includes('المزيد من الفلاتر'), 'Must render Arabic More Filters label');
+    assert.ok(html.includes('id="cdrToggleMoreLabel">الفلاتر<'), 'Must render Arabic Filters label');
     assert.ok(html.includes('إعادة ضبط'), 'Must render Arabic Reset label');
 });
 
@@ -119,9 +122,9 @@ test('Call History drawer auto-expands with active badge when duration from-to o
     };
     const html = await ejs.renderFile(cdrEjsPath, activeData);
 
-    assert.ok(!html.includes('id="cdrSecondaryFilters" class="hidden'), 'Drawer must not be hidden when active filters are present');
+    assert.ok(!html.includes('id="cdrFilterBody" class="hidden'), 'Body must not be hidden when active filters are present');
     assert.ok(html.includes('2 Active'), 'Must show 2 Active badge');
-    assert.ok(html.includes('Fewer Filters'), 'Must show Fewer Filters label');
+    assert.ok(html.includes('Hide Filters'), 'Must show Hide Filters label');
     assert.ok(html.includes('value="45"'), 'Duration min input retains value 45');
     assert.ok(html.includes('value="101"'), 'Search input retains value 101');
 });

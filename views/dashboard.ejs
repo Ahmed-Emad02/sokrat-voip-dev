@@ -9,9 +9,9 @@ const words = {
         direction: "Direction", allDir: "All Directions", dirIn: "Inbound", dirOut: "Outbound", dirInternal: "Internal",
         scope: "Call Scope", allScope: "All Scopes", scopeInternal: "Internal Only", scopeExternal: "External Only", scopeFailover: "Failover Only",
         src: "Source", dst: "Destination", did: "DID Number", uid: "Unique ID",
-        moreFilters: "More Filters", lessFilters: "Fewer Filters",
+        moreFilters: "More Filters", lessFilters: "Fewer Filters", filters: "Filters", hideFilters: "Hide Filters",
         reset: "Reset Filters",
-        btn: "Refresh Metrics",
+        btn: "Apply Filters",
         totalCalls: "Total Calls", answeredCalls: "Answered",
         inbound: "Inbound", outbound: "Outbound",
         answerRate: "Answer Rate", airMinutes: "air minutes", internalCalls: "Internal Calls", externalCalls: "External Calls", chartScope: "Call Scope",
@@ -55,9 +55,9 @@ const words = {
         src: "المصدر", dst: "الوجهة", did: "رقم DID", uid: "المعرف الفريد",
         trunk: "خط الربط / الشريحة", allTrunks: "جميع خطوط الربط", trunkInternal: "داخلي فقط (بدون خط)",
         duration: "مدة المكالمة", unitSec: "ثانية", unitMin: "دقيقة", unitHour: "ساعة", durFrom: "من", durTo: "إلى",
-        moreFilters: "المزيد من الفلاتر", lessFilters: "إخفاء الفلاتر",
+        moreFilters: "المزيد من الفلاتر", lessFilters: "إخفاء الفلاتر", filters: "الفلاتر", hideFilters: "إخفاء الفلاتر",
         reset: "إعادة ضبط",
-        btn: "تحديث مؤشرات الأداء",
+        btn: "تطبيق الفلاتر",
         totalCalls: "إجمالي المكالمات", answeredCalls: "تم الرد",
         inbound: "وارد", outbound: "صادر",
         answerRate: "نسبة الرد", airMinutes: "دقيقة اتصال", internalCalls: "المكالمات الداخلية", externalCalls: "المكالمات الخارجية", chartScope: "نطاق المكالمات",
@@ -191,6 +191,14 @@ const isRtl = currentLang === 'ar';
         html.light-theme #dashFilterForm {
             background-color: transparent !important;
             border: 0 !important;
+        }
+        #dashFilterForm.filters-collapsed {
+            padding-top: 0.5rem;
+            padding-bottom: 0.5rem;
+        }
+        #dashFilterForm.filters-collapsed .filter-action-bar {
+            padding-top: 0;
+            border-top-color: transparent;
         }
         /* Hero stat row dividers.
            The container supplies the rule above and below the whole row, and
@@ -472,11 +480,64 @@ const isRtl = currentLang === 'ar';
         <% } %>
 
         <% const canExportDashboard = (typeof isSuperAdmin !== 'undefined' && isSuperAdmin) || (typeof allowedTabs !== 'undefined' && Array.isArray(allowedTabs) && allowedTabs.includes('cdr-export')); %>
+        <%
+            // Single collapsible filter body: rows 1-3 are hidden together.
+            // Scoped users always have their allowed extensions selected, so
+            // that permission scope is not counted as an "active" filter.
+            let dashScopedExts = null;
+            if (typeof userExtensions !== 'undefined' && Array.isArray(userExtensions) && userExtensions.length > 0) {
+                dashScopedExts = userExtensions;
+            } else if (typeof userExtension !== 'undefined' && userExtension) {
+                dashScopedExts = String(userExtension).split(',').map(e => e.trim()).filter(Boolean);
+            }
+            const dashIsScopedUser = Boolean(dashScopedExts && dashScopedExts.length > 0 && (typeof isSuperAdmin !== 'undefined' && !isSuperAdmin));
+            const dashSelectedExtsForActive = Array.isArray(filters.targetExtension)
+                ? filters.targetExtension
+                : (filters.targetExtension && filters.targetExtension !== 'ALL' ? [filters.targetExtension] : ['ALL']);
+            const dashIsPrimaryExtActive = !dashIsScopedUser && !(dashSelectedExtsForActive.includes('ALL') || dashSelectedExtsForActive.length === 0);
+
+            const dashSelectedStatusesForActive = Array.isArray(filters.statusFilter)
+                ? filters.statusFilter
+                : (filters.statusFilter && filters.statusFilter !== 'ALL' ? [filters.statusFilter] : ['ALL']);
+            const dashIsPrimaryStatusActive = !(dashSelectedStatusesForActive.includes('ALL') || dashSelectedStatusesForActive.length === 0);
+
+            const dashDefaultStart = moment().startOf('day').format('YYYY-MM-DD HH:mm:ss');
+            const dashDefaultEnd = moment().endOf('day').format('YYYY-MM-DD HH:mm:ss');
+            const dashIsPrimaryDateActive = moment(filters.startDate).format('YYYY-MM-DD HH:mm:ss') !== dashDefaultStart
+                || moment(filters.endDate).format('YYYY-MM-DD HH:mm:ss') !== dashDefaultEnd;
+
+            let selectedTrk = Array.isArray(filters.trunkFilter) ? filters.trunkFilter : (filters.trunkFilter && filters.trunkFilter !== 'ALL' ? [filters.trunkFilter] : ['ALL']);
+            let isAllTrk = selectedTrk.includes('ALL') || selectedTrk.length === 0;
+            let isTrunkActive = !isAllTrk;
+            let isDurationActive = Boolean((filters.durationMin && String(filters.durationMin).trim() !== '') || (filters.durationMax && String(filters.durationMax).trim() !== ''));
+            let hasActiveSecondary = (filters.directionFilter && filters.directionFilter !== 'ALL') ||
+                                     (filters.callScopeFilter && filters.callScopeFilter !== 'ALL') ||
+                                     isTrunkActive ||
+                                     isDurationActive ||
+                                     (filters.searchSrc && filters.searchSrc.trim() !== '') ||
+                                     (filters.searchDst && filters.searchDst.trim() !== '') ||
+                                     (filters.searchDid && filters.searchDid.trim() !== '') ||
+                                     (filters.searchUniqueId && filters.searchUniqueId.trim() !== '');
+            let activeSecondaryCount = 0;
+            if (filters.directionFilter && filters.directionFilter !== 'ALL') activeSecondaryCount++;
+            if (filters.callScopeFilter && filters.callScopeFilter !== 'ALL') activeSecondaryCount++;
+            if (isTrunkActive) activeSecondaryCount++;
+            if (isDurationActive) activeSecondaryCount++;
+            if (filters.searchSrc && filters.searchSrc.trim() !== '') activeSecondaryCount++;
+            if (filters.searchDst && filters.searchDst.trim() !== '') activeSecondaryCount++;
+            if (filters.searchDid && filters.searchDid.trim() !== '') activeSecondaryCount++;
+            if (filters.searchUniqueId && filters.searchUniqueId.trim() !== '') activeSecondaryCount++;
+
+            const dashActivePrimaryCount = (dashIsPrimaryExtActive ? 1 : 0) + (dashIsPrimaryStatusActive ? 1 : 0) + (dashIsPrimaryDateActive ? 1 : 0);
+            const activeFilterCount = dashActivePrimaryCount + activeSecondaryCount;
+            const hasActiveFilters = activeFilterCount > 0;
+        %>
         <!-- Compact Balanced Filter Form -->
-        <form id="dashFilterForm" action="/" method="GET" class="panel-surface p-3 px-3.5 rounded-xl mb-4 flex flex-col relative z-30">
+        <form id="dashFilterForm" action="/" method="GET" class="panel-surface p-3 px-3.5 rounded-xl mb-4 flex flex-col relative z-30 <%= hasActiveFilters ? '' : 'filters-collapsed' %>">
             <input type="hidden" name="lang" value="<%= currentLang %>">
             
             
+            <div id="dashFilterBody" class="<%= hasActiveFilters ? '' : 'hidden' %> overflow-hidden"<%= hasActiveFilters ? '' : ' inert' %>>
             <!-- Row 1: Primary Filters (4-column responsive grid) -->
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 mb-2.5 filter-grid-row1">
                 <div>
@@ -583,34 +644,8 @@ const isRtl = currentLang === 'ar';
                 </div>
             </div>
 
-            <!-- Row 2 & 3: Secondary / Advanced Filters in Collapsible Drawer -->
-            <% 
-                let selectedTrk = Array.isArray(filters.trunkFilter) ? filters.trunkFilter : (filters.trunkFilter && filters.trunkFilter !== 'ALL' ? [filters.trunkFilter] : ['ALL']);
-                let isAllTrk = selectedTrk.includes('ALL') || selectedTrk.length === 0;
-                let isTrunkActive = !isAllTrk;
-
-                let isDurationActive = Boolean((filters.durationMin && String(filters.durationMin).trim() !== '') || (filters.durationMax && String(filters.durationMax).trim() !== ''));
-
-                let hasActiveSecondary = (filters.directionFilter && filters.directionFilter !== 'ALL') ||
-                                         (filters.callScopeFilter && filters.callScopeFilter !== 'ALL') ||
-                                         isTrunkActive ||
-                                         isDurationActive ||
-                                         (filters.searchSrc && filters.searchSrc.trim() !== '') ||
-                                         (filters.searchDst && filters.searchDst.trim() !== '') ||
-                                         (filters.searchDid && filters.searchDid.trim() !== '') ||
-                                         (filters.searchUniqueId && filters.searchUniqueId.trim() !== '');
-
-                let activeSecondaryCount = 0;
-                if (filters.directionFilter && filters.directionFilter !== 'ALL') activeSecondaryCount++;
-                if (filters.callScopeFilter && filters.callScopeFilter !== 'ALL') activeSecondaryCount++;
-                if (isTrunkActive) activeSecondaryCount++;
-                if (isDurationActive) activeSecondaryCount++;
-                if (filters.searchSrc && filters.searchSrc.trim() !== '') activeSecondaryCount++;
-                if (filters.searchDst && filters.searchDst.trim() !== '') activeSecondaryCount++;
-                if (filters.searchDid && filters.searchDid.trim() !== '') activeSecondaryCount++;
-                if (filters.searchUniqueId && filters.searchUniqueId.trim() !== '') activeSecondaryCount++;
-            %>
-            <div id="dashSecondaryFilters" class="<%= hasActiveSecondary ? '' : 'hidden' %> overflow-hidden">
+            <!-- Rows 2 & 3: secondary filters, shown inside the same body -->
+            <div id="dashSecondaryFilters">
                 <div class="pb-2.5">
                     <!-- Row 2: Routing, Line & Duration Filters (4-column responsive grid) -->
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 mb-2.5 filter-grid-row2">
@@ -709,8 +744,10 @@ const isRtl = currentLang === 'ar';
                 </div>
             </div>
 
+            </div>
+
             <!-- Bottom Action Bar -->
-            <div class="flex flex-wrap sm:flex-nowrap items-center justify-between gap-2.5 sm:gap-3 pt-2 border-t border-[var(--border-primary)]/50">
+            <div id="dashFilterActionBar" class="filter-action-bar flex flex-wrap sm:flex-nowrap items-center justify-between gap-2.5 sm:gap-3 pt-2 border-t border-[var(--border-primary)]/50">
                 <div class="flex items-center gap-2 w-full sm:w-auto">
                     <a href="/?lang=<%= currentLang %>" class="filter-action-btn flex-1 sm:flex-none h-8 inline-flex items-center justify-center" title="<%= t.reset %>">
                         <svg class="w-3.5 h-3.5 shrink-0 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -718,15 +755,15 @@ const isRtl = currentLang === 'ar';
                         </svg>
                         <span><%= t.reset %></span>
                     </a>
-                    <button type="button" id="dashToggleMoreBtn" onclick="toggleDashboardMoreFilters()" class="filter-action-btn flex-1 sm:flex-none h-8 inline-flex items-center justify-center" title="<%= hasActiveSecondary ? t.lessFilters : t.moreFilters %>">
+                    <button type="button" id="dashToggleMoreBtn" onclick="toggleDashboardFilters()" class="filter-action-btn flex-1 sm:flex-none h-8 inline-flex items-center justify-center" title="<%= hasActiveFilters ? t.hideFilters : t.filters %>" aria-expanded="<%= hasActiveFilters ? 'true' : 'false' %>" aria-controls="dashFilterBody">
                         <svg id="dashToggleMoreFilterIcon" class="w-3.5 h-3.5 shrink-0 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
                         </svg>
-                        <span id="dashToggleMoreLabel"><%= hasActiveSecondary ? t.lessFilters : t.moreFilters %></span>
-                        <svg id="dashToggleMoreIcon" class="w-3.5 h-3.5 transition-transform duration-200 <%= hasActiveSecondary ? 'rotate-180' : '' %>" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
-                        <% if (activeSecondaryCount > 0) { %>
+                        <span id="dashToggleMoreLabel"><%= hasActiveFilters ? t.hideFilters : t.filters %></span>
+                        <svg id="dashToggleMoreIcon" class="w-3.5 h-3.5 transition-transform duration-200 <%= hasActiveFilters ? 'rotate-180' : '' %>" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+                        <% if (activeFilterCount > 0) { %>
                             <span class="inline-flex items-center px-1.5 py-0.2 text-[10px] font-bold rounded-full bg-[var(--accent-color)]/20 text-[var(--accent-color)] border border-[var(--accent-color)]/30 ms-0.5">
-                                <%= activeSecondaryCount %> <%= isRtl ? 'نشط' : 'Active' %>
+                                <%= activeFilterCount %> <%= isRtl ? 'نشط' : 'Active' %>
                             </span>
                         <% } %>
                     </button>
@@ -2274,146 +2311,171 @@ function syncStatusChecklistUI() {
 
 
         // Expandable Filters Mechanism for Dashboard
-        function toggleDashboardMoreFilters(forcedState, immediate) {
-            const drawer = document.getElementById('dashSecondaryFilters');
+        const dashFilterLabels = {
+            collapsed: <%- JSON.stringify(t.filters) %>,
+            expanded: <%- JSON.stringify(t.hideFilters) %>
+        };
+
+        function setDashboardFilterUi(expanded) {
+            const form = document.getElementById('dashFilterForm');
+            const body = document.getElementById('dashFilterBody');
+            const btn = document.getElementById('dashToggleMoreBtn');
             const label = document.getElementById('dashToggleMoreLabel');
             const icon = document.getElementById('dashToggleMoreIcon');
-            if (!drawer) return;
+            if (form) form.classList.toggle('filters-collapsed', !expanded);
+            if (body) {
+                if (expanded) body.removeAttribute('inert');
+                else body.setAttribute('inert', '');
+            }
+            if (btn) {
+                btn.setAttribute('aria-expanded', String(expanded));
+                btn.title = expanded ? dashFilterLabels.expanded : dashFilterLabels.collapsed;
+            }
+            if (label) label.textContent = expanded ? dashFilterLabels.expanded : dashFilterLabels.collapsed;
+            if (icon) icon.classList.toggle('rotate-180', expanded);
+        }
 
-            const isCurrentlyHidden = drawer.classList.contains('hidden') || drawer.style.display === 'none' || drawer.offsetHeight === 0;
+        function toggleDashboardFilters(forcedState, immediate) {
+            const body = document.getElementById('dashFilterBody');
+            const btn = document.getElementById('dashToggleMoreBtn');
+            if (!body) return;
+
+            const isCurrentlyHidden = body.classList.contains('hidden') || body.style.display === 'none' || body.offsetHeight === 0;
             const expand = (typeof forcedState === 'boolean') ? forcedState : isCurrentlyHidden;
 
             if (expand) {
-                if (!drawer.classList.contains('hidden') && drawer.offsetHeight > 0 && !drawer.dataset.animating) {
+                if (!body.classList.contains('hidden') && body.offsetHeight > 0 && !body.dataset.animating) {
+                    setDashboardFilterUi(true);
                     return;
                 }
 
+                setDashboardFilterUi(true);
+
                 if (immediate) {
-                    drawer.classList.remove('hidden');
-                    drawer.style.display = 'block';
-                    drawer.style.maxHeight = 'none';
-                    drawer.style.opacity = '1';
-                    drawer.style.overflow = 'visible';
-                    drawer.style.transition = 'none';
-                    if (label) label.textContent = <%- JSON.stringify(t.lessFilters) %>;
-                    if (icon) icon.classList.add('rotate-180');
+                    body.classList.remove('hidden');
+                    body.style.display = 'block';
+                    body.style.maxHeight = 'none';
+                    body.style.opacity = '1';
+                    body.style.overflow = 'visible';
+                    body.style.transition = 'none';
                     try { localStorage.setItem('dash_filters_expanded', 'true'); } catch (e) {}
                     return;
                 }
 
-                drawer.dataset.animating = 'true';
-                drawer.classList.remove('hidden');
-                drawer.style.display = 'block';
-                drawer.style.overflow = 'hidden';
-                drawer.style.transition = 'none';
-                drawer.style.maxHeight = '0px';
-                drawer.style.opacity = '0';
+                body.dataset.animating = 'true';
+                body.classList.remove('hidden');
+                body.style.display = 'block';
+                body.style.overflow = 'hidden';
+                body.style.transition = 'none';
+                body.style.maxHeight = '0px';
+                body.style.opacity = '0';
 
-                const targetHeight = drawer.scrollHeight;
-                void drawer.offsetHeight;
+                const targetHeight = body.scrollHeight;
+                void body.offsetHeight;
 
-                drawer.style.transition = 'max-height 0.28s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.22s ease-out';
+                body.style.transition = 'max-height 0.28s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.22s ease-out';
 
                 requestAnimationFrame(() => {
-                    drawer.style.maxHeight = targetHeight + 'px';
-                    drawer.style.opacity = '1';
+                    body.style.maxHeight = targetHeight + 'px';
+                    body.style.opacity = '1';
                 });
 
                 let finished = false;
                 const finishExpand = () => {
                     if (finished) return;
                     finished = true;
-                    delete drawer.dataset.animating;
-                    drawer.style.transition = 'none';
-                    drawer.style.maxHeight = 'none';
-                    drawer.style.overflow = 'visible';
+                    delete body.dataset.animating;
+                    body.style.transition = 'none';
+                    body.style.maxHeight = 'none';
+                    body.style.overflow = 'visible';
                 };
 
                 const onEnd = (e) => {
-                    if (e && (e.target !== drawer || e.propertyName !== 'max-height')) return;
-                    drawer.removeEventListener('transitionend', onEnd);
+                    if (e && (e.target !== body || e.propertyName !== 'max-height')) return;
+                    body.removeEventListener('transitionend', onEnd);
                     finishExpand();
                 };
-                drawer.addEventListener('transitionend', onEnd);
+                body.addEventListener('transitionend', onEnd);
                 setTimeout(finishExpand, 350);
 
-                if (label) label.textContent = <%- JSON.stringify(t.lessFilters) %>;
-                if (icon) icon.classList.add('rotate-180');
                 try { localStorage.setItem('dash_filters_expanded', 'true'); } catch (e) {}
             } else {
-                if (drawer.classList.contains('hidden') && !drawer.dataset.animating) {
+                if (body.classList.contains('hidden') && !body.dataset.animating) {
+                    setDashboardFilterUi(false);
                     return;
                 }
 
+                const startHeight = body.offsetHeight || body.scrollHeight;
+                if (body.contains(document.activeElement) && btn) btn.focus();
+                document.querySelectorAll('#dashFilterForm .checklist-menu').forEach(menu => menu.classList.add('hidden'));
+                setDashboardFilterUi(false);
+
                 if (immediate) {
-                    drawer.classList.add('hidden');
-                    drawer.style.display = '';
-                    drawer.style.maxHeight = '';
-                    drawer.style.opacity = '';
-                    drawer.style.overflow = '';
-                    drawer.style.transition = '';
-                    if (label) label.textContent = <%- JSON.stringify(t.moreFilters) %>;
-                    if (icon) icon.classList.remove('rotate-180');
+                    body.classList.add('hidden');
+                    body.style.display = '';
+                    body.style.maxHeight = '';
+                    body.style.opacity = '';
+                    body.style.overflow = '';
+                    body.style.transition = '';
                     try { localStorage.setItem('dash_filters_expanded', 'false'); } catch (e) {}
                     return;
                 }
 
-                drawer.dataset.animating = 'true';
-                drawer.style.overflow = 'hidden';
+                body.dataset.animating = 'true';
+                body.style.overflow = 'hidden';
+                body.style.transition = 'none';
+                body.style.maxHeight = startHeight + 'px';
+                body.style.opacity = '1';
 
-                const startHeight = drawer.offsetHeight || drawer.scrollHeight;
-                drawer.style.transition = 'none';
-                drawer.style.maxHeight = startHeight + 'px';
-                drawer.style.opacity = '1';
+                void body.offsetHeight;
 
-                void drawer.offsetHeight;
-
-                drawer.style.transition = 'max-height 0.26s cubic-bezier(0.2, 0, 0, 1), opacity 0.2s ease-in';
+                body.style.transition = 'max-height 0.26s cubic-bezier(0.2, 0, 0, 1), opacity 0.2s ease-in';
 
                 requestAnimationFrame(() => {
-                    drawer.style.maxHeight = '0px';
-                    drawer.style.opacity = '0';
+                    body.style.maxHeight = '0px';
+                    body.style.opacity = '0';
                 });
 
                 let finished = false;
                 const finishCollapse = () => {
                     if (finished) return;
                     finished = true;
-                    delete drawer.dataset.animating;
-                    drawer.classList.add('hidden');
-                    drawer.style.display = '';
-                    drawer.style.maxHeight = '';
-                    drawer.style.opacity = '';
-                    drawer.style.overflow = '';
-                    drawer.style.transition = '';
+                    delete body.dataset.animating;
+                    body.classList.add('hidden');
+                    body.style.display = '';
+                    body.style.maxHeight = '';
+                    body.style.opacity = '';
+                    body.style.overflow = '';
+                    body.style.transition = '';
                 };
 
                 const onEnd = (e) => {
-                    if (e && (e.target !== drawer || e.propertyName !== 'max-height')) return;
-                    drawer.removeEventListener('transitionend', onEnd);
+                    if (e && (e.target !== body || e.propertyName !== 'max-height')) return;
+                    body.removeEventListener('transitionend', onEnd);
                     finishCollapse();
                 };
-                drawer.addEventListener('transitionend', onEnd);
+                body.addEventListener('transitionend', onEnd);
                 setTimeout(finishCollapse, 320);
 
-                if (label) label.textContent = <%- JSON.stringify(t.moreFilters) %>;
-                if (icon) icon.classList.remove('rotate-180');
                 try { localStorage.setItem('dash_filters_expanded', 'false'); } catch (e) {}
             }
         }
-        window.toggleDashboardMoreFilters = toggleDashboardMoreFilters;
+        window.toggleDashboardFilters = toggleDashboardFilters;
+        window.toggleDashboardMoreFilters = toggleDashboardFilters;
 
         document.addEventListener('DOMContentLoaded', () => {
             syncExtChecklistUI();
             syncStatusChecklistUI();
             syncDashTrunkChecklistUI();
             
-            const hasServerActiveSecondary = <%= hasActiveSecondary ? 'true' : 'false' %>;
-            if (!hasServerActiveSecondary) {
+            const hasServerActiveFilters = <%= hasActiveFilters ? 'true' : 'false' %>;
+            if (hasServerActiveFilters) {
+                setDashboardFilterUi(true);
+            } else {
                 try {
                     const savedExpanded = localStorage.getItem('dash_filters_expanded');
                     if (savedExpanded === 'true') {
-                        toggleDashboardMoreFilters(true, true);
+                        toggleDashboardFilters(true, true);
                     }
                 } catch (e) {}
             }

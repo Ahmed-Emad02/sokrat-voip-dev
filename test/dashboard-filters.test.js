@@ -39,8 +39,8 @@ const defaultData = {
     stats: mockStats,
     roster: mockRoster,
     filters: {
-        startDate: '2026-08-24 00:00:00',
-        endDate: '2026-08-24 23:59:59',
+        startDate: moment().startOf('day').format('YYYY-MM-DD HH:mm:ss'),
+        endDate: moment().endOf('day').format('YYYY-MM-DD HH:mm:ss'),
         targetExtension: 'ALL',
         statusFilter: 'ALL',
         searchSrc: '',
@@ -75,10 +75,13 @@ test('Dashboard renders visible Row 1 and expandable drawer with rows 2-3 and du
     assert.ok(html.includes('id="dashTargetExtensionSelect"'), 'dashTargetExtensionSelect exists');
     assert.ok(html.includes('id="dashStatusFilterSelect"'), 'dashStatusFilterSelect exists');
 
-    // Collapsible Drawer
-    assert.ok(html.includes('id="dashSecondaryFilters" class="hidden'), 'dashSecondaryFilters is hidden when empty');
-    assert.ok(html.includes('filter-grid-row2'), 'Row 2 grid is inside the drawer');
-    assert.ok(html.includes('filter-grid-row3'), 'Row 3 grid is inside the drawer');
+    // Collapsible body now contains all three rows.
+    assert.ok(html.includes('id="dashFilterBody" class="hidden'), 'dashFilterBody is hidden when empty');
+    assert.ok(html.includes('id="dashSecondaryFilters"'), 'secondary rows are nested in the body');
+    assert.ok(html.indexOf('id="dashFilterBody"') < html.indexOf('filter-grid-row1'), 'Row 1 is inside the body');
+    assert.ok(html.indexOf('filter-grid-row1') < html.indexOf('id="dashFilterActionBar"'), 'body closes before the action bar');
+    assert.ok(html.includes('filter-grid-row2'), 'Row 2 grid is inside the body');
+    assert.ok(html.includes('filter-grid-row3'), 'Row 3 grid is inside the body');
 
     // Row 2 Routing / Line / Duration (from - to)
     assert.ok(html.includes('id="dashDirectionFilter"'), 'dashDirectionFilter exists');
@@ -101,7 +104,7 @@ test('Dashboard renders visible Row 1 and expandable drawer with rows 2-3 and du
 
     // Action Bar toggle button
     assert.ok(html.includes('id="dashToggleMoreBtn"'), 'dashToggleMoreBtn exists');
-    assert.ok(html.includes('More Filters'), 'More Filters label shown when collapsed');
+    assert.ok(html.includes('id="dashToggleMoreLabel">Filters<'), 'Filters label shown when collapsed');
 
     // Checklist menus
     assert.ok(html.includes('id="dashExtChecklistBtn"'), 'dashExtChecklistBtn exists');
@@ -131,7 +134,7 @@ test('Dashboard renders in Arabic (ar) with localized filter labels and duration
     assert.ok(html.includes('ساعة'), 'Arabic hours option rendered');
     assert.ok(html.includes('placeholder="من"'), 'Arabic duration from placeholder');
     assert.ok(html.includes('placeholder="إلى"'), 'Arabic duration to placeholder');
-    assert.ok(html.includes('المزيد من الفلاتر'), 'Arabic More Filters rendered');
+    assert.ok(html.includes('id="dashToggleMoreLabel">الفلاتر<'), 'Arabic Filters rendered');
     assert.ok(html.includes('إعادة ضبط'), 'Arabic Reset rendered');
 });
 
@@ -148,10 +151,10 @@ test('Dashboard secondary filters drawer auto-expands and shows active badge whe
     };
     const html = await ejs.renderFile(dashboardPath, activeSecondaryData);
 
-    // Should NOT have hidden class on dashSecondaryFilters
-    assert.ok(!html.includes('id="dashSecondaryFilters" class="hidden'), 'dashSecondaryFilters is visible when active');
-    assert.ok(html.includes('4 Active'), 'Active secondary count badge displays 4 Active');
-    assert.ok(html.includes('Fewer Filters'), 'Toggle button shows Fewer Filters when expanded');
+    // Should NOT have hidden class on dashFilterBody
+    assert.ok(!html.includes('id="dashFilterBody" class="hidden'), 'dashFilterBody is visible when active');
+    assert.ok(html.includes('4 Active'), 'Active filter count badge displays 4 Active');
+    assert.ok(html.includes('Hide Filters'), 'Toggle button shows Hide Filters when expanded');
     assert.ok(html.includes('value="60"'), 'Duration min input retains value 60');
 });
 
