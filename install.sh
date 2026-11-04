@@ -1529,11 +1529,14 @@ fi
 # image/Dockerfile, must still finish installing. The native push service
 # above remains active in that case.
 GATEWAY_IMAGE_TAR="${SOKRAT_GATEWAY_IMAGE_TAR:-$SCRIPT_DIR/packages/sokrat-push-gateway-image.tar.gz}"
+GATEWAY_IMAGE_TAR_ALT="$SCRIPT_DIR/installer-bundle/packages/sokrat-push-gateway-image.tar.gz"
 GATEWAY_READY=0
 if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
     if docker image inspect "${SOKRAT_GATEWAY_IMAGE:-sokrat/push-gateway:latest}" >/dev/null 2>&1 \
         || [ -f "$PUSH_GATEWAY_DIR/Dockerfile" ] \
-        || [ -f "$GATEWAY_IMAGE_TAR" ]; then
+        || [ -f "$GATEWAY_IMAGE_TAR" ] \
+        || [ -f "$GATEWAY_IMAGE_TAR_ALT" ] \
+        || [ -f "/opt/sokrat-voip/installer-bundle/packages/sokrat-push-gateway-image.tar.gz" ]; then
         GATEWAY_READY=1
     fi
 fi
