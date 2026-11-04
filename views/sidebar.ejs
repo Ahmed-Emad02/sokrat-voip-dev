@@ -609,7 +609,7 @@ function can(tab) {
     /* --- Base: EVERY button and nav-item gets the shutter scaffold ---
        position/border-radius are NON-important so Tailwind utilities
        (.absolute, .rounded-full, ...) keep winning on buttons that need them. */
-    button, a.btn-link, .nav-item {
+    button, a.btn-link, .nav-item, a.icon-tool-btn {
         position: relative;
         overflow: hidden !important;
         isolation: isolate !important;
@@ -617,7 +617,7 @@ function can(tab) {
     }
 
     /* --- The shutter cover pseudo-element (all buttons) --- */
-    button::before, a.btn-link::before, .nav-item::before {
+    button::before, a.btn-link::before, .nav-item::before, a.icon-tool-btn::before {
         content: "" !important;
         position: absolute !important;
         z-index: -1 !important;
@@ -632,7 +632,8 @@ function can(tab) {
 
     /* --- On hover/focus: shutter opens (shrinks to center) --- */
     button:hover::before, a.btn-link:hover::before, .nav-item:hover::before,
-    button:focus-visible::before, a.btn-link:focus-visible::before, .nav-item:focus-visible::before {
+    button:focus-visible::before, a.btn-link:focus-visible::before, .nav-item:focus-visible::before,
+    a.icon-tool-btn:hover::before, a.icon-tool-btn:focus-visible::before {
         transform: scaleX(0) !important;
     }
 
@@ -640,7 +641,8 @@ function can(tab) {
            overlay so the shutter is VISIBLE on any background; sliding it
            open reveals the button's own (semantic) color. --- */
     button:not(.btn-primary):not(.config-btn-primary):not(.config-btn-secondary):not(.btn-ghost):not(.config-action-btn):not(.config-tab-btn):not(.nav-item):not(.btn-transparent):not([data-player-playpause]):not([data-player-mute]):not([data-action='delete-cdr'])::before,
-    a.btn-link::before {
+    a.btn-link::before,
+    a.icon-tool-btn::before {
         background: rgba(185, 28, 28, 0.30) !important;
     }
 
@@ -913,7 +915,8 @@ function can(tab) {
 
     /* Light theme: default cover — red tint over any bg */
     .light-theme button:not(.btn-primary):not(.config-btn-primary):not(.config-btn-secondary):not(.btn-ghost):not(.config-action-btn):not(.config-tab-btn):not(.nav-item):not(.btn-transparent):not([data-player-playpause]):not([data-player-mute]):not([data-action='delete-cdr'])::before,
-    .light-theme a.btn-link::before {
+    .light-theme a.btn-link::before,
+    .light-theme a.icon-tool-btn::before {
         background: rgba(185, 28, 28, 0.20) !important;
     }
 
@@ -1190,14 +1193,31 @@ function can(tab) {
         width: 2.5rem;
         height: 2.5rem;
         flex-shrink: 0;
+        box-sizing: border-box;
         padding: 0;
-        border-radius: 0.75rem;
+        border-radius: 0.5rem !important;
         background-color: rgba(225, 29, 72, 0.25) !important;
         color: #fecdd3 !important;
         border: 1px solid rgba(244, 63, 94, 0.5) !important;
+        font-size: 1rem !important;
+        line-height: 1;
+        text-decoration: none;
+        -webkit-appearance: none;
+        appearance: none;
         transition: all 150ms ease-in-out;
         cursor: pointer;
         position: relative;
+    }
+    /* The global button colour rules do not match <a> elements, so an
+       icon-only toolbar link kept the class's pink palette while the
+       neighbouring buttons rendered white/black. Match them explicitly. */
+    html:not(.light-theme) a.icon-tool-btn,
+    html:not(.light-theme) a.icon-tool-btn:hover {
+        color: #ffffff !important;
+    }
+    html.light-theme a.icon-tool-btn,
+    html.light-theme a.icon-tool-btn:hover {
+        color: #000000 !important;
     }
     .icon-tool-btn:hover {
         background-color: rgba(225, 29, 72, 0.4) !important;
