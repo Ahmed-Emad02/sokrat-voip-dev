@@ -223,9 +223,26 @@ ensure_db_index() {
     fi
 }
 
+ensure_db_column_width() {
+    local tbl="$1"
+    local col="$2"
+    local col_def="$3"
+    local min_len="$4"
+    local current
+    current=$(mysql "${MYSQL_AUTH[@]}" asterisk -Nse \
+        "SELECT CHARACTER_MAXIMUM_LENGTH FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '$tbl' AND COLUMN_NAME = '$col'" 2>/dev/null || echo "")
+    if [ -z "$current" ] || [ "$current" = "NULL" ]; then
+        ensure_db_column "$tbl" "$col" "$col_def"
+    elif [ "$current" -lt "$min_len" ] 2>/dev/null; then
+        mysql "${MYSQL_AUTH[@]}" asterisk -e "ALTER TABLE \`$tbl\` MODIFY \`$col\` $col_def" 2>/dev/null || true
+        echo "  Widened column $col on $tbl"
+    fi
+}
+
 # Run idempotent schema migrations
 ensure_db_column "dashboard_users" "group_id" "INT DEFAULT NULL"
-ensure_db_column "dashboard_users" "extension" "VARCHAR(20) DEFAULT NULL"
+ensure_db_column "dashboard_users" "extension" "VARCHAR(512) DEFAULT NULL"
+ensure_db_column_width "dashboard_users" "extension" "VARCHAR(512) DEFAULT NULL" 512
 ensure_db_column "dashboard_users" "reset_token_expires" "DATETIME DEFAULT NULL"
 ensure_db_index "dashboard_users" "idx_dash_users_extension" "KEY \`idx_dash_users_extension\` (\`extension\`)"
 ensure_db_index "dashboard_users" "idx_unique_email" "UNIQUE KEY \`idx_unique_email\` (\`email\`)"

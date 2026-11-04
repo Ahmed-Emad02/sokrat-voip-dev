@@ -921,7 +921,7 @@ async function initAuthDb() {
             reset_token VARCHAR(255) DEFAULT NULL,
             reset_expires DATETIME DEFAULT NULL,
             group_id INT DEFAULT NULL,
-            extension VARCHAR(20) DEFAULT NULL,
+            extension VARCHAR(512) DEFAULT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
@@ -931,7 +931,19 @@ async function initAuthDb() {
     // Add group_id and extension columns if they don't exist (for existing installs)
     await ensureDbColumn(conn, 'dashboard_users', 'group_id', 'INT DEFAULT NULL');
     await ensureDbColumn(conn, 'dashboard_users', 'reset_token_expires', 'DATETIME DEFAULT NULL');
-    await ensureDbColumn(conn, 'dashboard_users', 'extension', 'VARCHAR(20) DEFAULT NULL');
+    await ensureDbColumn(conn, 'dashboard_users', 'extension', 'VARCHAR(512) DEFAULT NULL');
+    // Existing installs may still have the old VARCHAR(20) column: widen it
+    // so a user with multiple comma-separated extensions can be saved.
+    try {
+        const [extCols] = await conn.execute(
+            "SELECT CHARACTER_MAXIMUM_LENGTH AS max_len FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'dashboard_users' AND COLUMN_NAME = 'extension'"
+        );
+        const maxLen = extCols.length ? Number(extCols[0].max_len) : 0;
+        if (maxLen && maxLen < 512) {
+            await conn.execute('ALTER TABLE dashboard_users MODIFY extension VARCHAR(512) DEFAULT NULL');
+            console.log('Widened dashboard_users.extension to VARCHAR(512)');
+        }
+    } catch (_) {}
     try { await conn.execute('ALTER TABLE dashboard_users ADD UNIQUE KEY idx_unique_email (email)'); } catch (_) {}
     try { await conn.execute('ALTER TABLE dashboard_users ADD KEY idx_dash_users_extension (extension)'); } catch (_) {}
     await conn.execute(`

@@ -11,7 +11,7 @@ test('backend/install_db.sql has full schema parity for extension scoping, dongl
 
     // dashboard_users table
     assert.match(sql, /CREATE TABLE IF NOT EXISTS `dashboard_users`/, 'dashboard_users table must be created');
-    assert.match(sql, /`extension` VARCHAR\(20\) DEFAULT NULL/, 'dashboard_users must define extension column');
+    assert.match(sql, /`extension` VARCHAR\(512\) DEFAULT NULL/, 'dashboard_users must define a multi-extension column');
     assert.match(sql, /KEY `idx_dash_users_extension` \(`extension`\)/, 'dashboard_users must index extension');
 
     // dashboard_user_extensions & dashboard_user_preferences
@@ -36,6 +36,34 @@ test('backend/install_db.sql has full schema parity for extension scoping, dongl
     assert.match(sql, /CREATE TABLE IF NOT EXISTS `asterisk`\.`sipsettings`/, 'install_db.sql must ensure sipsettings table exists before updates');
     assert.match(sql, /CREATE TABLE IF NOT EXISTS `asterisk`\.`pjsipsettings`/, 'install_db.sql must ensure pjsipsettings table exists before updates');
     assert.match(sql, /CREATE TABLE IF NOT EXISTS `crm_call_telemetry`/, 'install_db.sql must define crm_call_telemetry table');
+});
+
+test('dashboard user extension column is widened for multi-extension users', () => {
+    const sql = fs.readFileSync(path.join(__dirname, '..', 'backend', 'install_db.sql'), 'utf8');
+    assert.match(sql, /`extension` VARCHAR\(512\) DEFAULT NULL/, 'install_db.sql must allow long comma-separated extension lists');
+
+    const upgrade = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'safe-upgrade.sh'), 'utf8');
+    assert.match(
+        upgrade,
+        /ensure_db_column_width "dashboard_users" "extension" "VARCHAR\(512\) DEFAULT NULL" 512/,
+        'safe-upgrade.sh must widen an existing VARCHAR(20) extension column'
+    );
+
+    const server = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+    assert.match(
+        server,
+        /ALTER TABLE dashboard_users MODIFY extension VARCHAR\(512\) DEFAULT NULL/,
+        'server startup must widen an existing VARCHAR(20) extension column'
+    );
+
+    for (const file of ['install.sh', 'installer-bundle/install-sokrat.sh']) {
+        const script = fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
+        assert.match(
+            script,
+            /ensure_db_column_width "dashboard_users" "extension" "VARCHAR\(512\) DEFAULT NULL" 512/,
+            `${file} must widen an existing VARCHAR(20) extension column`
+        );
+    }
 });
 
 test('installers enable open voicemail by default without overriding an explicit choice', () => {

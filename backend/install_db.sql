@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS `dashboard_users` (
   `username` VARCHAR(100) NOT NULL UNIQUE,
   `email` VARCHAR(255) DEFAULT NULL UNIQUE,
   `password_hash` VARCHAR(255) NOT NULL,
-  `extension` VARCHAR(20) DEFAULT NULL,
+  `extension` VARCHAR(512) DEFAULT NULL,
   `reset_token` VARCHAR(255) DEFAULT NULL,
   `reset_expires` DATETIME DEFAULT NULL,
   `reset_token_expires` DATETIME DEFAULT NULL,
