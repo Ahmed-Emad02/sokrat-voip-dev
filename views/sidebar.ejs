@@ -4026,6 +4026,9 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
                 <button type="button" id="gwDisconnectBtn" onclick="disconnectGatewayTunnel()" class="px-3.5 py-2 rounded-lg text-xs font-bold text-red-400 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 transition cursor-pointer hidden">
                     <%= isRtl ? 'قطع الاتصال' : 'Disconnect' %>
                 </button>
+                <button type="button" id="gwMigrateBtn" onclick="migrateGatewayTunnel()" class="px-3.5 py-2 rounded-lg text-xs font-bold text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 transition cursor-pointer hidden">
+                    <%= isRtl ? 'ترحيل ربط البوابة' : 'Migrate old assignment' %>
+                </button>
                 <div class="flex items-center gap-2 ms-auto">
                     <button type="button" onclick="closeGatewayTunnelModal()" class="px-4 py-2 rounded-lg text-xs font-bold text-[var(--text-secondary)] bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] transition cursor-pointer">
                         <%= isRtl ? 'إغلاق' : 'Close' %>
@@ -7171,6 +7174,7 @@ async function loadGatewayTunnelStatus() {
         const pbxEl = document.getElementById('gwEnrolledPbx');
         const tunnelEl = document.getElementById('gwEnrolledTunnel');
         const mediaEl = document.getElementById('gwEnrolledMedia');
+        const migrateBtn = document.getElementById('gwMigrateBtn');
 
         // An active enrollment is authoritative: hide the one-shot pairing form
         // so an operator cannot silently re-pair. A disconnected enrollment must
@@ -7185,6 +7189,7 @@ async function loadGatewayTunnelStatus() {
         if (pbxEl) pbxEl.textContent = data.pbxId || '-';
         if (tunnelEl) tunnelEl.textContent = data.active ? 'active' : (configured ? 'stopped' : '-');
         if (mediaEl) mediaEl.textContent = data.mediaActive ? 'active' : (configured ? 'stopped' : '-');
+        if (migrateBtn) migrateBtn.classList.toggle('hidden', !configured || data.active);
 
         if (data.active) {
             if (dot) dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]';
@@ -7301,5 +7306,31 @@ async function disconnectGatewayTunnel() {
     }
 }
 window.disconnectGatewayTunnel = disconnectGatewayTunnel;
+
+async function migrateGatewayTunnel() {
+    if (!confirm('This will back up the existing gateway assignment, stop its tunnel/media units, and clear the saved pairing so a new gateway can be connected. The PBX installation identity is preserved. Continue?')) return;
+    const msg = document.getElementById('gwStatusMsg');
+    try {
+        const resp = await fetch('/api/settings/gateway-tunnel', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'migrate', confirm: 'MIGRATE' })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            if (msg) {
+                msg.className = 'text-xs p-2.5 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20 block';
+                msg.textContent = data.message || 'Old gateway assignment retired. Paste the new pairing code.';
+            }
+            loadGatewayTunnelStatus();
+        } else if (msg) {
+            msg.className = 'text-xs p-2.5 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 block';
+            msg.textContent = data.error || 'Migration failed';
+        }
+    } catch (e) {
+        alert('Migration failed: ' + e.message);
+    }
+}
+window.migrateGatewayTunnel = migrateGatewayTunnel;
 
 </script>

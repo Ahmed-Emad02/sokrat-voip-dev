@@ -5940,6 +5940,12 @@ app.post('/api/settings/gateway-tunnel', requireAuth, async (req, res) => {
         if (req.body.action === 'disconnect' && gatewayTunnelV2.status().configured) {
             return res.json(gatewayTunnelV2.disconnect());
         }
+        if (req.body.action === 'migrate') {
+            if (req.body.confirm !== 'MIGRATE') {
+                return res.status(400).json({ success: false, error: 'Explicit migration confirmation is required' });
+            }
+            return res.json(gatewayTunnelV2.migrate());
+        }
         if (String(req.body.token || '').trim().startsWith('sk_pair_v2_')) {
             return res.json(await gatewayTunnelV2.connect(req.body));
         }
