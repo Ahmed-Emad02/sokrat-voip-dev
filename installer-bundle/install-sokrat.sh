@@ -1443,22 +1443,37 @@ systemctl restart sokrat-push-gateway.service
     if command -v docker >/dev/null 2>&1; then
         systemctl enable --now docker 2>/dev/null || true
     fi
-    if ! command -v docker >/dev/null 2>&1; then
-        echo "  ERROR: Docker is required for the local fallback gateway; install Docker and re-run." >&2
-        exit 1
-    fi
     LOCAL_GATEWAY_SCRIPT="$INSTALL_DIR/scripts/install-local-gateway.sh"
-    if [ -x "$PARENT_DIR/scripts/install-local-gateway.sh" ]; then
+    GATEWAY_HELPER_SRC="$PARENT_DIR/scripts/install-local-gateway.sh"
+    if [ -x "$GATEWAY_HELPER_SRC" ] && [ "$GATEWAY_HELPER_SRC" != "$LOCAL_GATEWAY_SCRIPT" ]; then
         install -d -m 0755 "$INSTALL_DIR/scripts"
-        install -m 0755 "$PARENT_DIR/scripts/install-local-gateway.sh" "$LOCAL_GATEWAY_SCRIPT"
+        install -m 0755 "$GATEWAY_HELPER_SRC" "$LOCAL_GATEWAY_SCRIPT"
     fi
-    if [ -x "$LOCAL_GATEWAY_SCRIPT" ]; then
-        SOKRAT_GATEWAY_SOURCE="$PUSH_GATEWAY_DIR" SOKRAT_GATEWAY_HOST="${SOKRAT_GATEWAY_HOST:-}" SOKRAT_GATEWAY_IMAGE_TAR="${SOKRAT_GATEWAY_IMAGE_TAR:-$SCRIPT_DIR/packages/sokrat-push-gateway-image.tar.gz}" bash "$LOCAL_GATEWAY_SCRIPT"
+
+    # The Docker gateway is optional: a PBX without Docker, or without a
+    # gateway image/Dockerfile in the offline bundle, must still finish
+    # installing. The native push service above remains active in that case.
+    GATEWAY_IMAGE_TAR="${SOKRAT_GATEWAY_IMAGE_TAR:-$SCRIPT_DIR/packages/sokrat-push-gateway-image.tar.gz}"
+    GATEWAY_READY=0
+    if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+        if docker image inspect "${SOKRAT_GATEWAY_IMAGE:-sokrat/push-gateway:latest}" >/dev/null 2>&1 \
+            || [ -f "$PUSH_GATEWAY_DIR/Dockerfile" ] \
+            || [ -f "$GATEWAY_IMAGE_TAR" ]; then
+            GATEWAY_READY=1
+        fi
+    fi
+
+    if [ "$GATEWAY_READY" = "1" ] && [ -x "$LOCAL_GATEWAY_SCRIPT" ]; then
+        if SOKRAT_GATEWAY_SOURCE="$PUSH_GATEWAY_DIR" SOKRAT_GATEWAY_HOST="${SOKRAT_GATEWAY_HOST:-}" SOKRAT_GATEWAY_IMAGE_TAR="$GATEWAY_IMAGE_TAR" bash "$LOCAL_GATEWAY_SCRIPT"; then
+            echo "  push-gateway service enabled and started"
+        else
+            echo "  WARNING: local fallback gateway setup failed; keeping the native push service." >&2
+            systemctl enable --now sokrat-push-gateway.service 2>/dev/null || true
+        fi
     else
-        echo "  ERROR: local fallback gateway installer is missing: $LOCAL_GATEWAY_SCRIPT" >&2
-        exit 1
+        echo "  WARNING: local fallback gateway skipped (Docker or gateway image/Dockerfile unavailable)." >&2
+        echo "  Native push gateway remains active on :8095." >&2
     fi
-        echo "  push-gateway service enabled and started"
     fi
 fi
 

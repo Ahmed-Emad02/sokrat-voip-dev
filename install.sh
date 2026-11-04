@@ -1510,26 +1510,45 @@ systemctl restart sokrat-push-gateway.service
 # (control + tenant API + SIP WSS + push). It owns :8095, so the native
 # push-only service is disabled by the helper immediately before startup.
 if ! command -v docker >/dev/null 2>&1; then
-    echo "  Docker is required by the local fallback gateway; installing Docker..."
+    echo "  Docker is not installed; attempting to install it for the optional local fallback gateway..."
     if command -v curl >/dev/null 2>&1; then
         curl -fsSL https://get.docker.com | sh || true
     fi
     systemctl enable --now docker 2>/dev/null || true
 fi
 LOCAL_GATEWAY_SCRIPT="$INSTALL_DIR/scripts/install-local-gateway.sh"
-# Always refresh from the running installer source so an older checked-out copy
-# cannot shadow the current helper.
-if [ -x "$SCRIPT_DIR/scripts/install-local-gateway.sh" ]; then
+GATEWAY_HELPER_SRC="$SCRIPT_DIR/scripts/install-local-gateway.sh"
+# Refresh the helper from the installer source unless both paths are the same
+# file (running directly from /opt/sokrat-voip).
+if [ -x "$GATEWAY_HELPER_SRC" ] && [ "$GATEWAY_HELPER_SRC" != "$LOCAL_GATEWAY_SCRIPT" ]; then
     install -d -m 0755 "$INSTALL_DIR/scripts"
-    install -m 0755 "$SCRIPT_DIR/scripts/install-local-gateway.sh" "$LOCAL_GATEWAY_SCRIPT"
+    install -m 0755 "$GATEWAY_HELPER_SRC" "$LOCAL_GATEWAY_SCRIPT"
 fi
-if [ -x "$LOCAL_GATEWAY_SCRIPT" ]; then
-    SOKRAT_GATEWAY_SOURCE="$PUSH_GATEWAY_DIR"     SOKRAT_GATEWAY_HOST="${SOKRAT_GATEWAY_HOST:-}"     bash "$LOCAL_GATEWAY_SCRIPT"
+
+# The Docker gateway is optional: a PBX without Docker, or without a gateway
+# image/Dockerfile, must still finish installing. The native push service
+# above remains active in that case.
+GATEWAY_IMAGE_TAR="${SOKRAT_GATEWAY_IMAGE_TAR:-$SCRIPT_DIR/packages/sokrat-push-gateway-image.tar.gz}"
+GATEWAY_READY=0
+if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+    if docker image inspect "${SOKRAT_GATEWAY_IMAGE:-sokrat/push-gateway:latest}" >/dev/null 2>&1 \
+        || [ -f "$PUSH_GATEWAY_DIR/Dockerfile" ] \
+        || [ -f "$GATEWAY_IMAGE_TAR" ]; then
+        GATEWAY_READY=1
+    fi
+fi
+
+if [ "$GATEWAY_READY" = "1" ] && [ -x "$LOCAL_GATEWAY_SCRIPT" ]; then
+    if SOKRAT_GATEWAY_SOURCE="$PUSH_GATEWAY_DIR" SOKRAT_GATEWAY_HOST="${SOKRAT_GATEWAY_HOST:-}" SOKRAT_GATEWAY_IMAGE_TAR="$GATEWAY_IMAGE_TAR" bash "$LOCAL_GATEWAY_SCRIPT"; then
+        echo "  push-gateway service enabled and started"
+    else
+        echo "  WARNING: local fallback gateway setup failed; keeping the native push service." >&2
+        systemctl enable --now sokrat-push-gateway.service 2>/dev/null || true
+    fi
 else
-    echo "  ERROR: local fallback gateway installer is missing: $LOCAL_GATEWAY_SCRIPT" >&2
-    exit 1
+    echo "  WARNING: local fallback gateway skipped (Docker or gateway image/Dockerfile unavailable)." >&2
+    echo "  Native push gateway remains active on :8095." >&2
 fi
-echo "  push-gateway service enabled and started"
 
 # Install or update the Asterisk dialplan hooks. The linked ID deterministically
 # maps to the same UUID namespace used by the gateway.

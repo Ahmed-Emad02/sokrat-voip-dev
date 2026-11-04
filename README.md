@@ -51,6 +51,8 @@ bash install-sokrat.sh
 > `CLIENT_NAME=myclient NUM_DONGLES=4 DEFAULT_SETUP=yes curl -fsSL .../bootstrap.sh | bash`
 >
 > Use `NUM_DONGLES=0` for a server that has no GSM dongles (for example, a pure SIP/WebRTC PBX).
+>
+> The Docker-based LAN fallback gateway is optional. If Docker or a gateway image/Dockerfile is unavailable, the installer keeps the native push-only service and continues.
 
 ### Option B: Quick Online Install (Existing Issabel 5 Server)
 ```bash

@@ -28,6 +28,28 @@ if ! docker info >/dev/null 2>&1; then
     die "Docker daemon is not available"
 fi
 
+# Fail before touching the native push service when no gateway image can be
+# produced. This keeps mobile push working on installs without a bundled image.
+GATEWAY_IMAGE_READY=0
+if docker image inspect "$IMAGE" >/dev/null 2>&1; then
+    GATEWAY_IMAGE_READY=1
+else
+    for candidate in \
+        "${SOKRAT_GATEWAY_IMAGE_TAR:-}" \
+        "$GATEWAY_SOURCE/installer-bundle/packages/sokrat-push-gateway-image.tar.gz" \
+        "$GATEWAY_SOURCE/installer-bundle/packages/sokrat-push-gateway-image.tar" \
+        "/opt/sokrat-voip/installer-bundle/packages/sokrat-push-gateway-image.tar.gz"; do
+        if [ -n "$candidate" ] && [ -f "$candidate" ]; then
+            GATEWAY_IMAGE_READY=1
+            break
+        fi
+    done
+    if [ "$GATEWAY_IMAGE_READY" = "0" ] && [ -f "$GATEWAY_SOURCE/Dockerfile" ]; then
+        GATEWAY_IMAGE_READY=1
+    fi
+fi
+[ "$GATEWAY_IMAGE_READY" = "1" ] || die "gateway image missing and no Dockerfile/image archive found"
+
 # The native push-only service and the container both bind :8095.
 if systemctl list-unit-files sokrat-push-gateway.service >/dev/null 2>&1; then
     systemctl disable --now sokrat-push-gateway.service 2>/dev/null || true
