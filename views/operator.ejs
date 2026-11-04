@@ -3722,7 +3722,7 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
                         <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
                         <span><%= isRtl ? 'استعادة الافتراضيات' : 'Reset Defaults' %></span>
                     </button>
-                    <a href="/config?tab=extensions&subtab=callcodes" class="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer text-black bg-zinc-200 hover:bg-white border border-zinc-300 shadow-sm" title="<%= isRtl ? 'فتح في إعدادات المقسم' : 'Open in PBX Configurations' %>">
+                    <a href="/config?tab=callcodes" class="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer text-black bg-zinc-200 hover:bg-white border border-zinc-300 shadow-sm" title="<%= isRtl ? 'فتح في إعدادات المقسم' : 'Open in PBX Configurations' %>">
                         <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
                         <span><%= isRtl ? 'إعدادات المقسم' : 'PBX Config' %></span>
                     </a>

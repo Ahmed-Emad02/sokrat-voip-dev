@@ -1131,7 +1131,9 @@
         }
         window.closeAllModals = closeAllModals;
 
-        function switchTab(tabId) {
+        function switchTab(tabId, options = {}) {
+            // "dongles" is a legacy alias for the inbound-routes tab.
+            if (tabId === 'dongles') tabId = 'inbound';
             closeAllModals();
             document.querySelectorAll('.tab-section').forEach(el => el.classList.add('hidden'));
             document.querySelectorAll('.config-tab-btn').forEach(btn => {
@@ -1146,6 +1148,21 @@
                 btn.classList.remove('config-tab-inactive');
                 btn.classList.add('config-tab-active');
             });
+
+            // Keep the active tab in the URL so a refresh or bookmark restores it.
+            // replaceState avoids adding one history entry per tab switch.
+            if (options.updateUrl !== false && document.getElementById('section-' + tabId)) {
+                try {
+                    const url = new URL(window.location.href);
+                    url.searchParams.set('tab', tabId);
+                    if (tabId !== 'trunks') {
+                        url.searchParams.delete('highlightTrunk');
+                        url.searchParams.delete('trunkId');
+                        url.searchParams.delete('highlight');
+                    }
+                    history.replaceState({ tab: tabId }, '', url.toString());
+                } catch (_) {}
+            }
 
             // Auto-scroll the active pill into view.
             // NOTE: scrollIntoView() is NOT used here - it scrolls EVERY scrollable
@@ -1175,7 +1192,6 @@
             else if (tabId === 'inbound') { fetchInboundRoutes(); fetchDongleMappingsTab(); ensureAllConfigListsLoaded(); }
             else if (tabId === 'federation') { fetchFederationSettings(); fetchFederationPeers(); }
             else if (tabId === 'ipscan') { fetchIpscanInterfaces(); fetchIpscanStatus(); }
-            else if (tabId === 'dongles') { switchTab('inbound'); return; }
             if (['extensions', 'queues', 'ringgroups'].includes(tabId)) checkExtensionConflicts();
             if (typeof enhanceSelectElements === 'function') setTimeout(enhanceSelectElements, 100);
         }
@@ -5935,7 +5951,7 @@
                 defaultTab = tabParam;
             }
             if (defaultTab) {
-                switchTab(defaultTab);
+                switchTab(defaultTab, { updateUrl: false });
             }
             const dialInput = document.getElementById('trunkDialString');
             const popup = document.getElementById('dongleInfoPopup');
