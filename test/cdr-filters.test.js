@@ -87,6 +87,11 @@ test('Call History renders visible Row 1 and expandable drawer with rows 2-3 and
     // Action Bar toggle button
     assert.ok(html.includes('id="cdrToggleMoreBtn"'), 'Must contain cdrToggleMoreBtn');
     assert.ok(html.includes('id="cdrToggleMoreLabel">Filters<'), 'Must display Filters label when collapsed');
+    assert.ok(html.includes('id="cdrApplyFiltersBtn"'), 'Must contain cdrApplyFiltersBtn');
+    assert.ok(html.includes('#cdrFilterForm.filters-collapsed #cdrApplyFiltersBtn'), 'Apply Filters must be hidden while collapsed');
+    assert.ok(html.includes('id="cdrResetFiltersBtn"'), 'Must contain cdrResetFiltersBtn');
+    assert.ok(html.includes('#cdrFilterForm.filters-collapsed #cdrResetFiltersBtn'), 'Reset Filters must be hidden while collapsed');
+    assert.ok(html.indexOf('id="cdrToggleMoreBtn"') < html.indexOf('id="cdrResetFiltersBtn"'), 'Hide Filters must appear before Reset Filters when expanded');
     assert.ok(html.includes('id="cdrDurationUnit"'), 'Must render cdrDurationUnit select');
     assert.ok(html.includes('value="s"'), 'Contains seconds option');
     assert.ok(html.includes('value="m"'), 'Contains minutes option');

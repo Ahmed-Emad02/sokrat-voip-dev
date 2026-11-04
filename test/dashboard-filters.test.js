@@ -105,6 +105,12 @@ test('Dashboard renders visible Row 1 and expandable drawer with rows 2-3 and du
     // Action Bar toggle button
     assert.ok(html.includes('id="dashToggleMoreBtn"'), 'dashToggleMoreBtn exists');
     assert.ok(html.includes('id="dashToggleMoreLabel">Filters<'), 'Filters label shown when collapsed');
+    assert.ok(html.includes('id="dashApplyFiltersBtn"'), 'Apply Filters button exists');
+    assert.ok(html.includes('#dashFilterForm.filters-collapsed #dashApplyFiltersBtn'), 'Apply Filters button is hidden while collapsed');
+    assert.ok(html.includes('id="dashResetFiltersBtn"'), 'Reset Filters button exists');
+    assert.ok(html.includes('#dashFilterForm.filters-collapsed #dashResetFiltersBtn'), 'Reset Filters button is hidden while collapsed');
+    assert.ok(html.indexOf('id="dashToggleMoreBtn"') < html.indexOf('id="dashResetFiltersBtn"'), 'Hide Filters appears before Reset Filters when expanded');
+    assert.ok(html.indexOf('id="dashApplyFiltersBtn"') < html.indexOf('id="dashExportBtn"'), 'Apply Filters appears before Export Dashboard when expanded');
 
     // Checklist menus
     assert.ok(html.includes('id="dashExtChecklistBtn"'), 'dashExtChecklistBtn exists');
