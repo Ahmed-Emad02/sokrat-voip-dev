@@ -80,7 +80,7 @@ function can(tab) {
         100% { transform: translateX(100%); }
     }
     @keyframes soundWaveBar {
-        0%, 100% { transform: scaleY(0.4); opacity: 0.75; }
+        0%, 100% { transform: scaleY(0.55); opacity: 0.75; }
         50% { transform: scaleY(1); opacity: 1; }
     }
     .frosted-top-bar {
@@ -118,7 +118,10 @@ function can(tab) {
         background: var(--wave-bar);
         transform-origin: center;
         animation: soundWaveBar 0.9s steps(3, jump-none) infinite;
-        animation-delay: calc(var(--i, 0) * -0.07s);
+        animation-fill-mode: both;
+        /* Start mid-cycle so the leading bars are already on a rising ramp
+           instead of a flat low stub at the left edge. */
+        animation-delay: calc(var(--i, 0) * -0.07s - 0.315s);
         will-change: transform, opacity;
     }
     .loading-sound-wave .wave-bar.accent {
@@ -141,7 +144,7 @@ function can(tab) {
     <div class="frosted-top-bar"></div>
     <div class="flex flex-col items-center justify-center gap-5">
         <div id="loadingSoundWave" class="loading-sound-wave" role="img" aria-label="Sokrat VOIP loading">
-            <span class="wave-bar" aria-hidden="true" style="--h: 58%; --i: 0;"></span>
+            <span class="wave-bar" aria-hidden="true" style="--h: 50%; --i: 0;"></span>
             <span class="wave-bar accent" aria-hidden="true" style="--h: 58%; --i: 1;"></span>
             <span class="wave-bar" aria-hidden="true" style="--h: 82%; --i: 2;"></span>
             <span class="wave-bar" aria-hidden="true" style="--h: 100%; --i: 3;"></span>
