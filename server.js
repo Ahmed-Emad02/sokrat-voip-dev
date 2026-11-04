@@ -450,15 +450,7 @@ function buildCdrSource(scope) {
     };
 }
 app.set('view engine', 'ejs');
-const { formatBicolorText, formatBicolorHeader } = require('./lib/bicolor-text');
-app.locals.formatBicolorText = formatBicolorText;
-app.locals.formatBicolorHeader = formatBicolorHeader;
-app.use((req, res, next) => {
-    res.locals.assetVersion = ASSET_VERSION;
-    res.locals.formatBicolorText = formatBicolorText;
-    res.locals.formatBicolorHeader = formatBicolorHeader;
-    next();
-});
+app.use((req, res, next) => { res.locals.assetVersion = ASSET_VERSION; next(); });
 const staticCacheOptions = { maxAge: '7d', etag: true };
 app.use(express.static(path.join(__dirname, 'public'), staticCacheOptions));
 app.use('/public', express.static(path.join(__dirname, 'public'), staticCacheOptions));

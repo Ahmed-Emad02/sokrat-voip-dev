@@ -212,8 +212,8 @@
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
                     <div class="flex items-center gap-2.5">
-                        <h1 class="text-2xl font-vibrant-display text-[var(--text-primary)] tracking-tight" data-bicolor-header="true">
-                            <%- typeof formatBicolorHeader === 'function' ? formatBicolorHeader(currentLang === 'ar' ? 'إدارة مفاتيح API' : 'API Key Manager') : (currentLang === 'ar' ? 'إدارة مفاتيح API' : 'API Key Manager') %>
+                        <h1 class="text-2xl font-black text-[var(--text-primary)]">
+                            <%= currentLang === 'ar' ? 'إدارة مفاتيح API' : 'API Key Manager' %>
                         </h1>
                         <span class="badge-root-domain inline-flex items-center gap-1.5 px-3 py-1 text-[11px] font-black uppercase tracking-wider rounded-full">
                             <span class="indicator-dot w-2 h-2 rounded-full animate-pulse"></span>

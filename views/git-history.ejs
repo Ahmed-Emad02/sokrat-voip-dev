@@ -137,8 +137,8 @@
                 </div>
                 <div>
                     <div class="flex items-center gap-2">
-                        <h1 class="text-lg font-vibrant-display text-[var(--text-primary)]" data-bicolor-header="true">
-                            <%- typeof formatBicolorHeader === 'function' ? formatBicolorHeader(currentLang === 'ar' ? 'سجل Git للنظام' : 'Git Repository History') : (currentLang === 'ar' ? 'سجل Git للنظام' : 'Git Repository History') %>
+                        <h1 class="text-lg font-bold text-[var(--text-primary)]">
+                            <%= currentLang === 'ar' ? 'سجل Git للنظام' : 'Git Repository History' %>
                         </h1>
                         <span class="px-2 py-0.5 text-xs font-semibold rounded-md bg-red-500/10 text-red-400 border border-red-500/20 uppercase tracking-wider">
                             ROOT ONLY

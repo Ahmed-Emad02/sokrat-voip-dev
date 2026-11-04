@@ -408,7 +408,7 @@ const isRtl = currentLang === 'ar';
         
         <div class="mb-6 flex justify-between items-center gap-4 flex-wrap min-h-[2.5rem]">
             <div class="<%= isRtl ? 'text-right' : '' %>">
-                <h2 class="text-3xl font-vibrant-display text-[var(--text-primary)] tracking-tight <%= isRtl ? 'text-right' : '' %>" data-bicolor-header="true"><%- typeof formatBicolorHeader === 'function' ? formatBicolorHeader(t.title, t.subtitle) : (t.title + (t.subtitle ? ' ' + t.subtitle : '')) %></h2>
+                <h2 class="text-3xl font-vibrant-display text-white tracking-tight <%= isRtl ? 'text-right' : '' %>"><%= t.title %> <span class="accent-orange"><%= t.subtitle %></span></h2>
             </div>
             <div class="flex items-center gap-3 h-10 shrink-0">
                 <div class="flex items-center h-10 shrink-0">
