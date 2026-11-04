@@ -79,9 +79,9 @@ function can(tab) {
         50% { transform: translateX(25%); }
         100% { transform: translateX(100%); }
     }
-    @keyframes logoSoftBreath {
-        0%, 100% { transform: scale(0.97); opacity: 0.88; }
-        50% { transform: scale(1.02); opacity: 1; }
+    @keyframes soundWaveBar {
+        0%, 100% { transform: scaleY(0.4); opacity: 0.75; }
+        50% { transform: scaleY(1); opacity: 1; }
     }
     .frosted-top-bar {
         position: absolute;
@@ -93,9 +93,43 @@ function can(tab) {
         box-shadow: 0 0 12px rgba(239, 68, 68, 0.7), 0 0 4px #ef4444;
         animation: topBarLaser 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
     }
-    .loading-logo-breath {
-        animation: logoSoftBreath 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite ease-in-out;
+    .loading-sound-wave {
+        --wave-bar: #ffffff;
+        --wave-accent: #ef4444;
+        --wave-glow: rgba(239, 68, 68, 0.55);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: clamp(3px, 0.8vw, 6px);
+        width: min(320px, calc(100vw - 40px));
+        height: 112px;
+        filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.18));
+    }
+    html.light-theme .loading-sound-wave {
+        --wave-bar: #0a0a0a;
+        --wave-accent: #dc2626;
+        --wave-glow: rgba(220, 38, 38, 0.35);
+    }
+    .loading-sound-wave .wave-bar {
+        display: block;
+        width: clamp(6px, 1.4vw, 9px);
+        height: var(--h, 60%);
+        border-radius: 999px;
+        background: var(--wave-bar);
+        transform-origin: center;
+        animation: soundWaveBar 0.9s steps(3, jump-none) infinite;
+        animation-delay: calc(var(--i, 0) * -0.07s);
         will-change: transform, opacity;
+    }
+    .loading-sound-wave .wave-bar.accent {
+        background: var(--wave-accent);
+        box-shadow: 0 0 12px var(--wave-glow);
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .loading-sound-wave .wave-bar {
+            animation: none;
+            transform: scaleY(0.75);
+        }
     }
     .frosted-overlay-backdrop {
         backdrop-filter: blur(12px) saturate(140%);
@@ -106,7 +140,26 @@ function can(tab) {
     <!-- Frosted Top Edge Glowing Line -->
     <div class="frosted-top-bar"></div>
     <div class="flex flex-col items-center justify-center gap-5">
-        <img id="loadingLogo" src="/logo_light_text.png" alt="Sokrat VOIP" class="w-48 h-48 object-contain loading-logo-breath transition-all duration-300">
+        <div id="loadingSoundWave" class="loading-sound-wave" role="img" aria-label="Sokrat VOIP loading">
+            <span class="wave-bar" aria-hidden="true" style="--h: 58%; --i: 0;"></span>
+            <span class="wave-bar accent" aria-hidden="true" style="--h: 58%; --i: 1;"></span>
+            <span class="wave-bar" aria-hidden="true" style="--h: 82%; --i: 2;"></span>
+            <span class="wave-bar" aria-hidden="true" style="--h: 100%; --i: 3;"></span>
+            <span class="wave-bar accent" aria-hidden="true" style="--h: 72%; --i: 4;"></span>
+            <span class="wave-bar" aria-hidden="true" style="--h: 96%; --i: 5;"></span>
+            <span class="wave-bar" aria-hidden="true" style="--h: 64%; --i: 6;"></span>
+            <span class="wave-bar accent" aria-hidden="true" style="--h: 88%; --i: 7;"></span>
+            <span class="wave-bar" aria-hidden="true" style="--h: 46%; --i: 8;"></span>
+            <span class="wave-bar" aria-hidden="true" style="--h: 38%; --i: 9;"></span>
+            <span class="wave-bar accent" aria-hidden="true" style="--h: 66%; --i: 10;"></span>
+            <span class="wave-bar" aria-hidden="true" style="--h: 90%; --i: 11;"></span>
+            <span class="wave-bar" aria-hidden="true" style="--h: 74%; --i: 12;"></span>
+            <span class="wave-bar accent" aria-hidden="true" style="--h: 100%; --i: 13;"></span>
+            <span class="wave-bar" aria-hidden="true" style="--h: 62%; --i: 14;"></span>
+            <span class="wave-bar" aria-hidden="true" style="--h: 86%; --i: 15;"></span>
+            <span class="wave-bar accent" aria-hidden="true" style="--h: 52%; --i: 16;"></span>
+            <span class="wave-bar" aria-hidden="true" style="--h: 52%; --i: 17;"></span>
+        </div>
     </div>
 </div>
 <script>
@@ -133,15 +186,12 @@ function can(tab) {
             document.documentElement.classList.remove('sidebar-collapsed');
         }
         const overlay = document.getElementById('theme-loading-overlay');
-        const logo = document.getElementById('loadingLogo');
         if (theme === 'light') {
             document.documentElement.classList.add('light-theme');
             if (overlay) overlay.style.backgroundColor = 'rgba(249, 250, 251, 0.85)';
-            if (logo) logo.src = '/logo.png';
         } else {
             document.documentElement.classList.remove('light-theme');
             if (overlay) overlay.style.backgroundColor = 'rgba(5, 5, 7, 0.80)';
-            if (logo) logo.src = '/logo_light_text.png';
         }
     })();
 
