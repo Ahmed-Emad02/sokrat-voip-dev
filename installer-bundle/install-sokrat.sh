@@ -2125,6 +2125,39 @@ same => n,Goto(from-internal,${EXTEN},1)
 
 CAMPON_CTX
 
+# Append Progressive Autodialer contexts
+append_context '[from-autodialer-progressive]' '[from-autodialer-progressive]' << 'AUTODIALER_CTX'
+
+[autodialer-agent-setup]
+exten => _X.,1,NoOp(=== Progressive Dialer Agent Setup: ${EXTEN} ===)
+same => n,Set(HASH(__SIPHEADERS,Alert-Info)=info=alert-autoanswer)
+same => n,Set(HASH(__SIPHEADERS,Call-Info)=<sip:127.0.0.1>\;answer-after=0)
+same => n,Set(HASH(__SIPHEADERS,X-Sokrat-AutoDialer)=1)
+same => n,Goto(from-internal,${EXTEN},1)
+
+[from-autodialer-progressive]
+exten => s,1,NoOp(=== Progressive Dialer Outbound Leg: ${LEAD_PHONE} ===)
+same => n,Set(CALLERID(name)=${LEAD_NAME})
+same => n,Set(CALLERID(num)=${LEAD_PHONE})
+same => n,Set(CHANNEL(hangup_handler_push)=sub-autodialer-progressive-hangup,s,1)
+same => n,Set(TARGET_NUM=${IF($["${DIAL_NUM}"!=""]?${DIAL_NUM}:${LEAD_PHONE})})
+same => n,GotoIf($["${DIAL_TARGET}"!=""]?dial_target:dial_route)
+same => n(dial_target),Dial(${DIAL_TARGET}/${TARGET_NUM},60,U(sub-autodialer-progressive-connect^${ATTEMPT_UUID}^${LEAD_ID}^${TARGET_AGENT}^${CAMPAIGN_ID}))
+same => n,Hangup()
+same => n(dial_route),Dial(Local/${TARGET_NUM}@outbound-allroutes,60,U(sub-autodialer-progressive-connect^${ATTEMPT_UUID}^${LEAD_ID}^${TARGET_AGENT}^${CAMPAIGN_ID}))
+same => n,Hangup()
+
+[sub-autodialer-progressive-connect]
+exten => s,1,NoOp(=== Progressive Dialer Connected: ${ARG4} / ${ARG2} ===)
+same => n,UserEvent(DialerProgressiveConnect,AttemptUUID: ${IF($["${ARG1}"!=""]?${ARG1}:${ATTEMPT_UUID})},LeadID: ${IF($["${ARG2}"!=""]?${ARG2}:${LEAD_ID})},AgentExtension: ${IF($["${ARG3}"!=""]?${ARG3}:${TARGET_AGENT})},CampaignID: ${IF($["${ARG4}"!=""]?${ARG4}:${CAMPAIGN_ID})},Channel: ${CHANNEL})
+same => n,Return()
+
+[sub-autodialer-progressive-hangup]
+exten => s,1,NoOp(=== Progressive Dialer Hangup: ${CAMPAIGN_ID} / ${LEAD_ID} ===)
+same => n,UserEvent(DialerProgressiveHangup,AttemptUUID: ${ATTEMPT_UUID},CampaignID: ${CAMPAIGN_ID},LeadID: ${LEAD_ID},AgentExtension: ${TARGET_AGENT},DialStatus: ${DIALSTATUS},HangupCause: ${HANGUPCAUSE})
+same => n,Return()
+AUTODIALER_CTX
+
 # Ensure [macro-exten-vm] Camp-On override in /etc/asterisk/extensions_override_issabel.conf
 OVERRIDE_CONF="/etc/asterisk/extensions_override_issabel.conf"
 if [ -f "$OVERRIDE_CONF" ]; then

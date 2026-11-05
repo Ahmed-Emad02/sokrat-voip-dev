@@ -23295,6 +23295,7 @@ async function runDialerPacerCycle() {
 
                     const varHeaders = [
                         `Variable: ATTEMPT_UUID=${cleanAttemptUuid}`,
+                        `Variable: CAMPAIGN_ID=${campId}`,
                         `Variable: LEAD_ID=${lead.id}`,
                         `Variable: LEAD_PHONE=${displayedPhone}`,
                         `Variable: DIAL_NUM=${cleanPhone}`,
@@ -23302,7 +23303,8 @@ async function runDialerPacerCycle() {
                         `Variable: OUTBOUND_CONTEXT=${outboundContext}`,
                         `Variable: DIAL_TARGET=${cleanDialTarget}`,
                         `Variable: ORIGINATION_CALLER_ID=${cidNum}`,
-                        `Variable: TARGET_AGENT=${cleanAgent}`
+                        `Variable: TARGET_AGENT=${cleanAgent}`,
+                        `Variable: AGENT_EXTEN=${cleanAgent}`
                     ].join('\r\n');
 
                     amiClient.write(`Action: Originate\r\nActionID: ${cleanAttemptUuid}\r\nChannel: ${agentChannel}\r\nContext: from-autodialer-progressive\r\nExten: s\r\nPriority: 1\r\nCallerID: ${effectiveCallerId}\r\n${varHeaders}\r\n\r\n`);
@@ -23361,8 +23363,8 @@ function handleDialerAmiEvents(event) {
     // 3. Dialplan Custom UserEvents (DialerProgressiveConnect & DialerProgressiveHangup)
     if (event.Event === 'UserEvent') {
         if (event.UserEvent === 'DialerProgressiveConnect') {
-            const attemptUuid = event.AttemptUUID;
-            const agentExt = event.AgentExtension;
+            const attemptUuid = event.AttemptUUID || event.ActionID;
+            const agentExt = event.AgentExtension || event.Agent;
             const leadId = event.LeadID;
             if (attemptUuid) {
                 updateAttemptStatus(attemptUuid, 'agent_bridged', event.Uniqueid, event.Linkedid, event.Channel, agentExt);
@@ -23385,10 +23387,10 @@ function handleDialerAmiEvents(event) {
                 }
             }
         } else if (event.UserEvent === 'DialerProgressiveHangup') {
-            const attemptUuid = event.AttemptUUID;
+            const attemptUuid = event.AttemptUUID || event.ActionID;
             if (attemptUuid) {
                 const dialStatus = String(event.DialStatus || '').toUpperCase();
-                const cause = parseInt(event.Cause || '0', 10);
+                const cause = parseInt(event.Cause || event.HangupCause || '0', 10);
                 const termStatus = dialStatus === 'ANSWER' ? 'completed' : (dialStatus === 'BUSY' ? 'busy' : (dialStatus === 'NOANSWER' ? 'no_answer' : 'failed'));
                 finalizeAttempt(attemptUuid, termStatus, cause);
             }
@@ -24200,9 +24202,10 @@ app.get('/api/dialer/dnc', requireAuth, requireRootForDialer, async (req, res) =
 // POST /api/dialer/dnc
 app.post('/api/dialer/dnc', requireAuth, requireRootForDialer, requireActionPermission('campaigns-dnc'), async (req, res) => {
     try {
-        const { phone_number, reason } = req.body;
-        if (!phone_number) return res.status(400).json({ success: false, error: 'Phone number is required' });
-        const cleanPhone = normalizeLeadPhone(phone_number) || String(phone_number).trim();
+        const rawPhone = req.body.phone_number || req.body.phone;
+        const reason = req.body.reason;
+        if (!rawPhone) return res.status(400).json({ success: false, error: 'Phone number is required' });
+        const cleanPhone = normalizeLeadPhone(rawPhone) || String(rawPhone).trim();
 
         await pool.query('INSERT IGNORE INTO `asterisk`.`dialer_dnc` (phone_number, reason) VALUES (?, ?)', [cleanPhone, reason || null]);
         await pool.query('UPDATE `asterisk`.`dialer_leads` SET status = "dnc" WHERE phone_number = ?', [cleanPhone]);

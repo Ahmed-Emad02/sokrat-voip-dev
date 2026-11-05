@@ -764,19 +764,19 @@ same => n,Set(CALLERID(num)=${LEAD_PHONE})
 same => n,Set(CHANNEL(hangup_handler_push)=sub-autodialer-progressive-hangup,s,1)
 same => n,Set(TARGET_NUM=${IF($["${DIAL_NUM}"!=""]?${DIAL_NUM}:${LEAD_PHONE})})
 same => n,GotoIf($["${DIAL_TARGET}"!=""]?dial_target:dial_route)
-same => n(dial_target),Dial(${DIAL_TARGET}/${TARGET_NUM},60,U(sub-autodialer-progressive-connect))
+same => n(dial_target),Dial(${DIAL_TARGET}/${TARGET_NUM},60,U(sub-autodialer-progressive-connect^${ATTEMPT_UUID}^${LEAD_ID}^${TARGET_AGENT}^${CAMPAIGN_ID}))
 same => n,Hangup()
-same => n(dial_route),Dial(Local/${TARGET_NUM}@outbound-allroutes,60,U(sub-autodialer-progressive-connect))
+same => n(dial_route),Dial(Local/${TARGET_NUM}@outbound-allroutes,60,U(sub-autodialer-progressive-connect^${ATTEMPT_UUID}^${LEAD_ID}^${TARGET_AGENT}^${CAMPAIGN_ID}))
 same => n,Hangup()
 
 [sub-autodialer-progressive-connect]
-exten => s,1,NoOp(=== Progressive Dialer Connected: ${CAMPAIGN_ID} / ${LEAD_ID} ===)
-same => n,UserEvent(DialerProgressiveConnect,CampaignID: ${CAMPAIGN_ID},LeadID: ${LEAD_ID},Agent: ${AGENT_EXTEN},Channel: ${CHANNEL})
+exten => s,1,NoOp(=== Progressive Dialer Connected: ${ARG4} / ${ARG2} ===)
+same => n,UserEvent(DialerProgressiveConnect,AttemptUUID: ${IF($["${ARG1}"!=""]?${ARG1}:${ATTEMPT_UUID})},LeadID: ${IF($["${ARG2}"!=""]?${ARG2}:${LEAD_ID})},AgentExtension: ${IF($["${ARG3}"!=""]?${ARG3}:${TARGET_AGENT})},CampaignID: ${IF($["${ARG4}"!=""]?${ARG4}:${CAMPAIGN_ID})},Channel: ${CHANNEL})
 same => n,Return()
 
 [sub-autodialer-progressive-hangup]
 exten => s,1,NoOp(=== Progressive Dialer Hangup: ${CAMPAIGN_ID} / ${LEAD_ID} ===)
-same => n,UserEvent(DialerProgressiveHangup,CampaignID: ${CAMPAIGN_ID},LeadID: ${LEAD_ID},Agent: ${AGENT_EXTEN},DialStatus: ${DIALSTATUS},HangupCause: ${HANGUPCAUSE})
+same => n,UserEvent(DialerProgressiveHangup,AttemptUUID: ${ATTEMPT_UUID},CampaignID: ${CAMPAIGN_ID},LeadID: ${LEAD_ID},AgentExtension: ${TARGET_AGENT},DialStatus: ${DIALSTATUS},HangupCause: ${HANGUPCAUSE})
 same => n,Return()
 """
         content = content.rstrip() + "\n\n" + dialer_stub.strip() + "\n"
