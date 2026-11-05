@@ -199,9 +199,10 @@ The 264 API endpoints are organized into 31 functional modules:
   - [`PUT` /api/employee/extras/:extension](#put-apiemployeeextrasextension)
   - [`PUT` /api/employee/group-assignment](#put-apiemployeegroup-assignment)
   - [`POST` /api/employee/photo](#post-apiemployeephoto)
-- [**10. PBX Configuration: Extensions & AGC Audio Tuning**](#pbx-extensions) *(5 endpoints)*
+- [**10. PBX Configuration: Extensions & AGC Audio Tuning**](#pbx-extensions) *(6 endpoints)*
   - [`GET` /api/config/extensions](#get-apiconfigextensions)
   - [`POST` /api/config/extensions](#post-apiconfigextensions)
+  - [`POST` /api/config/extensions/bulk](#post-apiconfigextensionsbulk)
   - [`PUT` /api/config/extensions/:extension](#put-apiconfigextensionsextension)
   - [`DELETE` /api/config/extensions/:extension](#delete-apiconfigextensionsextension)
   - [`GET` /api/config/extension-conflicts](#get-apiconfigextension-conflicts)
@@ -3014,6 +3015,54 @@ curl -X POST http://localhost:8080/api/config/extensions -b cookie.txt \
 {
   "success": true,
   "message": "Extension 115 created successfully."
+}
+```
+
+---
+
+<a id="post-apiconfigextensionsbulk"></a>
+### `POST` /api/config/extensions/bulk
+
+**Description**: Creates a sequential range of PBX extensions with identical settings. The extension ID and display name are the same number; each subsequent extension increments the previous number by one.
+
+- **Authentication**: Session Cookie (`config` or `config-extensions` permission)
+- **Headers**: Cookie: connect.sid=<session_cookie>, Content-Type: application/json
+- **System Impact**: Runs the normal single-extension provisioning for every number, then performs one PJSIP reload, one voicemail reload, and one PBX configuration reload. Maximum 25 extensions per request.
+
+#### Request Parameters
+
+| Name | Location | Type | Required | Description |
+| :--- | :--- | :--- | :---: | :--- |
+| `start_extension` | `body` | `string` | **Yes** | First numeric extension, e.g. `200` |
+| `count` | `body` | `integer` | **Yes** | Number of extensions to create, 1–25 |
+| `secret` | `body` | `string` | **Yes** | Shared SIP secret for every created extension |
+| `tech` | `body` | `string` | No | `sip` (default) or `webrtc` |
+| `voicemail` | `body` | `string` | No | `enabled` or `disabled` (default) |
+| `denoise` | `body` | `string` | No | `off`, `both`, `rx`, or `tx` |
+| `vad_gate` | `body` | `string` | No | `0` (default) or `1` |
+| `vad_db` | `body` | `string` | No | `off` or a dBFS threshold such as `-45` |
+| `agc` | `body` | `string` | No | `off`, `6000`, `8000`, `10000`, or `12000` |
+
+#### Example Request
+
+```bash
+curl -X POST http://localhost:8080/api/config/extensions/bulk -b cookie.txt \
+  -H 'Content-Type: application/json' \
+  -d '{"start_extension":"200","count":5,"secret":"SharedPass@2026","tech":"sip","voicemail":"disabled","denoise":"off","vad_gate":"0","vad_db":"off","agc":"off"}'
+```
+
+#### Example Response
+
+```json
+{
+  "success": true,
+  "partial": false,
+  "message": "Created 5 extension(s) successfully.",
+  "extensions": [
+    {"extension": "200", "name": "200", "tech": "sip", "isWebRTC": false},
+    {"extension": "201", "name": "201", "tech": "sip", "isWebRTC": false}
+  ],
+  "failed": []
 }
 ```
 

@@ -1800,6 +1800,114 @@
             setEmployeeGroupOptions(data.groups || [], selectedValue);
         }
 
+        function buildBulkExtensionNumbers(startRaw, count) {
+            const start = String(startRaw || '').trim();
+            if (!/^\d+$/.test(start)) return [];
+            const startNum = Number(start);
+            if (!Number.isSafeInteger(startNum) || startNum < 1) return [];
+            const total = Number.parseInt(count, 10);
+            if (!Number.isInteger(total) || total < 1 || total > 25) return [];
+            const width = start.startsWith('0') ? start.length : 0;
+            const values = [];
+            for (let index = 0; index < total; index++) {
+                let value = String(startNum + index);
+                if (width > value.length) value = value.padStart(width, '0');
+                values.push(value);
+            }
+            return values;
+        }
+
+        function updateBulkExtensionPreview() {
+            const preview = document.getElementById('bulkExtPreview');
+            if (!preview) return;
+            const values = buildBulkExtensionNumbers(
+                document.getElementById('bulkExtStart')?.value,
+                document.getElementById('bulkExtCount')?.value
+            );
+            if (values.length === 0) {
+                preview.textContent = '—';
+                return;
+            }
+            preview.textContent = values.length <= 8
+                ? values.join(', ')
+                : values.slice(0, 8).join(', ') + ' … ' + values[values.length - 1];
+        }
+
+        function openBulkExtensionModal() {
+            const form = document.getElementById('bulkExtensionForm');
+            if (form) form.reset();
+            const startInput = document.getElementById('bulkExtStart');
+            if (startInput) {
+                const numeric = (loadedExtensionsList || [])
+                    .map(ext => Number.parseInt(ext.extension, 10))
+                    .filter(value => Number.isSafeInteger(value));
+                startInput.value = String(numeric.length > 0 ? Math.max(...numeric) + 1 : 101);
+            }
+            const countInput = document.getElementById('bulkExtCount');
+            if (countInput) countInput.value = '5';
+            const secretInput = document.getElementById('bulkExtSecret');
+            if (secretInput) secretInput.value = '';
+            document.getElementById('bulkExtTech').value = 'sip';
+            document.getElementById('bulkExtVoicemail').value = 'disabled';
+            document.getElementById('bulkExtDenoise').value = 'off';
+            document.getElementById('bulkExtVadGate').value = '0';
+            document.getElementById('bulkExtVadDb').value = 'off';
+            document.getElementById('bulkExtAgc').value = 'off';
+            updateBulkExtensionPreview();
+            openModal('bulkExtensionModal');
+        }
+
+        async function saveBulkExtensions(event) {
+            event.preventDefault();
+            const startRaw = document.getElementById('bulkExtStart').value.trim();
+            const count = Number.parseInt(document.getElementById('bulkExtCount').value, 10);
+            const secret = document.getElementById('bulkExtSecret').value.trim();
+            const values = buildBulkExtensionNumbers(startRaw, count);
+            if (values.length === 0) {
+                showToast(isRtl ? 'أدخل رقم بداية صحيحاً وعدداً بين 1 و25.' : 'Enter a valid start extension and a count between 1 and 25.', 'error');
+                return;
+            }
+            if (!secret) {
+                showToast(isRtl ? 'كلمة السر المشتركة مطلوبة.' : 'A shared secret is required.', 'error');
+                return;
+            }
+
+            const btn = document.getElementById('bulkExtSaveBtn');
+            setButtonLoading(btn, true, isRtl ? 'جاري إنشاء التحويلات...' : 'Creating extensions...');
+            try {
+                const response = await fetch('/api/config/extensions/bulk', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        start_extension: startRaw,
+                        count,
+                        secret,
+                        tech: document.getElementById('bulkExtTech').value,
+                        voicemail: document.getElementById('bulkExtVoicemail').value,
+                        denoise: document.getElementById('bulkExtDenoise').value,
+                        vad_gate: document.getElementById('bulkExtVadGate').value,
+                        vad_db: document.getElementById('bulkExtVadDb').value,
+                        agc: document.getElementById('bulkExtAgc').value
+                    })
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.error || (isRtl ? 'فشل إنشاء التحويلات.' : 'Failed to create extensions.'));
+                }
+                showToast(data.message || (isRtl ? 'تم إنشاء التحويلات.' : 'Extensions created.'), data.success ? 'success' : 'error');
+                closeModal('bulkExtensionModal');
+                fetchExtensions();
+            } catch (error) {
+                showToast(error.message || (isRtl ? 'فشل إنشاء التحويلات.' : 'Failed to create extensions.'), 'error');
+            } finally {
+                setButtonLoading(btn, false);
+            }
+        }
+
+        window.openBulkExtensionModal = openBulkExtensionModal;
+        window.saveBulkExtensions = saveBulkExtensions;
+        window.updateBulkExtensionPreview = updateBulkExtensionPreview;
+
         async function openExtensionModal() {
             document.getElementById('extModalTitle').textContent = isRtl ? 'إضافة تحويلة جديدة (WebRTC / Generic SIP)' : 'Add Extension (WebRTC / Generic SIP)';
             document.getElementById('extEditMode').value = 'false';

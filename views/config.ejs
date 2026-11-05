@@ -1274,6 +1274,10 @@ function isTabAllowed(tabName) {
                                 <span><%= isRtl ? 'سياسات وقفل WebRTC' : 'WebRTC Policies' %></span>
                             </button>
                             <% } %>
+                            <button type="button" onclick="openBulkExtensionModal()" class="config-btn-secondary px-4 py-2 flex items-center gap-2 text-xs cursor-pointer">
+                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M4 12h16M4 17h10" /></svg>
+                                <span><%= isRtl ? 'إضافة تحويلات متعددة' : 'Add Multiple Extensions' %></span>
+                            </button>
                             <button type="button" onclick="openExtensionModal()" class="config-btn-primary px-4 py-2 flex items-center gap-2 text-xs cursor-pointer">
                                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
                                 <span><%= isRtl ? 'إضافة تحويلة جديدة' : 'Add New Extension' %></span>
@@ -3402,6 +3406,126 @@ function isTabAllowed(tabName) {
             </form>
         </div>
     </div>
+    <!-- MODAL: BULK EXTENSION CREATION -->
+    <div id="bulkExtensionModal" class="fixed inset-0 bg-black/75 backdrop-blur-md z-[99999] flex items-center justify-center hidden p-4 sm:p-6">
+        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] w-full max-w-3xl max-h-[92vh] flex flex-col text-[var(--text-primary)]">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-[var(--border-primary)] bg-[var(--bg-primary)]/40 shrink-0">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 font-bold">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M4 12h16M4 17h10" /></svg>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'إضافة تحويلات متعددة' : 'Add Multiple Extensions' %></h3>
+                        <p class="text-[11px] text-[var(--text-muted)]"><%= isRtl ? 'أرقام متتابعة، والاسم الظاهر يساوي رقم التحويلة' : 'Sequential numbers; display name equals the extension number' %></p>
+                    </div>
+                </div>
+                <button type="button" onclick="closeModal('bulkExtensionModal')" class="w-8 h-8 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-red-500/40 flex items-center justify-center cursor-pointer transition-colors">✕</button>
+            </div>
+
+            <form id="bulkExtensionForm" onsubmit="saveBulkExtensions(event)" class="flex flex-col flex-1 overflow-hidden">
+                <div class="flex-1 overflow-y-auto p-6 space-y-5 custom-scrollbar">
+                    <div class="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4 space-y-3">
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                            <div>
+                                <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="bulkExtStart"><%= isRtl ? 'أول تحويلة *' : 'Start Extension *' %></label>
+                                <input type="text" id="bulkExtStart" required placeholder="e.g. 200" oninput="updateBulkExtensionPreview()" class="config-input w-full font-mono text-xs">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="bulkExtCount"><%= isRtl ? 'العدد *' : 'Count *' %></label>
+                                <input type="number" id="bulkExtCount" required min="1" max="25" value="5" oninput="updateBulkExtensionPreview()" class="config-input w-full font-mono text-xs">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'المعاينة' : 'Preview' %></label>
+                                <div id="bulkExtPreview" class="config-input w-full text-xs text-cyan-300 font-mono flex items-center min-h-[34px]">—</div>
+                            </div>
+                        </div>
+                        <p class="text-[10px] text-[var(--text-muted)]"><%= isRtl ? 'سيتم إنشاء أرقام متتابعة من رقم البداية. الحد الأقصى 25 تحويلة في العملية الواحدة.' : 'Sequential numbers are created from the start value. Maximum 25 extensions per operation.' %></p>
+                    </div>
+
+                    <div class="rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)]/40 p-4 space-y-3">
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                            <div>
+                                <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="bulkExtSecret"><%= isRtl ? 'كلمة السر المشتركة *' : 'Shared Secret *' %></label>
+                                <input type="text" id="bulkExtSecret" autocomplete="new-password" required placeholder="e.g. P@ssword123!" class="config-input w-full font-mono text-xs">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="bulkExtTech"><%= isRtl ? 'نوع الجهاز' : 'Device Type' %></label>
+                                <select id="bulkExtTech" class="config-input w-full text-xs font-semibold">
+                                    <option value="sip" selected><%= isRtl ? 'هاتف SIP اعتيادي' : 'Generic SIP Device' %></option>
+                                    <option value="webrtc"><%= isRtl ? 'هاتف WebRTC' : 'WebRTC Softphone' %></option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="bulkExtVoicemail"><%= isRtl ? 'البريد الصوتي' : 'Voicemail' %></label>
+                                <select id="bulkExtVoicemail" class="config-input w-full text-xs font-semibold">
+                                    <option value="disabled" selected><%= isRtl ? 'معطل' : 'Disabled' %></option>
+                                    <option value="enabled"><%= isRtl ? 'مفعل' : 'Enabled' %></option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)]/40 p-4 space-y-3">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                            <div>
+                                <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="bulkExtDenoise"><%= isRtl ? 'عزل الضوضاء (RNNoise)' : 'AI Noise Suppression (RNNoise)' %></label>
+                                <select id="bulkExtDenoise" class="config-input w-full text-xs font-semibold">
+                                    <option value="off" selected><%= isRtl ? 'معطل' : 'Disabled' %></option>
+                                    <option value="both"><%= isRtl ? 'إرسال واستقبال' : 'Both RX & TX' %></option>
+                                    <option value="rx"><%= isRtl ? 'ميكروفون فقط' : 'RX Only' %></option>
+                                    <option value="tx"><%= isRtl ? 'سماعة فقط' : 'TX Only' %></option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="bulkExtVadGate"><%= isRtl ? 'بوابة كتم الصمت (VAD)' : 'VAD Silence Gate' %></label>
+                                <select id="bulkExtVadGate" class="config-input w-full text-xs font-semibold">
+                                    <option value="0" selected><%= isRtl ? 'معطلة' : 'Disabled' %></option>
+                                    <option value="1"><%= isRtl ? 'مفعلة' : 'Enabled' %></option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="bulkExtVadDb"><%= isRtl ? 'عتبة الديسيبل' : 'Decibel Cutoff' %></label>
+                                <select id="bulkExtVadDb" class="config-input w-full text-xs font-semibold">
+                                    <option value="off" selected><%= isRtl ? 'تلقائي' : 'Auto' %></option>
+                                    <option value="-55">-55 dBFS</option>
+                                    <option value="-50">-50 dBFS</option>
+                                    <option value="-45">-45 dBFS</option>
+                                    <option value="-42">-42 dBFS</option>
+                                    <option value="-38">-38 dBFS</option>
+                                    <option value="-35">-35 dBFS</option>
+                                    <option value="-30">-30 dBFS</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="bulkExtAgc"><%= isRtl ? 'تطبيع الصوت (AGC)' : 'Auto Gain Control (AGC)' %></label>
+                                <select id="bulkExtAgc" class="config-input w-full text-xs font-semibold">
+                                    <option value="off" selected><%= isRtl ? 'معطل' : 'Disabled' %></option>
+                                    <option value="8000">8000</option>
+                                    <option value="6000">6000</option>
+                                    <option value="10000">10000</option>
+                                    <option value="12000">12000</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="p-3.5 bg-cyan-500/5 border border-cyan-500/20 rounded-xl text-[11px] text-[var(--text-muted)]">
+                        <strong class="text-cyan-400"><%= isRtl ? 'ملاحظة:' : 'Note:' %></strong>
+                        <%= isRtl ? 'رقم التحويلة والاسم الظاهر متطابقان. كل الإعدادات المختارة تُطبق على جميع التحويلات التي سيتم إنشاؤها.' : 'The extension ID and display name are identical. All selected settings are shared by every created extension.' %>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-[var(--border-primary)] bg-[var(--bg-primary)]/40 shrink-0">
+                    <button type="button" onclick="closeModal('bulkExtensionModal')" class="config-btn-secondary px-5 py-2.5 text-xs font-semibold"><%= isRtl ? 'إلغاء' : 'Cancel' %></button>
+                    <button id="bulkExtSaveBtn" type="submit" class="config-btn-primary px-6 py-2.5 text-xs font-bold flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg>
+                        <span id="bulkExtSaveBtnText"><%= isRtl ? 'إنشاء التحويلات' : 'Create Extensions' %></span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- MODAL: WEBRTC CREDENTIALS DISPLAY -->
     <div id="webrtcCredentialsModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[99999] flex items-center justify-center hidden p-4">
         <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] max-w-md w-full p-6 text-[var(--text-primary)]">

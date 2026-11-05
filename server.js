@@ -42,6 +42,7 @@ const chatStore = require('./lib/chat/store');
 const registerCrmLiveSocket = require('./socket/crm-live');
 const { getPhoneVariants, cleanPhoneString } = require('./lib/phone-normalization');
 const { loadContactsCached } = require('./lib/contacts');
+const { MAX_BULK_EXTENSIONS, buildExtensionRange } = require('./lib/extension-bulk');
 const dialerFollowup = require('./lib/dialer-followup');
 const { resolveRecordingPath, streamRecordingFile, createMediaId } = require('./lib/recordings');
 const gitHistoryService = require('./backend/git-history-service');
@@ -14708,7 +14709,7 @@ app.post('/api/config/reload', async (req, res) => {
 // --- 1. EXTENSIONS MANAGEMENT APIs ---
 
 // Helper function to manage /etc/asterisk/voicemail.conf for FreePBX/Issabel GUI
-function updateVoicemailConf(extNum, displayName, vmVal) {
+function updateVoicemailConf(extNum, displayName, vmVal, reload = true) {
     const vmFile = '/etc/asterisk/voicemail.conf';
     try {
         if (!fs.existsSync(vmFile)) return;
@@ -14724,9 +14725,11 @@ function updateVoicemailConf(extNum, displayName, vmVal) {
         }
 
         fs.writeFileSync(vmFile, lines.join('\n'), 'utf8');
-        exec(`${ASTERISK_BIN} -rx 'voicemail reload'`, (err) => {
-            if (err) console.error('Voicemail reload error:', err.message);
-        });
+        if (reload) {
+            exec(`${ASTERISK_BIN} -rx 'voicemail reload'`, (err) => {
+                if (err) console.error('Voicemail reload error:', err.message);
+            });
+        }
     } catch (e) {
         console.error('updateVoicemailConf error:', e.message);
     }
@@ -14745,7 +14748,7 @@ function applyVoicemailState(extNum, displayName, vmVal) {
 }
 
 // Helper function to sync extension astdb recording & user settings
-async function setExtensionAstdbDefaults(extNum, displayName, vmVal = 'novm', tech = 'sip', denoiseVal = 'off', vadGateVal = '0', vadDbVal = 'off', customDial = null, agcVal = 'off') {
+async function setExtensionAstdbDefaults(extNum, displayName, vmVal = 'novm', tech = 'sip', denoiseVal = 'off', vadGateVal = '0', vadDbVal = 'off', customDial = null, agcVal = 'off', reloadVoicemail = true) {
     let techUpper = (tech || 'sip').toUpperCase();
     let techLower = (tech || 'sip').toLowerCase();
     let dialTarget = customDial && String(customDial).trim() ? String(customDial).trim() : `${techUpper}/${extNum}`;
@@ -14789,7 +14792,7 @@ async function setExtensionAstdbDefaults(extNum, displayName, vmVal = 'novm', te
         }
     }
 
-    updateVoicemailConf(extNum, displayName, vmVal);
+    updateVoicemailConf(extNum, displayName, vmVal, reloadVoicemail);
 }
 
 async function syncAllExtensionsAstdb() {
@@ -14820,7 +14823,7 @@ async function getCurrentPjsipSecret(extNum) {
     }
 }
 
-function updatePjsipCustomConfig(extNum, secret, displayName, action = 'create') {
+function updatePjsipCustomConfig(extNum, secret, displayName, action = 'create', reload = true) {
     const pjsipPath = '/etc/asterisk/pjsip_custom.conf';
     const postPath = '/etc/asterisk/pjsip_custom_post.conf';
 
@@ -14933,7 +14936,7 @@ remove_unavailable=yes
         } catch (_) {}
     }
 
-    reloadPjsip();
+    if (reload) reloadPjsip();
 }
 
 function reloadPjsip() {
@@ -15329,167 +15332,270 @@ async function checkNumberCollision(number, entityType, currentId = null) {
     return null;
 }
 // POST /api/config/extensions - Create new Generic SIP Extension
-app.post('/api/config/extensions', async (req, res) => {
-    try {
-        const { extension, name, secret, voicemail, tech, denoise, vad_gate, vadGate, vad_db, vadDb, agc } = req.body;
-        if (!extension || !/^\d+$/.test(extension)) {
-            return res.status(400).json({ success: false, error: 'Valid numeric Extension number is required.' });
-        }
-        if (!name || !name.trim()) {
-            return res.status(400).json({ success: false, error: 'Display Name is required.' });
-        }
-        if (!secret || !secret.trim()) {
-            return res.status(400).json({ success: false, error: 'Secret (password) is required.' });
-        }
 
-        const extNum = String(extension).trim();
-        const displayName = String(name).trim();
-        const extSecret = String(secret).trim();
-        const vmVal = (voicemail === 'default' || voicemail === 'enabled' || voicemail === true) ? 'default' : 'novm';
-        const extContext = 'from-internal';
-        const isWebRTC = tech === 'webrtc' || tech === 'pjsip';
-        const devTech = isWebRTC ? 'pjsip' : 'sip';
-        const devDial = isWebRTC ? `PJSIP/${extNum}` : `SIP/${extNum}`;
+async function provisionExtension(payload = {}, options = {}) {
+    const validationError = (message, statusCode = 400) => {
+        const err = new Error(message);
+        err.statusCode = statusCode;
+        return err;
+    };
+    const { extension, name, secret, voicemail, tech, denoise, vad_gate, vadGate, vad_db, vadDb, agc } = payload;
+    if (!extension || !/^\d+$/.test(String(extension))) {
+        throw validationError('Valid numeric Extension number is required.');
+    }
+    if (!name || !String(name).trim()) {
+        throw validationError('Display Name is required.');
+    }
+    if (!secret || !String(secret).trim()) {
+        throw validationError('Secret (password) is required.');
+    }
 
-        // Strict number collision check across Users, Queues, and Ring Groups
-        const collisionError = await checkNumberCollision(extNum, 'extension');
-        if (collisionError) {
-            return res.status(400).json({ success: false, error: collisionError });
+    const extNum = String(extension).trim();
+    const displayName = String(name).trim();
+    const extSecret = String(secret).trim();
+    const vmVal = (voicemail === 'default' || voicemail === 'enabled' || voicemail === true) ? 'default' : 'novm';
+    const extContext = 'from-internal';
+    const isWebRTC = tech === 'webrtc' || tech === 'pjsip';
+    const devTech = isWebRTC ? 'pjsip' : 'sip';
+    const devDial = isWebRTC ? `PJSIP/${extNum}` : `SIP/${extNum}`;
+
+    // Validate Group Admin authority before creating any database rows.
+    let isGroupAdmin = 0;
+    const requestedAdminRaw = payload.is_group_admin !== undefined ? payload.is_group_admin : payload.isGroupAdmin;
+    if (payload.is_group_admin !== undefined || payload.isGroupAdmin !== undefined) {
+        const requestedAdmin = (requestedAdminRaw === true || requestedAdminRaw === 'true' || requestedAdminRaw === 1 || requestedAdminRaw === '1') ? 1 : 0;
+        if (requestedAdmin === 1 && !options.canManageGroupAdmin) {
+            throw validationError('Forbidden: Only Super Admins can assign Group Admin status', 403);
         }
+        if (options.canManageGroupAdmin) isGroupAdmin = requestedAdmin;
+    }
 
-        // 1. Insert into users with recording='out=always|in=always'
+    const collisionError = await checkNumberCollision(extNum, 'extension');
+    if (collisionError) {
+        throw validationError(collisionError);
+    }
+
+    await pool.query(`
+        INSERT INTO \`asterisk\`.\`users\` (extension, password, name, voicemail, ringtimer, noanswer, recording, outboundcid, sipname, mohclass)
+        VALUES (?, '', ?, ?, 0, '', 'out=always|in=always', '', '', 'default')
+    `, [extNum, displayName, vmVal]);
+
+    await pool.query(`
+        INSERT INTO \`asterisk\`.\`devices\` (id, tech, dial, devicetype, user, description, emergency_cid)
+        VALUES (?, ?, ?, 'fixed', ?, ?, '')
+    `, [extNum, devTech, devDial, extNum, displayName]);
+
+    const sipPairs = [
+        [extNum, 'account', extNum, 32],
+        [extNum, 'accountcode', '', 28],
+        [extNum, 'allow', isWebRTC ? 'opus,ulaw,alaw' : '', 26],
+        [extNum, 'avpf', isWebRTC ? 'yes' : 'no', 15],
+        [extNum, 'callerid', `${displayName} <${extNum}>`, 33],
+        [extNum, 'canreinvite', 'no', 4],
+        [extNum, 'context', extContext, 5],
+        [extNum, 'deny', '0.0.0.0/0.0.0.0', 30],
+        [extNum, 'dial', devDial, 27],
+        [extNum, 'disallow', isWebRTC ? 'all' : '', 25],
+        [extNum, 'dtmfmode', 'rfc2833', 3],
+        [extNum, 'encryption', isWebRTC ? 'yes' : 'no', 22],
+        [extNum, 'host', 'dynamic', 6],
+        [extNum, 'mailbox', `${extNum}@device`, 29],
+        [extNum, 'nat', 'yes', 10],
+        [extNum, 'permit', '0.0.0.0/0.0.0.0', 31],
+        [extNum, 'port', '5060', 11],
+        [extNum, 'qualify', 'yes', 12],
+        [extNum, 'qualifyfreq', '15', 13],
+        [extNum, 'secret', extSecret, 2],
+        [extNum, 'sendrpid', 'no', 8],
+        [extNum, 'transport', isWebRTC ? 'transport-wss' : 'udp', 14],
+        [extNum, 'trustrpid', 'yes', 7],
+        [extNum, 'type', 'friend', 9]
+    ];
+
+    if (isWebRTC) {
+        sipPairs.push(
+            [extNum, 'webrtc', 'yes', 18],
+            [extNum, 'media_encryption', 'dtls', 18],
+            [extNum, 'max_contacts', '10', 16],
+            [extNum, 'remove_existing', 'no', 18],
+            [extNum, 'remove_unavailable', 'yes', 18],
+            [extNum, 'direct_media', 'no', 18],
+            [extNum, 'rtp_symmetric', 'yes', 18],
+            [extNum, 'force_rport', 'yes', 18],
+            [extNum, 'rewrite_contact', 'yes', 18],
+            [extNum, 'rtcp_mux', 'yes', 18],
+            [extNum, 'use_avpf', 'yes', 18],
+            [extNum, 'ice_support', 'yes', 18],
+            [extNum, 'dtls_cert_file', '/etc/asterisk/keys/asterisk.pem', 18],
+            [extNum, 'dtls_private_key', '/etc/asterisk/keys/asterisk.key', 18],
+            [extNum, 'dtls_setup', 'actpass', 18],
+            [extNum, 'dtls_verify', 'fingerprint', 18],
+            [extNum, 'rtp_timeout', '30', 18],
+            [extNum, 'rtp_timeout_hold', '60', 18],
+            [extNum, 'rtp_keepalive', '5', 18]
+        );
+    }
+
+    for (const [id, kw, data, flags] of sipPairs) {
         await pool.query(`
-            INSERT INTO \`asterisk\`.\`users\` (extension, password, name, voicemail, ringtimer, noanswer, recording, outboundcid, sipname, mohclass)
-            VALUES (?, '', ?, ?, 0, '', 'out=always|in=always', '', '', 'default')
-        `, [extNum, displayName, vmVal]);
-
-        // 2. Insert into devices (PJSIP or Generic SIP Device)
-        await pool.query(`
-            INSERT INTO \`asterisk\`.\`devices\` (id, tech, dial, devicetype, user, description, emergency_cid)
-            VALUES (?, ?, ?, 'fixed', ?, ?, '')
-        `, [extNum, devTech, devDial, extNum, displayName]);
-
-        // 3. Batch insert into sip table
-        const sipPairs = [
-            [extNum, 'account', extNum, 32],
-            [extNum, 'accountcode', '', 28],
-            [extNum, 'allow', isWebRTC ? 'opus,ulaw,alaw' : '', 26],
-            [extNum, 'avpf', isWebRTC ? 'yes' : 'no', 15],
-            [extNum, 'callerid', `${displayName} <${extNum}>`, 33],
-            [extNum, 'canreinvite', 'no', 4],
-            [extNum, 'context', extContext, 5],
-            [extNum, 'deny', '0.0.0.0/0.0.0.0', 30],
-            [extNum, 'dial', devDial, 27],
-            [extNum, 'disallow', isWebRTC ? 'all' : '', 25],
-            [extNum, 'dtmfmode', 'rfc2833', 3],
-            [extNum, 'encryption', isWebRTC ? 'yes' : 'no', 22],
-            [extNum, 'host', 'dynamic', 6],
-            [extNum, 'mailbox', `${extNum}@device`, 29],
-            [extNum, 'nat', 'yes', 10],
-            [extNum, 'permit', '0.0.0.0/0.0.0.0', 31],
-            [extNum, 'port', '5060', 11],
-            [extNum, 'qualify', 'yes', 12],
-            [extNum, 'qualifyfreq', '15', 13],
-            [extNum, 'secret', extSecret, 2],
-            [extNum, 'sendrpid', 'no', 8],
-            [extNum, 'transport', isWebRTC ? 'transport-wss' : 'udp', 14],
-            [extNum, 'trustrpid', 'yes', 7],
-            [extNum, 'type', 'friend', 9]
-        ];
-
-        if (isWebRTC) {
-            sipPairs.push(
-                [extNum, 'webrtc', 'yes', 18],
-                [extNum, 'media_encryption', 'dtls', 18],
-                [extNum, 'max_contacts', '10', 16],
-                [extNum, 'remove_existing', 'no', 18],
-                [extNum, 'remove_unavailable', 'yes', 18],
-                [extNum, 'direct_media', 'no', 18],
-                [extNum, 'rtp_symmetric', 'yes', 18],
-                [extNum, 'force_rport', 'yes', 18],
-                [extNum, 'rewrite_contact', 'yes', 18],
-                [extNum, 'rtcp_mux', 'yes', 18],
-                [extNum, 'use_avpf', 'yes', 18],
-                [extNum, 'ice_support', 'yes', 18],
-                [extNum, 'dtls_cert_file', '/etc/asterisk/keys/asterisk.pem', 18],
-                [extNum, 'dtls_private_key', '/etc/asterisk/keys/asterisk.key', 18],
-                [extNum, 'dtls_setup', 'actpass', 18],
-                [extNum, 'dtls_verify', 'fingerprint', 18],
-                [extNum, 'rtp_timeout', '30', 18],
-                [extNum, 'rtp_timeout_hold', '60', 18],
-                [extNum, 'rtp_keepalive', '5', 18]
-            );
-        }
-
-        for (const [id, kw, data, flags] of sipPairs) {
-            await pool.query(`
-                INSERT INTO \`asterisk\`.\`sip\` (id, keyword, data, flags)
-                VALUES (?, ?, ?, ?)
-                ON DUPLICATE KEY UPDATE data = VALUES(data), flags = VALUES(flags)
-            `, [id, kw, data, flags]);
-        }
-
-        if (isWebRTC) {
-            updatePjsipCustomConfig(extNum, extSecret, displayName, 'create');
-            reloadPjsip();
-        } else {
-            updatePjsipCustomConfig(extNum, '', '', 'delete');
-            reloadPjsip();
-        }
-        const denoiseVal = ['both', 'rx', 'tx', 'off'].includes(denoise) ? denoise : 'off';
-        const vadGateVal = (vad_gate !== undefined ? vad_gate : vadGate);
-        const vadDbVal = (vad_db !== undefined ? vad_db : (vadDb || 'off'));
-        const agcVal = (agc !== undefined ? agc : 'off');
-        await setExtensionAstdbDefaults(extNum, displayName, vmVal, devTech, denoiseVal, vadGateVal, vadDbVal, devDial, agcVal);
-        let isGroupAdmin = 0;
-        if (req.body.is_group_admin !== undefined || req.body.isGroupAdmin !== undefined) {
-            const requestedAdmin = (req.body.is_group_admin === true || req.body.is_group_admin === 'true' || req.body.is_group_admin === 1 || req.body.is_group_admin === '1' || req.body.isGroupAdmin === true || req.body.isGroupAdmin === 'true' || req.body.isGroupAdmin === 1 || req.body.isGroupAdmin === '1') ? 1 : 0;
-            if (requestedAdmin === 1 && !isSuperAdmin(req)) {
-                return res.status(403).json({ success: false, error: 'Forbidden: Only Super Admins can assign Group Admin status' });
-            }
-            if (isSuperAdmin(req)) {
-                isGroupAdmin = requestedAdmin;
-            }
-        }
-        if (req.body.is_group_admin !== undefined || req.body.isGroupAdmin !== undefined || req.body.emp_group !== undefined) {
-            const empGroup = req.body.emp_group !== undefined ? (String(req.body.emp_group || '').trim() || null) : null;
-            const title = req.body.title !== undefined ? (String(req.body.title || '').trim() || null) : null;
-            const photo = req.body.photo ? String(req.body.photo).trim() : null;
-            await pool.query(`
-                INSERT INTO ${tables.employeeExtras} (extension, photo, title, emp_group, is_group_admin)
-                VALUES (?, ?, ?, ?, ?)
-                ON DUPLICATE KEY UPDATE
-                    photo = COALESCE(?, photo),
-                    title = COALESCE(?, title),
-                    emp_group = COALESCE(?, emp_group),
-                    is_group_admin = VALUES(is_group_admin)
-            `, [extNum, photo, title, empGroup, isGroupAdmin, photo, title, empGroup]);
-        }
-
-        // WebRTC Extension Policy (Per-Extension)
-        const autoAnswerVal = ['user_choice', 'force_on', 'force_off'].includes(req.body.auto_answer) ? req.body.auto_answer : 'user_choice';
-        const dndVal = ['user_choice', 'force_on', 'force_off'].includes(req.body.dnd) ? req.body.dnd : 'user_choice';
-        const disableCancelVal = (req.body.disable_outbound_ringing_cancel === 1 || req.body.disable_outbound_ringing_cancel === '1' || req.body.disable_outbound_ringing_cancel === true) ? 1 : 0;
-
-        await pool.query(`
-            INSERT INTO \`asterisk\`.\`extension_policies\` (extension, auto_answer, dnd, disable_outbound_ringing_cancel)
+            INSERT INTO \`asterisk\`.\`sip\` (id, keyword, data, flags)
             VALUES (?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE auto_answer = VALUES(auto_answer), dnd = VALUES(dnd), disable_outbound_ringing_cancel = VALUES(disable_outbound_ringing_cancel)
-        `, [extNum, autoAnswerVal, dndVal, disableCancelVal]);
+            ON DUPLICATE KEY UPDATE data = VALUES(data), flags = VALUES(flags)
+        `, [id, kw, data, flags]);
+    }
 
-        io.emit('extensionPolicyUpdate', { extension: extNum, auto_answer: autoAnswerVal, dnd: dndVal, disable_outbound_ringing_cancel: disableCancelVal });
+    const reloadPjsipConfig = options.reloadPjsip !== false;
+    if (isWebRTC) {
+        updatePjsipCustomConfig(extNum, extSecret, displayName, 'create', reloadPjsipConfig);
+    } else {
+        updatePjsipCustomConfig(extNum, '', '', 'delete', reloadPjsipConfig);
+    }
 
+    const denoiseVal = ['both', 'rx', 'tx', 'off'].includes(denoise) ? denoise : 'off';
+    const vadGateVal = (vad_gate !== undefined ? vad_gate : vadGate);
+    const vadDbVal = (vad_db !== undefined ? vad_db : (vadDb || 'off'));
+    const agcVal = (agc !== undefined ? agc : 'off');
+    await setExtensionAstdbDefaults(
+        extNum,
+        displayName,
+        vmVal,
+        devTech,
+        denoiseVal,
+        vadGateVal,
+        vadDbVal,
+        devDial,
+        agcVal,
+        options.reloadVoicemail !== false
+    );
+
+    if (payload.is_group_admin !== undefined || payload.isGroupAdmin !== undefined || payload.emp_group !== undefined) {
+        const empGroup = payload.emp_group !== undefined ? (String(payload.emp_group || '').trim() || null) : null;
+        const title = payload.title !== undefined ? (String(payload.title || '').trim() || null) : null;
+        const photo = payload.photo ? String(payload.photo).trim() : null;
+        await pool.query(`
+            INSERT INTO ${tables.employeeExtras} (extension, photo, title, emp_group, is_group_admin)
+            VALUES (?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+                photo = COALESCE(?, photo),
+                title = COALESCE(?, title),
+                emp_group = COALESCE(?, emp_group),
+                is_group_admin = VALUES(is_group_admin)
+        `, [extNum, photo, title, empGroup, isGroupAdmin, photo, title, empGroup]);
+    }
+
+    const autoAnswerVal = ['user_choice', 'force_on', 'force_off'].includes(payload.auto_answer) ? payload.auto_answer : 'user_choice';
+    const dndVal = ['user_choice', 'force_on', 'force_off'].includes(payload.dnd) ? payload.dnd : 'user_choice';
+    const disableCancelVal = (payload.disable_outbound_ringing_cancel === 1 || payload.disable_outbound_ringing_cancel === '1' || payload.disable_outbound_ringing_cancel === true) ? 1 : 0;
+
+    await pool.query(`
+        INSERT INTO \`asterisk\`.\`extension_policies\` (extension, auto_answer, dnd, disable_outbound_ringing_cancel)
+        VALUES (?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE auto_answer = VALUES(auto_answer), dnd = VALUES(dnd), disable_outbound_ringing_cancel = VALUES(disable_outbound_ringing_cancel)
+    `, [extNum, autoAnswerVal, dndVal, disableCancelVal]);
+
+    io.emit('extensionPolicyUpdate', { extension: extNum, auto_answer: autoAnswerVal, dnd: dndVal, disable_outbound_ringing_cancel: disableCancelVal });
+
+    if (options.reload !== false) {
         await reloadPbxConfigPromise();
         syncExtensionCallPickupGroups().catch(() => {});
+    }
 
+    return { extension: extNum, name: displayName, secret: extSecret, tech: devTech, isWebRTC };
+}
+
+app.post('/api/config/extensions', async (req, res) => {
+    try {
+        const extension = await provisionExtension(req.body, {
+            reload: true,
+            canManageGroupAdmin: isSuperAdmin(req)
+        });
         res.json({
             success: true,
-            message: `Extension ${extNum} (${isWebRTC ? 'WebRTC Softphone' : 'Generic SIP'}) created successfully.`,
-            extension: { extension: extNum, name: displayName, secret: extSecret, tech: devTech, isWebRTC }
+            message: `Extension ${extension.extension} (${extension.isWebRTC ? 'WebRTC Softphone' : 'Generic SIP'}) created successfully.`,
+            extension
         });
     } catch (error) {
-        console.error("[POST /api/config/extensions] Error:", error);
-        res.status(500).json({ success: false, error: error.message });
+        if (!error.statusCode || error.statusCode >= 500) {
+            console.error("[POST /api/config/extensions] Error:", error);
+        }
+        res.status(error.statusCode || 500).json({ success: false, error: error.message });
+    }
+});
+
+app.post('/api/config/extensions/bulk', requireAuth, async (req, res) => {
+    try {
+        const body = req.body || {};
+        const range = buildExtensionRange(body.start_extension, body.count);
+        if (!range.ok) {
+            return res.status(400).json({ success: false, error: range.error });
+        }
+        if (range.values.length > MAX_BULK_EXTENSIONS) {
+            return res.status(400).json({ success: false, error: `Count must be between 1 and ${MAX_BULK_EXTENSIONS}.` });
+        }
+        const secret = String(body.secret || '').trim();
+        if (!secret) {
+            return res.status(400).json({ success: false, error: 'A shared secret is required.' });
+        }
+        const extensions = range.values;
+
+        // Validate every number before inserting the first one.
+        for (const extNum of extensions) {
+            const collisionError = await checkNumberCollision(extNum, 'extension');
+            if (collisionError) {
+                return res.status(400).json({ success: false, error: collisionError, extension: extNum });
+            }
+        }
+
+        const created = [];
+        const failed = [];
+        for (const extNum of extensions) {
+            try {
+                const result = await provisionExtension({
+                    extension: extNum,
+                    name: extNum,
+                    secret,
+                    voicemail: body.voicemail,
+                    tech: body.tech,
+                    denoise: body.denoise,
+                    vad_gate: body.vad_gate !== undefined ? body.vad_gate : body.vadGate,
+                    vad_db: body.vad_db !== undefined ? body.vad_db : body.vadDb,
+                    agc: body.agc,
+                    auto_answer: body.auto_answer,
+                    dnd: body.dnd,
+                    disable_outbound_ringing_cancel: body.disable_outbound_ringing_cancel
+                }, {
+                    reload: false,
+                    reloadPjsip: false,
+                    reloadVoicemail: false,
+                    canManageGroupAdmin: false
+                });
+                created.push(result);
+            } catch (error) {
+                failed.push({ extension: extNum, error: error.message, code: error.code || 'extension_create_failed' });
+                break;
+            }
+        }
+
+        if (created.length > 0) {
+            reloadPjsip();
+            exec(`${ASTERISK_BIN} -rx "voicemail reload"`, () => {});
+            await reloadPbxConfigPromise();
+            syncExtensionCallPickupGroups().catch(() => {});
+        }
+
+        const message = failed.length === 0
+            ? `Created ${created.length} extension(s) successfully.`
+            : `Created ${created.length} extension(s); failed at ${failed[0].extension}: ${failed[0].error}`;
+        return res.status(created.length === 0 && failed.length > 0 ? 500 : 200).json({
+            success: failed.length === 0,
+            partial: failed.length > 0 && created.length > 0,
+            message,
+            extensions: created,
+            failed
+        });
+    } catch (error) {
+        console.error('[POST /api/config/extensions/bulk] Error:', error);
+        return res.status(error.statusCode || 500).json({ success: false, error: error.message });
     }
 });
 
