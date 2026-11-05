@@ -95,6 +95,11 @@ test('wake preparation preserves DND/forwarding and bounds a CRM-safe new-contac
         'Wait(0.2)', '${SOKRAT_WAKE_ITER}<60']) assert.ok(text.includes(term), term);
     assert.ok(text.indexOf('DB(DND/') < text.indexOf('sokrat-webrtc-wake-dispatch.py'));
     assert.match(text, /SOKRAT_WAKE_WAIT.*!="1"/);
+    assert.ok(text.includes('SOKRAT_WS_CONTACT=${REGEX("transport=W" ${PJSIP_DIAL_CONTACTS(${ARG1})})}'));
+    assert.ok(text.includes('"${SOKRAT_WS_CONTACT}"'));
+    assert.ok(text.includes('SOKRAT_GROUP_HAS_WS=${REGEX("transport=W" ${PJSIP_DIAL_CONTACTS(${SOKRAT_GROUP_MEMBER})})}'));
+    assert.ok(!text.includes('GotoIf($["${PJSIP_DIAL_CONTACTS(${ARG1})}"!=""]?done)'));
+    assert.ok(!text.includes('${REGEX("transport=W" ${PJSIP_DIAL_CONTACTS(${ARG1})})}=1]?done'));
     assert.doesNotMatch(text, /Dial\(|Answer\(|Hangup\(/);
 });
 
@@ -146,6 +151,20 @@ test('all installers, enrollment and post-retrieve_conf lifecycle include the sc
     // The migration compares the historical template; it does not install it.
     const emitted = readiness.split('cat >> "$DIALPLAN_FILE" <<\'EOF\'\n')[1].split('\nEOF')[0];
     assert.doesNotMatch(emitted, /^\[macro-dial(?:-one)?\]$/m);
+});
+
+test('installers and upgraders select the gateway-authoritative wake guard', () => {
+    for (const name of ['install.sh', 'installer-bundle/install-sokrat.sh', 'scripts/safe-upgrade.sh']) {
+        const source = fs.readFileSync(path.join(root, name), 'utf8');
+        assert.match(source, /python3 "\$INSTALL_DIR\/scripts\/install-webrtc-wake\.py" --apply --no-reload --verify-access/);
+    }
+    const source = fs.readFileSync(path.join(root, 'scripts/install-webrtc-wake.py'), 'utf8');
+    assert.match(source, /SOKRAT_WS_CONTACT/);
+    assert.match(source, /SOKRAT_GROUP_HAS_WS/);
+    assert.match(fs.readFileSync(path.join(root, 'scripts/webrtc-wake-dispatch.py'), 'utf8'), /incoming-call-live/);
+    for (const name of ['install.sh', 'installer-bundle/install-sokrat.sh', 'scripts/safe-upgrade.sh']) {
+        assert.match(fs.readFileSync(path.join(root, name), 'utf8'), /grep -q 'incoming-call-live' \/usr\/local\/bin\/sokrat-webrtc-wake-dispatch\.py/);
+    }
 });
 
 test('online, offline and upgrade entry points all require service-user wake access verification', () => {
@@ -207,13 +226,21 @@ def opener(request,**kwargs):
  calls.append((request,kwargs));return Reply()
 args=['404','%2B442012345678','Caller%20Name','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa']
 with mock.patch.object(ssl,'create_default_context',return_value='pinned-context') as tls:
- for result,expected in [({'status':'dispatched','count':1},True),({'status':'partial','count':1},True),({'status':'dispatched','count':0},False),({'status':'dispatched','count':True},False)]:
+ for result,expected in [({'status':'dispatched','count':1},True),({'status':'partial','count':1},True),({'status':'dispatched','count':0},False),({'status':'dispatched','count':True},False),({'status':'already_connected','count':0},False)]:
   assert wake.dispatch(config,args,opener)==expected
  request,options=calls[0]
  assert options=={'timeout':6,'context':'pinned-context'}
  assert request.headers['Authorization'].startswith('Bearer ')
  assert json.loads(request.data)['caller']=='+442012345678'
  assert 'token' not in request.full_url
+ assert request.full_url.endswith('/api/gateway/incoming-call')
+ wake.dispatch(config,args+['1'],opener)
+ request,options=calls[-1]
+ assert request.full_url.endswith('/api/gateway/incoming-call-live')
+ wake.dispatch(config,args+['0'],opener)
+ request,options=calls[-1]
+ assert request.full_url.endswith('/api/gateway/incoming-call')
+ assert not wake.dispatch(config,args+['2'],opener)
  assert not wake.dispatch(dict(config,gatewayUrl='http://gateway.example'),args,opener)
  assert not wake.dispatch(config,['404','caller','name','invalid'],opener)
  tls.assert_called_with(cafile='/etc/frp/gateway-ca.crt')

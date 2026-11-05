@@ -66,7 +66,10 @@ def post(config, path, body, timeout, opener, read_body=True):
 
 
 def dispatch(config, args, opener=urllib.request.urlopen):
-    if len(args) != 4:
+    if len(args) not in (4, 5):
+        return False
+    has_websocket_contact = len(args) == 5 and args[4] == '1'
+    if len(args) == 5 and args[4] not in ('0', '1'):
         return False
     callee, caller, name = [urllib.parse.unquote(value) for value in args[:3]]
     call_id = args[3]
@@ -81,7 +84,8 @@ def dispatch(config, args, opener=urllib.request.urlopen):
         pass
     for candidate in configs:
         try:
-            status, data = post(candidate, '/api/gateway/incoming-call', body, 6, opener)
+            path = '/api/gateway/incoming-call-live' if has_websocket_contact else '/api/gateway/incoming-call'
+            status, data = post(candidate, path, body, 6, opener)
             if status != 200 or len(data) > 4096:
                 continue
             result = json.loads(data)
@@ -126,7 +130,7 @@ def main():
         except Exception:
             config = None
         argv = sys.argv[1:]
-        if len(argv) == 4:
+        if len(argv) in (4, 5):
             result = dispatch(config, argv) if config else False
         elif len(argv) == 2:
             result = cancel(config, argv) if config else False

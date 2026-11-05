@@ -35,6 +35,17 @@ mobile push enables the bounded registration wait. Credential errors, missing
 devices and gateway outages continue into normal FreePBX routing; credentials
 and provider payloads are never logged.
 
+When `PJSIP_DIAL_CONTACTS` reports a WebSocket contact, the dispatcher uses the
+gateway's `/api/gateway/incoming-call-live` endpoint instead. The gateway owns
+the actual SIP WebSocket and suppresses the push only when that socket has
+received a recent pong or client message. A stale Asterisk contact therefore
+cannot suppress the wake. If an older gateway does not have the live-gated
+endpoint, its `404` is treated as legacy behavior: the dialplan proceeds without
+a push, as before. Upgrade the gateway first to gain stale-contact recovery;
+upgrading the PBX first is safe but does not fix stale contacts until the
+gateway is updated. Installers warn if the installed dispatcher lacks the
+live-gated endpoint.
+
 The HTTP deadline is6 seconds; registration wait is at most12 seconds. Comparing
 the new contact count with the pre-push count prevents an existing CRM contact
 from immediately masking an asleep mobile. Existing contacts are never removed
