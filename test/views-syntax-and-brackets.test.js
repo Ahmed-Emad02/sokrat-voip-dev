@@ -294,3 +294,53 @@ test('views/cdr.ejs and views/dashboard.ejs render with zero JavaScript syntax e
         });
     });
 });
+
+test('views/contacts.ejs renders with bulk selection and valid inline scripts', () => {
+    const ejsPath = path.join(viewsDir, 'contacts.ejs');
+    const template = fs.readFileSync(ejsPath, 'utf8');
+
+    ['en', 'ar'].forEach((lang) => {
+        const data = createDummyData(ejsPath, lang);
+        data.contacts = [{ id: 1, name: 'Alice', last_name: 'Test', telefono: '01000000000', is_remote: false }];
+        let rendered;
+        assert.doesNotThrow(() => {
+            rendered = ejs.render(template, data, { filename: ejsPath });
+        }, `contacts.ejs should compile in ${lang} without EJS errors`);
+
+        assert.match(rendered, /id="contactsSelectAll"/);
+        assert.match(rendered, /id="contactsBulkBar"/);
+        assert.match(rendered, /class="contact-select-checkbox/);
+
+        const scriptRegex = /<script(?:\s+[^>]*)?>([\s\S]*?)<\/script>/gi;
+        let match;
+        let count = 0;
+        while ((match = scriptRegex.exec(rendered)) !== null) {
+            count++;
+            const js = match[1];
+            if (!js.trim()) continue;
+            try {
+                new vm.Script(js, { filename: `contacts-${lang}-script-${count}.js` });
+            } catch (err) {
+                assert.fail(`Script block #${count} in contacts.ejs (${lang}) failed JavaScript syntax: ${err.message}`);
+            }
+        }
+        assert.ok(count > 0, `contacts.ejs in ${lang} should contain script blocks`);
+    });
+});
+
+test('contacts view honors granular delete-only permissions', () => {
+    const ejsPath = path.join(viewsDir, 'contacts.ejs');
+    const template = fs.readFileSync(ejsPath, 'utf8');
+    const data = createDummyData(ejsPath, 'en');
+    data.isSuperAdmin = false;
+    data.userPermissions = ['contacts-delete'];
+    data.contacts = [{ id: 1, name: 'Alice', last_name: 'Test', telefono: '01000000000', is_remote: false }];
+
+    const rendered = ejs.render(template, data, { filename: ejsPath });
+    assert.match(rendered, /id="contactsSelectAll"/);
+    assert.match(rendered, /id="bulkDeleteBtn"/);
+    assert.match(rendered, /class="contact-select-checkbox/);
+    assert.doesNotMatch(rendered, /id="contactsExportBtn"/);
+    assert.doesNotMatch(rendered, /id="editContactModal"/);
+    assert.doesNotMatch(rendered, /openAddContactModal/);
+});

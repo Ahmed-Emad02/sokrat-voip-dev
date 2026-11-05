@@ -16,19 +16,23 @@ test('contacts export endpoint returns an xlsx attachment', () => {
     // Same access rule as viewing the address book.
     assert.match(handler, /requireAuth, requireTabPermission\('contacts'\)/);
 
-    // Real workbook, not a CSV with an xlsx name.
-    assert.match(handler, /XLSX\.utils\.book_new\(\)/);
-    assert.match(handler, /XLSX\.utils\.aoa_to_sheet\(dataRows\)/);
-    assert.match(handler, /bookType: 'xlsx'/);
-    assert.match(handler, /XLSX\.utils\.book_append_sheet\(wb, ws, 'Contacts'\)/);
+    // Real workbook, not a CSV with an xlsx name. The workbook builder and
+    // sender are shared with the selected-contacts bulk export.
+    const builder = server.match(/function buildContactsXlsxBuffer\(contacts\)[\s\S]*?\n\}/);
+    assert.ok(builder, 'buildContactsXlsxBuffer must exist');
+    assert.match(builder[0], /XLSX\.utils\.book_new\(\)/);
+    assert.match(builder[0], /XLSX\.utils\.aoa_to_sheet\(dataRows\)/);
+    assert.match(builder[0], /bookType: 'xlsx'/);
+    assert.match(builder[0], /XLSX\.utils\.book_append_sheet\(wb, ws, 'Contacts'\)/);
+    assert.match(builder[0], /\[\['First Name', 'Last Name', 'Phone'\]\]/);
 
-    // Headers must match what the importer understands so the file round-trips.
-    assert.match(handler, /\[\['First Name', 'Last Name', 'Phone'\]\]/);
-
-    assert.match(handler, /application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet/);
-    assert.match(handler, /Content-Disposition/);
-    assert.match(handler, /const filename = `contacts_\$\{moment\(\)\.format\('YYYYMMDD_HHmmss'\)\}\.xlsx`/);
-    assert.match(handler, /Cache-Control', 'no-store'|Cache-Control', 'no-store"/);
+    const sender = server.match(/function sendContactsXlsx\(res, contacts, filenamePrefix = 'contacts'\)[\s\S]*?\n\}/);
+    assert.ok(sender, 'sendContactsXlsx must exist');
+    assert.match(sender[0], /application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet/);
+    assert.match(sender[0], /Content-Disposition/);
+    assert.match(sender[0], /\$\{filenamePrefix\}_\$\{moment\(\)\.format\('YYYYMMDD_HHmmss'\)\}\.xlsx/);
+    assert.match(sender[0], /Cache-Control', 'no-store'|Cache-Control', 'no-store"/);
+    assert.match(handler, /sendContactsXlsx\(res, contacts\)/);
 
     // Every contact, not the paginated list view.
     assert.match(handler, /await loadContactsCached\(\)/);

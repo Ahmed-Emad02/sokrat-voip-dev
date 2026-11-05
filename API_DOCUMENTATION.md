@@ -369,11 +369,13 @@ The 264 API endpoints are organized into 31 functional modules:
   - [`DELETE` /api/blacklist/:id](#delete-apiblacklistid)
   - [`POST` /api/blacklist/sync](#post-apiblacklistsync)
   - [`POST` /api/blacklist/import](#post-apiblacklistimport)
-- [**28. Corporate Contacts & Phonebook Directory**](#contacts) *(5 endpoints)*
+- [**28. Corporate Contacts & Phonebook Directory**](#contacts) *(7 endpoints)*
   - [`GET` /api/contacts](#get-apicontacts)
   - [`POST` /api/contacts/add](#post-apicontactsadd)
   - [`POST` /api/contacts/edit](#post-apicontactsedit)
   - [`POST` /api/contacts/delete](#post-apicontactsdelete)
+  - [`POST` /api/contacts/bulk-delete](#post-apicontactsbulk-delete)
+  - [`POST` /api/contacts/bulk-export](#post-apicontactsbulk-export)
   - [`POST` /api/contacts/csv-import](#post-apicontactscsv-import)
 - [**29. Storage Management, Retention Auto-Purge & Cloud Backup**](#storage-backup) *(6 endpoints)*
   - [`GET` /api/storage/info](#get-apistorageinfo)
@@ -8217,6 +8219,73 @@ curl -X POST http://localhost:8080/api/contacts/delete -b cookie.txt \
   "message": "Contact deleted."
 }
 ```
+
+---
+
+<a id="post-apicontactsbulk-delete"></a>
+### `POST` /api/contacts/bulk-delete
+
+**Description**: Deletes multiple local address-book contacts in one SQLite transaction.
+
+- **Authentication**: Session Cookie (`contacts` or `contacts-delete` permission)
+- **Headers**: Cookie: connect.sid=<session_cookie>, Content-Type: application/json
+- **System Impact**: Deletes rows from `/var/www/db/address_book.db`; invalidates the in-process contacts cache.
+
+#### Request Parameters
+
+| Name | Location | Type | Required | Description |
+| :--- | :--- | :--- | :---: | :--- |
+| `ids` | `body` | `integer[]` | **Yes** | 1–1,000 unique positive contact IDs |
+
+#### Example Request
+
+```bash
+curl -X POST http://localhost:8080/api/contacts/bulk-delete -b cookie.txt \
+  -H 'Content-Type: application/json' \
+  -d '{"ids":[12,18,44]}'
+```
+
+#### Example Response
+
+```json
+{
+  "success": true,
+  "message": "Deleted 2 contact(s).",
+  "requested": 3,
+  "deleted": 2,
+  "deletedIds": [12, 18],
+  "missing": [44]
+}
+```
+
+---
+
+<a id="post-apicontactsbulk-export"></a>
+### `POST` /api/contacts/bulk-export
+
+**Description**: Exports only the selected local contacts as an XLSX attachment.
+
+- **Authentication**: Session Cookie (`contacts` permission)
+- **Headers**: Cookie: connect.sid=<session_cookie>, Content-Type: application/json
+- **System Impact**: Reads selected rows from `/var/www/db/address_book.db`; does not modify data.
+
+#### Request Parameters
+
+| Name | Location | Type | Required | Description |
+| :--- | :--- | :--- | :---: | :--- |
+| `ids` | `body` | `integer[]` | **Yes** | 1–1,000 unique positive contact IDs |
+
+#### Example Request
+
+```bash
+curl -X POST http://localhost:8080/api/contacts/bulk-export -b cookie.txt \
+  -H 'Content-Type: application/json' \
+  -d '{"ids":[12,18,44]}' --output contacts_selected.xlsx
+```
+
+#### Example Response
+
+Returns `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` with columns `First Name`, `Last Name`, `Phone`.
 
 ---
 

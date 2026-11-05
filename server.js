@@ -14179,6 +14179,8 @@ const {
     createContact,
     updateContact,
     deleteContact,
+    getContactsByIds,
+    deleteContacts,
     importContactsBatch,
     MAX_IMPORT_ROWS
 } = require('./lib/contacts');
@@ -14222,16 +14224,54 @@ app.get('/contacts', requireAuth, async (req, res) => {
             `${a.name} ${a.last_name}`.localeCompare(`${b.name} ${b.last_name}`, undefined, { sensitivity: 'base' })
         );
         const currentLang = res.locals.currentLang || 'en';
+        const perms = req.session.userPermissions || [];
+        const isSuper = isSuperAdmin(req);
         res.render('contacts', {
             contacts,
             currentPage: '/contacts',
             currentLang,
-            isSuperAdmin: isSuperAdmin(req)
+            isSuperAdmin: isSuper,
+            canCreate: isSuper || perms.includes('contacts-create') || perms.includes('contacts'),
+            canEdit: isSuper || perms.includes('contacts-edit') || perms.includes('contacts'),
+            canDelete: isSuper || perms.includes('contacts-delete') || perms.includes('contacts'),
+            canImport: isSuper || perms.includes('contacts-import') || perms.includes('contacts'),
+            canExport: isSuper || perms.includes('contacts')
         });
     } catch (err) {
         res.status(500).send("Database Error: " + err.message);
     }
 });
+
+function buildContactsXlsxBuffer(contacts) {
+    if (!XLSX) return null;
+
+    const dataRows = [['First Name', 'Last Name', 'Phone']];
+    for (const contact of contacts) {
+        dataRows.push([
+            String(contact.first_name || ''),
+            String(contact.last_name || ''),
+            String(contact.phone || '')
+        ]);
+    }
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(dataRows);
+    ws['!cols'] = [{ wch: 28 }, { wch: 28 }, { wch: 22 }];
+    XLSX.utils.book_append_sheet(wb, ws, 'Contacts');
+    return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+}
+
+function sendContactsXlsx(res, contacts, filenamePrefix = 'contacts') {
+    const buffer = buildContactsXlsxBuffer(contacts);
+    if (!buffer) {
+        return res.status(503).json({ success: false, error: 'Spreadsheet support is unavailable on this server.' });
+    }
+    const filename = `${filenamePrefix}_${moment().format('YYYYMMDD_HHmmss')}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Cache-Control', 'no-store');
+    return res.send(buffer);
+}
 
 // GET /api/contacts/export - Download the whole address book as .xlsx.
 // Column headers match the CSV importer (first name / last name / phone) so an
@@ -14251,26 +14291,7 @@ app.get('/api/contacts/export', requireAuth, requireTabPermission('contacts'), a
             return res.status(404).json({ success: false, error: 'There are no contacts to export.' });
         }
 
-        const dataRows = [['First Name', 'Last Name', 'Phone']];
-        for (const contact of contacts) {
-            dataRows.push([
-                String(contact.first_name || ''),
-                String(contact.last_name || ''),
-                String(contact.phone || '')
-            ]);
-        }
-
-        const wb = XLSX.utils.book_new();
-        const ws = XLSX.utils.aoa_to_sheet(dataRows);
-        ws['!cols'] = [{ wch: 28 }, { wch: 28 }, { wch: 22 }];
-        XLSX.utils.book_append_sheet(wb, ws, 'Contacts');
-
-        const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
-        const filename = `contacts_${moment().format('YYYYMMDD_HHmmss')}.xlsx`;
-        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-        res.setHeader('Cache-Control', 'no-store');
-        return res.send(buffer);
+        return sendContactsXlsx(res, contacts);
     } catch (err) {
         console.error('[Contacts Export] failed:', err && err.message);
         return res.status(500).json({ success: false, error: 'Failed to export contacts.' });
@@ -14343,6 +14364,51 @@ app.post('/api/contacts/delete', requireAuth, async (req, res) => {
         res.status(statusCode).json({ success: false, error: err.message });
     }
 });
+
+app.post('/api/contacts/bulk-delete', requireAuth, async (req, res) => {
+    const perms = req.session.userPermissions || [];
+    if (!isSuperAdmin(req) && !perms.includes('contacts-delete') && !perms.includes('contacts')) {
+        return res.status(403).json({ success: false, error: 'Unauthorized: Missing contacts-delete permission' });
+    }
+    try {
+        const result = await deleteContacts(req.body ? req.body.ids : undefined);
+        return res.json({
+            success: true,
+            message: `Deleted ${result.deleted} contact(s).`,
+            ...result
+        });
+    } catch (err) {
+        const statusCode = err.statusCode || 500;
+        return res.status(statusCode).json({
+            success: false,
+            error: err.message,
+            code: err.code || 'bulk_delete_failed'
+        });
+    }
+});
+
+app.post('/api/contacts/bulk-export', requireAuth, requireTabPermission('contacts'), async (req, res) => {
+    try {
+        if (!XLSX) {
+            return res.status(503).json({ success: false, error: 'Spreadsheet support is unavailable on this server.' });
+        }
+
+        const contacts = await getContactsByIds(req.body ? req.body.ids : undefined);
+        if (contacts.length === 0) {
+            return res.status(404).json({ success: false, error: 'No matching contacts to export.' });
+        }
+        return sendContactsXlsx(res, contacts, 'contacts_selected');
+    } catch (err) {
+        const statusCode = err.statusCode || 500;
+        console.error('[Contacts Bulk Export] failed:', err && err.message);
+        return res.status(statusCode).json({
+            success: false,
+            error: err.message,
+            code: err.code || 'bulk_export_failed'
+        });
+    }
+});
+
 // --- INBOUND BLACKLIST API ENDPOINTS & ASTDB SYNC ---
 
 async function syncBlacklistEntryToAstDB(phone, enabled) {

@@ -8,6 +8,12 @@ const words = {
         noData: "No contacts located in directory.",
         saveChanges: "Save Changes", editTitle: "Edit Contact", confirmDelete: "Are you sure you want to delete this contact?",
         toastDeleteSuccess: "Contact deleted successfully", toastEditSuccess: "Contact updated successfully",
+        bulkSelected: "selected", bulkExport: "Export selected", bulkDelete: "Delete selected", bulkClear: "Clear",
+        bulkSelectAll: "Select all visible contacts", bulkSomeHidden: "selected contacts are hidden by the current filter.",
+        bulkDeleteConfirm: "Delete {count} contacts? This cannot be undone.",
+        bulkDeleteSuccess: "Contacts deleted successfully", bulkExportEmpty: "Select at least one contact first.",
+        bulkExportSuccess: "Selected contacts exported successfully", bulkRequestFailed: "Bulk operation failed.",
+        readOnly: "read-only",
         footerLeft: "Contacts Database Sync", footerRight: "Total Records:"
     },
     ar: {
@@ -18,11 +24,26 @@ const words = {
         noData: "لا توجد جهات اتصال في الدليل.",
         saveChanges: "حفظ التغييرات", editTitle: "تعديل جهة الاتصال", confirmDelete: "هل أنت متأكد من حذف جهة الاتصال هذه؟",
         toastDeleteSuccess: "تم حذف جهة الاتصال بنجاح", toastEditSuccess: "تم تحديث جهة الاتصال بنجاح",
+        bulkSelected: "محدد", bulkExport: "تصدير المحدد", bulkDelete: "حذف المحدد", bulkClear: "إلغاء التحديد",
+        bulkSelectAll: "تحديد كل جهات الاتصال الظاهرة", bulkSomeHidden: "من جهات الاتصال المحددة مخفية بواسطة الفلتر الحالي.",
+        bulkDeleteConfirm: "حذف {count} جهة اتصال؟ لا يمكن التراجع عن هذا الإجراء.",
+        bulkDeleteSuccess: "تم حذف جهات الاتصال بنجاح", bulkExportEmpty: "اختر جهة اتصال واحدة على الأقل أولاً.",
+        bulkExportSuccess: "تم تصدير جهات الاتصال المحددة بنجاح", bulkRequestFailed: "فشلت عملية التحديد الجماعي.",
+        readOnly: "للقراءة فقط",
         footerLeft: "مزامنة قاعدة بيانات جهات الاتصال", footerRight: "إجمالي السجلات:"
     }
 };
 const t = words[currentLang];
 const isRtl = currentLang === 'ar';
+const contactPerms = (typeof userPermissions !== 'undefined' && Array.isArray(userPermissions)) ? userPermissions : [];
+const canCreateContact = typeof canCreate !== 'undefined' ? canCreate : (isSuperAdmin || contactPerms.includes('contacts-create') || contactPerms.includes('contacts'));
+const canEditContact = typeof canEdit !== 'undefined' ? canEdit : (isSuperAdmin || contactPerms.includes('contacts-edit') || contactPerms.includes('contacts'));
+const canDeleteContact = typeof canDelete !== 'undefined' ? canDelete : (isSuperAdmin || contactPerms.includes('contacts-delete') || contactPerms.includes('contacts'));
+const canImportContacts = typeof canImport !== 'undefined' ? canImport : (isSuperAdmin || contactPerms.includes('contacts-import') || contactPerms.includes('contacts'));
+const canExportContacts = typeof canExport !== 'undefined' ? canExport : (isSuperAdmin || contactPerms.includes('contacts'));
+const showSelection = canDeleteContact || canExportContacts;
+const showActions = canEditContact || canDeleteContact;
+const tableColSpan = 3 + (showSelection ? 1 : 0) + (showActions ? 1 : 0);
 %>
 <!DOCTYPE html>
 <html lang="<%= currentLang %>" dir="<%= isRtl ? 'rtl' : 'ltr' %>">
@@ -89,6 +110,9 @@ const isRtl = currentLang === 'ar';
             background-color: transparent !important;
             border: none !important;
             box-shadow: none !important;
+        }
+        .contact-row.is-selected {
+            background-color: var(--bg-hover) !important;
         }
         .accent-orange { color: var(--accent-color); }
         .font-vibrant-display { font-weight: 900; letter-spacing: -0.01em; }
@@ -421,32 +445,62 @@ const isRtl = currentLang === 'ar';
                         <input type="text" id="contactsSearchInput" oninput="filterContacts()" placeholder="<%= t.searchPlaceholder %>" autocomplete="off">
                     </div>
                 </div>
+                <% if (canExportContacts) { %>
                 <button onclick="exportContactsXlsx()" id="contactsExportBtn" class="icon-tool-btn" title="<%= isRtl ? 'تصدير كل جهات الاتصال (Excel)' : 'Export all contacts (Excel)' %>" aria-label="<%= isRtl ? 'تصدير كل جهات الاتصال (Excel)' : 'Export all contacts (Excel)' %>">
                     <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                     </svg>
                 </button>
-                <% if (isSuperAdmin) { %>
+                <% } %>
+                <% if (isSuperAdmin || canImportContacts || canCreateContact) { %>
                 <div class="flex items-center gap-3 h-10 shrink-0">
+                    <% if (isSuperAdmin) { %>
                     <button onclick="openBlacklistModal()" class="icon-tool-btn" title="<%= isRtl ? 'القائمة السوداء (الحظر الوارد)' : 'Inbound Blacklist' %>" aria-label="<%= isRtl ? 'القائمة السوداء (الحظر الوارد)' : 'Inbound Blacklist' %>">
                         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
                         </svg>
                     </button>
+                    <% } %>
+                    <% if (canImportContacts) { %>
                     <button onclick="openImportCsvModal()" class="icon-tool-btn" title="<%= isRtl ? 'استيراد CSV' : 'Import CSV' %>" aria-label="<%= isRtl ? 'استيراد CSV' : 'Import CSV' %>">
                         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                         </svg>
                     </button>
+                    <% } %>
+                    <% if (canCreateContact) { %>
                     <button onclick="openAddContactModal()" class="icon-tool-btn" title="<%= isRtl ? 'إضافة جهة اتصال' : 'Add Contact' %>" aria-label="<%= isRtl ? 'إضافة جهة اتصال' : 'Add Contact' %>">
                         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
                         </svg>
                     </button>
+                    <% } %>
                 </div>
                 <% } %>
             </div>
         </div>
+
+        <% if (showSelection) { %>
+        <div id="contactsBulkBar" class="hidden mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] px-3 py-2">
+            <span id="contactsBulkCount" class="text-xs font-bold text-[var(--text-primary)]" aria-live="polite"></span>
+            <span id="contactsBulkHiddenHint" class="hidden text-[11px] text-amber-400"></span>
+            <div class="ms-auto flex flex-wrap items-center gap-2">
+                <% if (canExportContacts) { %>
+                <button type="button" id="bulkExportBtn" onclick="bulkExportSelected()" class="config-btn-secondary px-3 py-1.5 text-[11px] font-bold uppercase rounded transition cursor-pointer">
+                    <%= t.bulkExport %>
+                </button>
+                <% } %>
+                <% if (canDeleteContact) { %>
+                <button type="button" id="bulkDeleteBtn" onclick="bulkDeleteContacts()" class="px-3 py-1.5 bg-rose-500/15 hover:bg-rose-500 text-rose-300 hover:text-white text-[11px] font-bold uppercase rounded border border-rose-500/30 transition cursor-pointer">
+                    <%= t.bulkDelete %>
+                </button>
+                <% } %>
+                <button type="button" id="bulkClearBtn" onclick="clearContactSelection()" class="px-3 py-1.5 text-[11px] font-bold uppercase rounded border border-[var(--border-primary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer">
+                    <%= t.bulkClear %>
+                </button>
+            </div>
+        </div>
+        <% } %>
 
         <!-- Directory Table -->
         <div id="contactsTableContainer" class="rounded-2xl overflow-hidden bg-transparent border-0 border-none shadow-none">
@@ -454,20 +508,34 @@ const isRtl = currentLang === 'ar';
                 <table class="w-full text-start border-collapse bg-transparent border-0 border-none">
                     <thead>
                         <tr class="bg-transparent text-zinc-400 text-xs font-bold uppercase border-b border-[#27272a]">
+                            <% if (showSelection) { %>
+                            <th class="px-4 py-[14px] tracking-wider text-center w-10">
+                                <input type="checkbox" id="contactsSelectAll" onchange="toggleAllVisibleContacts(this.checked)" class="h-4 w-4 rounded accent-[var(--accent-color)] cursor-pointer" aria-label="<%= t.bulkSelectAll %>">
+                            </th>
+                            <% } %>
                             <th class="px-4 py-[14px] tracking-wider text-start"><%= t.nameCol %></th>
                             <th class="px-4 py-[14px] tracking-wider text-start"><%= t.lastNameCol %></th>
                             <th class="px-4 py-[14px] tracking-wider text-start"><%= t.phoneCol %></th>
-                            <% if (isSuperAdmin) { %>
+                            <% if (showActions) { %>
                             <th class="px-4 py-[14px] tracking-wider text-end w-40"><%= t.actionsCol %></th>
                             <% } %>
                         </tr>
                     </thead>
                     <tbody id="contactsTableBody" class="divide-y divide-zinc-800/30 text-sm font-mono">
                         <% if (contacts.length === 0) { %>
-                            <tr id="noContactsRow"><td colspan="<%= isSuperAdmin ? 4 : 3 %>" class="p-8 text-center text-zinc-500 font-mono"><%= t.noData %></td></tr>
+                            <tr id="noContactsRow"><td colspan="<%= tableColSpan %>" class="p-8 text-center text-zinc-500 font-mono"><%= t.noData %></td></tr>
                         <% } else { %>
                             <% contacts.forEach(contact => { %>
-                                <tr class="contact-row hover:bg-zinc-900/60 transition" data-name="<%= String(contact.name || '').toLowerCase() %>" data-lastname="<%= String(contact.last_name || '').toLowerCase() %>" data-phone="<%= contact.telefono || '' %>">
+                                <tr class="contact-row hover:bg-zinc-900/60 transition" data-contact-id="<%= contact.id %>" data-remote="<%= contact.is_remote ? '1' : '0' %>" data-name="<%= String(contact.name || '').toLowerCase() %>" data-lastname="<%= String(contact.last_name || '').toLowerCase() %>" data-phone="<%= contact.telefono || '' %>">
+                                    <% if (showSelection) { %>
+                                    <td class="p-4 text-center select-none">
+                                        <% if (contact.is_remote) { %>
+                                        <input type="checkbox" disabled class="h-4 w-4 rounded opacity-40 cursor-not-allowed" title="<%= t.readOnly %>" aria-label="<%= t.readOnly %>">
+                                        <% } else { %>
+                                        <input type="checkbox" class="contact-select-checkbox h-4 w-4 rounded accent-[var(--accent-color)] cursor-pointer" data-contact-id="<%= contact.id %>" aria-label="<%= `${contact.name || ''} ${contact.last_name || ''}`.trim() %>">
+                                        <% } %>
+                                    </td>
+                                    <% } %>
                                     <td class="p-4 font-bold text-white font-name">
                                         <%= contact.name || '' %>
                                         <% if (contact.is_remote) { %>
@@ -478,18 +546,22 @@ const isRtl = currentLang === 'ar';
                                     </td>
                                     <td class="p-4 text-zinc-300 font-lastname"><%= contact.last_name || '' %></td>
                                     <td class="p-4 text-zinc-400 font-mono font-phone"><%= contact.telefono || '' %></td>
-                                    <% if (isSuperAdmin) { %>
+                                    <% if (showActions) { %>
                                     <td class="p-4 text-end select-none">
                                         <% if (contact.is_remote) { %>
-                                        <span class="text-[10px] font-bold uppercase tracking-wide text-[var(--text-muted)]"><%= isRtl ? 'قراءة فقط' : 'read-only' %></span>
+                                        <span class="text-[10px] font-bold uppercase tracking-wide text-[var(--text-muted)]"><%= t.readOnly %></span>
                                         <% } else { %>
                                         <div class="flex items-center justify-end gap-2 whitespace-nowrap">
+                                            <% if (canEditContact) { %>
                                             <button onclick="openEditContactModal('<%= contact.id %>', '<%= contact.name %>', '<%= contact.last_name %>', '<%= contact.telefono %>')" class="config-btn-secondary px-2.5 py-1 text-[11px] font-bold uppercase rounded transition cursor-pointer">
                                                 <%= t.editBtn %>
                                             </button>
+                                            <% } %>
+                                            <% if (canDeleteContact) { %>
                                             <button onclick="deleteContact('<%= contact.id %>')" class="px-2.5 py-1 bg-[var(--accent-color)]/10 hover:bg-[var(--accent-color)] text-[var(--accent-color)] hover:text-white text-[11px] font-bold uppercase rounded border border-[var(--accent-color)]/20 transition cursor-pointer">
                                                 <%= t.deleteBtn %>
                                             </button>
+                                            <% } %>
                                         </div>
                                         <% } %>
                                     </td>
@@ -507,7 +579,7 @@ const isRtl = currentLang === 'ar';
         </div>
     </div>
 
-    <% if (isSuperAdmin) { %>
+    <% if (canCreateContact || canEditContact || canImportContacts) { %>
     <!-- Edit Contact Modal -->
     <div id="editContactModal" class="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm opacity-0 pointer-events-none transition-all duration-300">
         <div id="editContactModalContainer" class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl w-full max-w-md p-6 scale-95 transition-all duration-300 transform">
@@ -723,16 +795,239 @@ const isRtl = currentLang === 'ar';
                     const tbody = document.getElementById('contactsTableBody');
                     const tr = document.createElement('tr');
                     tr.id = 'noContactsRow';
-                    tr.innerHTML = '<td colspan="' + <%- isSuperAdmin ? 4 : 3 %> + '" class="p-8 text-center text-zinc-500 font-mono">' + <%- JSON.stringify(t.noData) %> + '</td>';
+                    tr.innerHTML = '<td colspan="' + <%- tableColSpan %> + '" class="p-8 text-center text-zinc-500 font-mono">' + <%- JSON.stringify(t.noData) %> + '</td>';
                     tbody.appendChild(tr);
                 }
             } else {
                 if (noRow) noRow.remove();
             }
             document.getElementById('contactsCount').textContent = visibleCount;
+            syncContactSelectionUI();
         }
 
-        <% if (isSuperAdmin) { %>
+        const contactBulkText = {
+            selected: <%- JSON.stringify(t.bulkSelected) %>,
+            someHidden: <%- JSON.stringify(t.bulkSomeHidden) %>,
+            deleteConfirm: <%- JSON.stringify(t.bulkDeleteConfirm) %>,
+            deleteSuccess: <%- JSON.stringify(t.bulkDeleteSuccess) %>,
+            exportEmpty: <%- JSON.stringify(t.bulkExportEmpty) %>,
+            exportSuccess: <%- JSON.stringify(t.bulkExportSuccess) %>,
+            requestFailed: <%- JSON.stringify(t.bulkRequestFailed) %>
+        };
+
+        const selectedContactIds = new Set();
+
+        function showContactToast(message, type = 'info') {
+            if (typeof window.showToast === 'function') {
+                window.showToast(message, type);
+            } else {
+                alert(message);
+            }
+        }
+
+        function getSelectableContactRows() {
+            return Array.from(document.querySelectorAll('.contact-row'))
+                .filter(row => row.getAttribute('data-remote') !== '1');
+        }
+
+        function getVisibleSelectableContactRows() {
+            return getSelectableContactRows().filter(row => !row.classList.contains('hidden'));
+        }
+
+        function contactRowId(row) {
+            return Number(row.getAttribute('data-contact-id'));
+        }
+
+        function updateBulkBar() {
+            const bar = document.getElementById('contactsBulkBar');
+            if (!bar) return;
+            const count = selectedContactIds.size;
+            bar.classList.toggle('hidden', count === 0);
+
+            const countEl = document.getElementById('contactsBulkCount');
+            if (countEl) countEl.textContent = `${count} ${contactBulkText.selected}`;
+
+            const hiddenCount = getSelectableContactRows()
+                .filter(row => selectedContactIds.has(contactRowId(row)) && row.classList.contains('hidden'))
+                .length;
+            const hint = document.getElementById('contactsBulkHiddenHint');
+            if (hint) {
+                hint.textContent = hiddenCount > 0 ? `${hiddenCount} ${contactBulkText.someHidden}` : '';
+                hint.classList.toggle('hidden', hiddenCount === 0);
+            }
+        }
+
+        function syncContactSelectionUI() {
+            const rows = getSelectableContactRows();
+            rows.forEach(row => {
+                const id = contactRowId(row);
+                const checkbox = row.querySelector('.contact-select-checkbox');
+                const checked = selectedContactIds.has(id);
+                if (checkbox) checkbox.checked = checked;
+                row.classList.toggle('is-selected', checked);
+            });
+
+            const visibleRows = getVisibleSelectableContactRows();
+            const visibleSelected = visibleRows.filter(row => selectedContactIds.has(contactRowId(row))).length;
+            const selectAll = document.getElementById('contactsSelectAll');
+            if (selectAll) {
+                selectAll.disabled = visibleRows.length === 0;
+                selectAll.checked = visibleRows.length > 0 && visibleSelected === visibleRows.length;
+                selectAll.indeterminate = visibleSelected > 0 && visibleSelected < visibleRows.length;
+            }
+            updateBulkBar();
+        }
+
+        function toggleContactSelection(id, checked) {
+            if (!Number.isInteger(id) || id <= 0) return;
+            if (checked) selectedContactIds.add(id);
+            else selectedContactIds.delete(id);
+            syncContactSelectionUI();
+        }
+
+        function toggleAllVisibleContacts(checked) {
+            getVisibleSelectableContactRows().forEach(row => {
+                const id = contactRowId(row);
+                if (!Number.isInteger(id) || id <= 0) return;
+                if (checked) selectedContactIds.add(id);
+                else selectedContactIds.delete(id);
+            });
+            syncContactSelectionUI();
+        }
+
+        function clearContactSelection() {
+            selectedContactIds.clear();
+            syncContactSelectionUI();
+        }
+
+        async function bulkDeleteContacts() {
+            const ids = Array.from(selectedContactIds);
+            if (ids.length === 0) return;
+
+            const names = getSelectableContactRows()
+                .filter(row => selectedContactIds.has(contactRowId(row)))
+                .slice(0, 5)
+                .map(row => {
+                    const firstName = row.querySelector('.font-name')?.textContent.replace(/\s+/g, ' ').trim() || '';
+                    const lastName = row.querySelector('.font-lastname')?.textContent.replace(/\s+/g, ' ').trim() || '';
+                    const name = `${firstName} ${lastName}`.trim();
+                    return name || row.getAttribute('data-phone') || `#${contactRowId(row)}`;
+                });
+            const suffix = names.length > 0 ? `\n\n${names.join(', ')}${ids.length > names.length ? '…' : ''}` : '';
+            const message = contactBulkText.deleteConfirm.replace('{count}', String(ids.length)) + suffix;
+            if (!window.confirm(message)) return;
+
+            const btn = document.getElementById('bulkDeleteBtn');
+            if (btn) btn.disabled = true;
+            try {
+                const resp = await fetch('/api/contacts/bulk-delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ids })
+                });
+                const data = await resp.json().catch(() => ({}));
+                if (!resp.ok || !data.success) {
+                    throw new Error(data.error || contactBulkText.requestFailed);
+                }
+                showContactToast(`${contactBulkText.deleteSuccess} (${data.deleted})`, 'success');
+                selectedContactIds.clear();
+                setTimeout(() => window.location.reload(), 350);
+            } catch (err) {
+                showContactToast(err.message || contactBulkText.requestFailed, 'error');
+                if (btn) btn.disabled = false;
+            }
+        }
+
+        async function bulkExportSelected() {
+            const ids = Array.from(selectedContactIds);
+            if (ids.length === 0) {
+                showContactToast(contactBulkText.exportEmpty, 'error');
+                return;
+            }
+
+            const btn = document.getElementById('bulkExportBtn');
+            if (btn) btn.disabled = true;
+            try {
+                const resp = await fetch('/api/contacts/bulk-export', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ids })
+                });
+                if (!resp.ok) {
+                    const data = await resp.json().catch(() => ({}));
+                    throw new Error(data.error || contactBulkText.requestFailed);
+                }
+
+                const blob = await resp.blob();
+                const disposition = resp.headers.get('Content-Disposition') || '';
+                const match = disposition.match(/filename="?([^"]+)"?/i);
+                const filename = match ? match[1] : `contacts_selected_${Date.now()}.xlsx`;
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = filename;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+                showContactToast(contactBulkText.exportSuccess, 'success');
+            } catch (err) {
+                showContactToast(err.message || contactBulkText.requestFailed, 'error');
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+        }
+
+        async function deleteContact(id) {
+            if (!confirm(<%- JSON.stringify(t.confirmDelete) %>)) return;
+            try {
+                const resp = await fetch('/api/contacts/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id })
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    showContactToast(<%- JSON.stringify(t.toastDeleteSuccess) %>, 'success');
+                    window.location.reload();
+                } else {
+                    showContactToast(data.error || 'Failed to delete contact', 'error');
+                }
+            } catch (err) {
+                showContactToast('Network error deleting contact', 'error');
+            }
+        }
+
+        // Download the full address book as .xlsx. The browser handles the
+        // download, so no blob/memory juggling is needed here.
+        function exportContactsXlsx() {
+            const btn = document.getElementById('contactsExportBtn');
+            if (btn) btn.disabled = true;
+            const url = '/api/contacts/export';
+            try {
+                const link = document.createElement('a');
+                link.href = url;
+                link.rel = 'noopener';
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                showContactToast(<%- JSON.stringify(isRtl ? 'جارٍ تصدير جهات الاتصال...' : 'Exporting contacts...') %>, 'info');
+            } catch (err) {
+                showContactToast(<%- JSON.stringify(isRtl ? 'تعذر بدء التصدير' : 'Could not start the export') %>, 'error');
+            } finally {
+                setTimeout(() => { if (btn) btn.disabled = false; }, 1500);
+            }
+        }
+        window.exportContactsXlsx = exportContactsXlsx;
+
+        document.getElementById('contactsTableBody')?.addEventListener('change', (event) => {
+            const checkbox = event.target.closest('.contact-select-checkbox');
+            if (!checkbox) return;
+            toggleContactSelection(Number(checkbox.getAttribute('data-contact-id')), checkbox.checked);
+        });
+        syncContactSelectionUI();
+
+        <% if (canCreateContact || canEditContact || canImportContacts) { %>
         function openAddContactModal() {
             const modal = document.getElementById('addContactModal');
             const container = document.getElementById('addContactModalContainer');
@@ -850,54 +1145,6 @@ const isRtl = currentLang === 'ar';
                 msgEl.textContent = 'Network error updating contact';
             }
         }
-
-        async function deleteContact(id) {
-            if (!confirm('<%= t.confirmDelete %>')) return;
-            try {
-                const resp = await fetch('/api/contacts/delete', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ id })
-                });
-                const data = await resp.json();
-                if (data.success) {
-                    if (typeof window.showToast === 'function') {
-                        window.showToast('<%= t.toastDeleteSuccess %>', 'success');
-                    }
-                    window.location.reload();
-                } else {
-                    alert(data.error || 'Failed to delete contact');
-                }
-            } catch (err) {
-                alert('Network error deleting contact');
-            }
-        }
-
-        // Download the full address book as .xlsx. The browser handles the
-        // download, so no blob/memory juggling is needed here.
-        function exportContactsXlsx() {
-            const btn = document.getElementById('contactsExportBtn');
-            if (btn) btn.disabled = true;
-            const url = '/api/contacts/export';
-            try {
-                const link = document.createElement('a');
-                link.href = url;
-                link.rel = 'noopener';
-                document.body.appendChild(link);
-                link.click();
-                link.remove();
-                if (typeof window.showToast === 'function') {
-                    window.showToast('<%= isRtl ? "جارٍ تصدير جهات الاتصال..." : "Exporting contacts..." %>', 'info');
-                }
-            } catch (err) {
-                if (typeof window.showToast === 'function') {
-                    window.showToast('<%= isRtl ? "تعذر بدء التصدير" : "Could not start the export" %>', 'error');
-                }
-            } finally {
-                setTimeout(() => { if (btn) btn.disabled = false; }, 1500);
-            }
-        }
-        window.exportContactsXlsx = exportContactsXlsx;
 
         function openImportCsvModal() {
             const modal = document.getElementById('importCsvModal');
