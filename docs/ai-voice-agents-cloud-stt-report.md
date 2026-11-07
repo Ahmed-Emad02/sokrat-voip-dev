@@ -1,10 +1,41 @@
 # AI Voice Agents and Cloud STT — Architecture and Feasibility Report
 
-**Status:** Brainstorming / design only. No implementation changes are included in this document.
+**Status:** Design report plus partial implementation. The batch evaluation slice and the SIP-hosted AI agent path are implemented in the working tree; the ARI/ExternalMedia bridge and advanced tool orchestration are not.
 
 **Scope:** Sokrat VoIP (`/opt/sokrat-voip`), Asterisk 18.19.0, Issabel 5, GSM `chan_dongle` channels, existing campaign dialer, CDR, call recordings, voicemail, and the existing cloud STT worker.
 
 **Goal:** Add cloud-only AI voice agents for inbound and outbound calls, and use cloud speech-to-text plus a configurable evaluation engine to rate call performance from recordings. Local model inference is explicitly out of scope because the hardware is not sufficient.
+
+**Implementation status (2026-11-05):** Phase 0 (transcript/diarization foundation), Phase 1 (AI quality evaluation), and the SIP-hosted AI agent control path are implemented in this working tree. The ARI/ExternalMedia media bridge is not implemented; it remains the optional path for advanced media control. The current implementation adds:
+
+- `ai_evaluation_settings`, `evaluation_profiles`, `transcript_segments`, `evaluation_jobs`, `call_evaluations`, and `evaluation_scores`.
+- Diarized transcript persistence and segment normalization in `scripts/stt-worker.js`.
+- A provider-agnostic LLM judge in `lib/ai/evaluation.js` and `lib/ai/llm.js`.
+- `/api/ai/*` evaluation/profile/settings APIs.
+- A `Call Quality` page at `/quality` with profiles, runs, scorecards, evidence, audio, and human review.
+
+To enable it:
+
+1. Configure a diarizing STT provider (Deepgram is the current implementation; Munsit remains available but must return speaker/timestamp data to be useful for agent/customer attribution).
+2. Open **Call Quality → AI Provider**, select the LLM provider, enter the API key, and save/test.
+3. Create an evaluation profile with context, instructions, rubric, scope, sampling, and pass threshold.
+4. Transcribe a call, then use **Run Evaluation** with the call `uniqueid`, or let a global profile auto-enqueue after transcription.
+
+**Access control:** all AI evaluation and AI agent pages/APIs are restricted to the `root` session. Super-admin group members, API keys, and trusted federation peers are intentionally denied. AI-campaign CRUD/control, lead imports/exports, attempts, and follow-ups also reject or filter federation/non-root access; human campaigns keep the legacy federation behavior. The sidebar hides the Call Quality entry for everyone else.
+
+**SIP-hosted AI agent implementation (2026-11-05):** The SIP-hosted path is implemented in this working tree:
+
+- `ai_agents` and `ai_sessions` tables, plus `dialer_campaigns.agent_kind` / `ai_agent_id`.
+- `/api/ai/agents` CRUD, `/api/ai/sessions`, and AstDB synchronization (`AI_AGENT/<id>/sip_endpoint`).
+- `[ai-agent]` inbound context for FreePBX Custom Destination `ai-agent,<id>,1`; it explicitly accepts one-digit numeric IDs (`_[0-9]`) as well as longer IDs.
+- `[ai-agent-dial]` + `[ai-agent-connect]` contexts: Originate targets the lead-facing `Local/s@ai-agent-dial/n` first; when the lead answers, Asterisk starts the post-answer `[ai-agent-connect]` context, which dials the provider SIP endpoint. No polling flag and no second cellular call.
+- Campaign UI/API supports Agent Type = AI and an AI agent selector; the pacer skips human-agent reservation for AI campaigns.
+- The outbound Local-channel flow was verified with local `Answer()`/`Playback()` test contexts: the lead-facing leg starts and answers first, then `[ai-agent-connect]` starts and dials the bot. No deadlock and no polling flag.
+- Recording, `AutoDialerEvent` status updates, and `ai_sessions` lifecycle updates are wired.
+
+**Configuration for the first pilot:** create an AI agent with a SIP endpoint name such as `PJSIP/ai-provider` (the PJSIP endpoint/trunk must already exist in Asterisk and the provider must accept inbound INVITEs/media). For inbound, create a FreePBX Custom Destination `ai-agent,<id>,1`. For outbound, create a campaign with Agent Type = AI and select the agent. Test DTMF, transfer/REFER, NAT, and audio at 8 kHz before enabling a production campaign.
+
+**Known limitations in this slice:** the STT worker still processes one transcription at a time (the `max_concurrency` setting is not yet used); provider fallback is not implemented; the real SIP provider has not been exercised because no endpoint/credential is configured. **Still needed before production:** a provider/test SIP endpoint and credential, plus validation of the provider's transfer/DTMF/NAT behavior. ARI + ExternalMedia remains optional for advanced media control, but is not required for this SIP-hosted path.
 
 ---
 
@@ -15,7 +46,7 @@ The system already has two useful foundations:
 1. A batch STT worker with cloud providers and transcription tables.
 2. A database-driven progressive campaign dialer with AMI call control.
 
-What is missing is:
+The design adds:
 
 - a richer transcript model (speaker diarization, timestamps, confidence, language);
 - an LLM-based evaluation engine with configurable context, rubric, and instructions;

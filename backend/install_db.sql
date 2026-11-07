@@ -8,8 +8,10 @@ CREATE TABLE IF NOT EXISTS `dashboard_users` (
   `reset_expires` DATETIME DEFAULT NULL,
   `reset_token_expires` DATETIME DEFAULT NULL,
   `group_id` INT DEFAULT NULL,
+  `tenant_id` INT UNSIGNED DEFAULT NULL,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  KEY `idx_dash_users_extension` (`extension`)
+  KEY `idx_dash_users_extension` (`extension`),
+  KEY `idx_dash_users_tenant` (`tenant_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `dashboard_user_dongles` (
@@ -189,6 +191,8 @@ CREATE TABLE IF NOT EXISTS `dialer_campaigns` (
   `wrapup_time_sec` INT DEFAULT 15,
   `max_queue_wait_sec` INT DEFAULT 5,
   `auto_answer` TINYINT(1) DEFAULT 0,
+  `agent_kind` ENUM('human','ai') NOT NULL DEFAULT 'human',
+  `ai_agent_id` INT DEFAULT NULL,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -221,6 +225,7 @@ CREATE TABLE IF NOT EXISTS `dialer_call_attempts` (
   `channel` VARCHAR(100) DEFAULT NULL,
   `dongle_id` VARCHAR(50) DEFAULT NULL,
   `agent_extension` VARCHAR(20) DEFAULT NULL,
+  `ai_agent_id` INT DEFAULT NULL,
   `status` ENUM('originated', 'ringing', 'lead_answered', 'amd_passed', 'queued', 'agent_bridged', 'completed', 'abandoned', 'machine', 'busy', 'no_answer', 'failed', 'stale') NOT NULL DEFAULT 'originated',
   `cause_code` INT DEFAULT NULL,
   `lease_expires_at` DATETIME NOT NULL,
@@ -443,6 +448,11 @@ CREATE TABLE IF NOT EXISTS `asteriskcdrdb`.`cdr_transcriptions` (
   `processing_ms` BIGINT DEFAULT NULL,
   `engine` VARCHAR(32) DEFAULT NULL,
   `model_used` VARCHAR(128) DEFAULT NULL,
+  `segments_json` LONGTEXT DEFAULT NULL,
+  `provider` VARCHAR(32) DEFAULT NULL,
+  `language_detected` VARCHAR(16) DEFAULT NULL,
+  `confidence_avg` DECIMAL(5,4) DEFAULT NULL,
+  `cost_usd` DECIMAL(10,6) DEFAULT 0,
   INDEX `idx_stt_status` (`status`),
   FULLTEXT KEY `ft_transcript` (`transcript`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -462,9 +472,171 @@ CREATE TABLE IF NOT EXISTS `asteriskcdrdb`.`voicemail_transcriptions` (
   `processing_ms` BIGINT DEFAULT NULL,
   `engine` VARCHAR(32) DEFAULT NULL,
   `model_used` VARCHAR(128) DEFAULT NULL,
+  `segments_json` LONGTEXT DEFAULT NULL,
+  `provider` VARCHAR(32) DEFAULT NULL,
+  `language_detected` VARCHAR(16) DEFAULT NULL,
+  `confidence_avg` DECIMAL(5,4) DEFAULT NULL,
+  `cost_usd` DECIMAL(10,6) DEFAULT 0,
   UNIQUE KEY `uniq_vm_file` (`mailbox`, `msg_file`),
   INDEX `idx_vm_stt_status` (`status`),
   FULLTEXT KEY `ft_vm_transcript` (`transcript`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- ---------------------------------------------------------------------------
+-- Sokrat AI call evaluation / quality schema
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `ai_evaluation_settings` (
+  `id` INT PRIMARY KEY DEFAULT 1,
+  `enabled` TINYINT(1) DEFAULT 0,
+  `provider` VARCHAR(32) DEFAULT 'openai',
+  `api_key_enc` TEXT DEFAULT NULL,
+  `api_url` VARCHAR(255) DEFAULT 'https://api.openai.com/v1',
+  `model` VARCHAR(128) DEFAULT 'gpt-4o-mini',
+  `temperature` DECIMAL(2,1) DEFAULT 0.0,
+  `max_tokens` INT DEFAULT 4096,
+  `monthly_budget_usd` DECIMAL(10,2) DEFAULT 0,
+  `require_evidence` TINYINT(1) DEFAULT 1,
+  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+INSERT IGNORE INTO `ai_evaluation_settings` (`id`) VALUES (1);
+
+CREATE TABLE IF NOT EXISTS `evaluation_profiles` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `name` VARCHAR(120) NOT NULL,
+  `description` TEXT DEFAULT NULL,
+  `scope_type` ENUM('global','campaign','queue','did','agent','team') DEFAULT 'global',
+  `scope_id` VARCHAR(64) DEFAULT NULL,
+  `direction` ENUM('any','inbound','outbound','internal') DEFAULT 'any',
+  `language` VARCHAR(16) DEFAULT 'ar',
+  `context_text` MEDIUMTEXT DEFAULT NULL,
+  `instructions_text` MEDIUMTEXT DEFAULT NULL,
+  `rubric_json` LONGTEXT NOT NULL,
+  `thresholds_json` TEXT DEFAULT NULL,
+  `sampling_percent` TINYINT DEFAULT 100,
+  `min_duration_sec` INT DEFAULT 30,
+  `temperature` DECIMAL(2,1) DEFAULT 0.0,
+  `version` INT NOT NULL DEFAULT 1,
+  `active` TINYINT(1) NOT NULL DEFAULT 1,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  KEY `idx_eval_profile_active` (`active`, `scope_type`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `asteriskcdrdb`.`transcript_segments` (
+  `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
+  `transcription_type` ENUM('call','voicemail') NOT NULL,
+  `transcription_id` BIGINT NOT NULL,
+  `seq` INT NOT NULL DEFAULT 0,
+  `speaker` VARCHAR(32) DEFAULT 'unknown',
+  `start_ms` INT DEFAULT NULL,
+  `end_ms` INT DEFAULT NULL,
+  `text` TEXT NOT NULL,
+  `confidence` DECIMAL(5,4) DEFAULT NULL,
+  `language` VARCHAR(16) DEFAULT NULL,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  KEY `idx_segment_target` (`transcription_type`, `transcription_id`, `seq`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE IF NOT EXISTS `asteriskcdrdb`.`evaluation_jobs` (
+  `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
+  `target_type` ENUM('call','voicemail') NOT NULL DEFAULT 'call',
+  `target_id` VARCHAR(128) NOT NULL,
+  `transcription_id` BIGINT DEFAULT NULL,
+  `uniqueid` VARCHAR(32) DEFAULT NULL,
+  `profile_id` INT NOT NULL,
+  `profile_version` INT NOT NULL DEFAULT 1,
+  `profile_snapshot_json` LONGTEXT DEFAULT NULL,
+  `status` ENUM('pending','processing','completed','failed','skipped') NOT NULL DEFAULT 'pending',
+  `attempt_count` INT NOT NULL DEFAULT 0,
+  `error_message` VARCHAR(500) DEFAULT NULL,
+  `provider` VARCHAR(32) DEFAULT NULL,
+  `model` VARCHAR(128) DEFAULT NULL,
+  `cost_usd` DECIMAL(10,6) DEFAULT 0,
+  `processing_started_at` DATETIME DEFAULT NULL,
+  `completed_at` DATETIME DEFAULT NULL,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY `uniq_eval_target` (`profile_id`, `target_type`, `target_id`, `profile_version`),
+  KEY `idx_eval_status` (`status`, `id`),
+  KEY `idx_eval_uniqueid` (`uniqueid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE IF NOT EXISTS `asteriskcdrdb`.`call_evaluations` (
+  `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
+  `job_id` BIGINT NOT NULL,
+  `target_type` ENUM('call','voicemail') NOT NULL DEFAULT 'call',
+  `target_id` VARCHAR(128) NOT NULL,
+  `uniqueid` VARCHAR(32) DEFAULT NULL,
+  `profile_id` INT NOT NULL,
+  `profile_version` INT NOT NULL DEFAULT 1,
+  `overall_score` DECIMAL(5,2) DEFAULT NULL,
+  `pass` TINYINT(1) DEFAULT NULL,
+  `critical_fail` TINYINT(1) DEFAULT 0,
+  `summary` LONGTEXT DEFAULT NULL,
+  `warnings_json` LONGTEXT DEFAULT NULL,
+  `raw_response_json` LONGTEXT DEFAULT NULL,
+  `provider` VARCHAR(32) DEFAULT NULL,
+  `model` VARCHAR(128) DEFAULT NULL,
+  `prompt_hash` VARCHAR(64) DEFAULT NULL,
+  `human_score` DECIMAL(5,2) DEFAULT NULL,
+  `human_notes` TEXT DEFAULT NULL,
+  `reviewer_id` INT DEFAULT NULL,
+  `reviewed_at` DATETIME DEFAULT NULL,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY `uniq_eval_job` (`job_id`),
+  KEY `idx_eval_profile_time` (`profile_id`, `created_at`),
+  KEY `idx_eval_uniqueid` (`uniqueid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE IF NOT EXISTS `asteriskcdrdb`.`evaluation_scores` (
+  `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
+  `evaluation_id` BIGINT NOT NULL,
+  `criterion_key` VARCHAR(64) NOT NULL,
+  `label` VARCHAR(120) DEFAULT NULL,
+  `score` DECIMAL(6,2) DEFAULT NULL,
+  `weight` DECIMAL(6,2) DEFAULT NULL,
+  `weighted_score` DECIMAL(7,2) DEFAULT NULL,
+  `critical` TINYINT(1) DEFAULT 0,
+  `evidence_json` LONGTEXT DEFAULT NULL,
+  `comment` TEXT DEFAULT NULL,
+  KEY `idx_eval_score` (`evaluation_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- SIP-hosted AI voice agents
+CREATE TABLE IF NOT EXISTS `ai_agents` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `name` VARCHAR(120) NOT NULL,
+  `description` TEXT DEFAULT NULL,
+  `direction` ENUM('inbound','outbound','both') NOT NULL DEFAULT 'both',
+  `language` VARCHAR(16) DEFAULT 'ar',
+  `voice` VARCHAR(80) DEFAULT NULL,
+  `persona_prompt` MEDIUMTEXT DEFAULT NULL,
+  `sip_endpoint` VARCHAR(255) NOT NULL,
+  `transfer_target` VARCHAR(128) DEFAULT NULL,
+  `fallback_target` VARCHAR(128) DEFAULT NULL,
+  `max_concurrency` INT NOT NULL DEFAULT 1,
+  `recording_disclosure` TINYINT(1) NOT NULL DEFAULT 1,
+  `active` TINYINT(1) NOT NULL DEFAULT 1,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `asteriskcdrdb`.`ai_sessions` (
+  `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
+  `uniqueid` VARCHAR(64) DEFAULT NULL,
+  `attempt_uuid` VARCHAR(64) DEFAULT NULL,
+  `linkedid` VARCHAR(64) DEFAULT NULL,
+  `agent_id` INT NOT NULL,
+  `direction` ENUM('inbound','outbound') NOT NULL,
+  `campaign_id` INT DEFAULT NULL,
+  `lead_id` INT DEFAULT NULL,
+  `caller` VARCHAR(80) DEFAULT NULL,
+  `status` ENUM('started','answered','completed','failed','transferred') NOT NULL DEFAULT 'started',
+  `transfer_target` VARCHAR(128) DEFAULT NULL,
+  `error_message` VARCHAR(500) DEFAULT NULL,
+  `started_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  `ended_at` DATETIME DEFAULT NULL,
+  KEY `idx_ai_session_agent` (`agent_id`, `started_at`),
+  KEY `idx_ai_session_uniqueid` (`uniqueid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Sokrat Push Gateway device registry (see sokrat-push-gateway repo)
@@ -1155,6 +1327,121 @@ SET @sokrat_sql := (
                       AND INDEX_NAME = 'idx_voicemail'),
     'DO 0',
     'ALTER TABLE `asterisk`.`users` ADD INDEX `idx_voicemail` (`voicemail`)')
+);
+PREPARE sokrat_stmt FROM @sokrat_sql;
+EXECUTE sokrat_stmt;
+DEALLOCATE PREPARE sokrat_stmt;
+
+-- ---------------------------------------------------------------------------
+-- Sokrat Cloud Tenants / public click-to-call
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `sokrat_tenants` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `public_id` VARCHAR(24) NOT NULL,
+  `name` VARCHAR(120) NOT NULL,
+  `status` ENUM('active','suspended','deleted') NOT NULL DEFAULT 'active',
+  `ring_group` VARCHAR(20) NOT NULL,
+  `timezone` VARCHAR(64) NOT NULL DEFAULT 'Africa/Cairo',
+  `max_concurrency` SMALLINT UNSIGNED NOT NULL DEFAULT 5,
+  `max_call_seconds` INT UNSIGNED NOT NULL DEFAULT 1800,
+  `recording_enabled` TINYINT(1) NOT NULL DEFAULT 1,
+  `branding_json` TEXT DEFAULT NULL,
+  `consent_text` VARCHAR(500) DEFAULT NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_sokrat_tenants_public_id` (`public_id`),
+  UNIQUE KEY `uq_sokrat_tenants_ring_group` (`ring_group`),
+  KEY `idx_sokrat_tenants_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `sokrat_tenant_links` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `tenant_id` INT UNSIGNED NOT NULL,
+  `slug` VARCHAR(32) NOT NULL,
+  `label` VARCHAR(100) NOT NULL DEFAULT 'Website',
+  `source` VARCHAR(100) DEFAULT NULL,
+  `allowed_origins` TEXT DEFAULT NULL,
+  `branding_json` TEXT DEFAULT NULL,
+  `active` TINYINT(1) NOT NULL DEFAULT 1,
+  `max_calls` INT UNSIGNED DEFAULT NULL,
+  `expires_at` DATETIME DEFAULT NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_sokrat_tenant_links_slug` (`slug`),
+  KEY `idx_sokrat_tenant_links_tenant` (`tenant_id`, `active`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `sokrat_tenant_agents` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `tenant_id` INT UNSIGNED NOT NULL,
+  `extension` VARCHAR(20) NOT NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_sokrat_tenant_agent` (`tenant_id`, `extension`),
+  KEY `idx_sokrat_tenant_agent_ext` (`extension`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `sokrat_guest_endpoints` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `tenant_id` INT UNSIGNED NOT NULL,
+  `sip_username` VARCHAR(64) NOT NULL,
+  `sip_secret_enc` TEXT NOT NULL,
+  `status` ENUM('free','leased','disabled') NOT NULL DEFAULT 'free',
+  `lease_session_id` VARCHAR(40) DEFAULT NULL,
+  `lease_expires_at` DATETIME DEFAULT NULL,
+  `last_used_at` DATETIME DEFAULT NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_sokrat_guest_sip_username` (`sip_username`),
+  KEY `idx_sokrat_guest_tenant_status` (`tenant_id`, `status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `sokrat_web_sessions` (
+  `id` CHAR(32) NOT NULL,
+  `tenant_id` INT UNSIGNED NOT NULL,
+  `link_id` INT UNSIGNED DEFAULT NULL,
+  `endpoint_id` INT UNSIGNED DEFAULT NULL,
+  `caller_id` VARCHAR(32) NOT NULL,
+  `linkedid` VARCHAR(64) DEFAULT NULL,
+  `status` ENUM('pending','registered','calling','answered','ended','failed','expired') NOT NULL DEFAULT 'pending',
+  `ip_hash` CHAR(64) DEFAULT NULL,
+  `origin` VARCHAR(255) DEFAULT NULL,
+  `source` VARCHAR(100) DEFAULT NULL,
+  `user_agent` VARCHAR(255) DEFAULT NULL,
+  `started_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `expires_at` DATETIME NOT NULL,
+  `connected_at` DATETIME DEFAULT NULL,
+  `ended_at` DATETIME DEFAULT NULL,
+  `duration_sec` INT UNSIGNED NOT NULL DEFAULT 0,
+  `hangup_cause` VARCHAR(64) DEFAULT NULL,
+  `recording_ref` VARCHAR(255) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_sokrat_web_sessions_tenant` (`tenant_id`, `status`, `started_at`),
+  KEY `idx_sokrat_web_sessions_link` (`link_id`),
+  KEY `idx_sokrat_web_sessions_linkedid` (`linkedid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------------------------------------------------------------------------
+-- Dashboard user -> Cloud Tenant binding (existing installations)
+-- ---------------------------------------------------------------------------
+SET @sokrat_sql := (
+  SELECT IF(EXISTS(SELECT 1 FROM information_schema.COLUMNS
+                    WHERE TABLE_SCHEMA = 'asterisk' AND TABLE_NAME = 'dashboard_users'
+                      AND COLUMN_NAME = 'tenant_id'),
+    'DO 0',
+    'ALTER TABLE `asterisk`.`dashboard_users` ADD `tenant_id` INT UNSIGNED DEFAULT NULL')
+);
+PREPARE sokrat_stmt FROM @sokrat_sql;
+EXECUTE sokrat_stmt;
+DEALLOCATE PREPARE sokrat_stmt;
+
+SET @sokrat_sql := (
+  SELECT IF(EXISTS(SELECT 1 FROM information_schema.STATISTICS
+                    WHERE TABLE_SCHEMA = 'asterisk' AND TABLE_NAME = 'dashboard_users'
+                      AND INDEX_NAME = 'idx_dash_users_tenant'),
+    'DO 0',
+    'ALTER TABLE `asterisk`.`dashboard_users` ADD INDEX `idx_dash_users_tenant` (`tenant_id`)')
 );
 PREPARE sokrat_stmt FROM @sokrat_sql;
 EXECUTE sokrat_stmt;

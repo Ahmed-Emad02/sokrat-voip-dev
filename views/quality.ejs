@@ -1,0 +1,554 @@
+<%
+const words = {
+    en: {
+        title: 'Call Quality', subtitle: 'AI Evaluation',
+        overview: 'Overview', evaluations: 'Evaluations', profiles: 'Profiles', agents: 'AI Agents', settings: 'AI Provider',
+        newAgent: 'New AI Agent', editAgent: 'Edit AI Agent', sipEndpoint: 'SIP endpoint (PJSIP/name)', voice: 'Voice', transferTarget: 'Transfer target', fallbackTarget: 'Fallback target', maxConcurrency: 'Max concurrency', recordingDisclosure: 'Recording/AI disclosure', personaPrompt: 'Persona / system prompt', saveAgent: 'Save AI Agent', noAgents: 'No AI agents configured.',
+        totalEvaluations: 'Evaluations', avgScore: 'Average Score', passRate: 'Pass Rate', criticalFails: 'Critical Fails',
+        recentEvaluations: 'Recent Evaluations', noEvaluations: 'No evaluations yet. Run one from a completed transcript.',
+        profile: 'Profile', score: 'Score', result: 'Result', date: 'Date', agent: 'Agent', call: 'Call',
+        pass: 'PASS', fail: 'FAIL', detail: 'Evaluation Detail', criteria: 'Criteria', evidence: 'Evidence',
+        transcript: 'Transcript', summary: 'Summary', coaching: 'Coaching', override: 'Human Review',
+        humanScore: 'Human score (0-100)', humanNotes: 'Review notes', saveReview: 'Save Review', saved: 'Saved.',
+        newProfile: 'New Profile', editProfile: 'Edit Profile', name: 'Name', scope: 'Scope', direction: 'Direction',
+        language: 'Language', sampling: 'Sampling %', minDuration: 'Min duration (sec)', context: 'Call context',
+        instructions: 'Evaluator instructions', rubric: 'Rubric JSON', thresholds: 'Pass score', active: 'Active',
+        saveProfile: 'Save Profile', cancel: 'Cancel', runEvaluation: 'Run Evaluation', uniqueid: 'Call uniqueid',
+        selectProfile: 'Select profile', run: 'Run', noProfiles: 'No evaluation profiles configured.',
+        provider: 'Provider', apiUrl: 'API URL', model: 'Model', apiKey: 'API key (leave blank to keep existing)',
+        temperature: 'Temperature', maxTokens: 'Max tokens', budget: 'Monthly budget (USD)', enabled: 'Enabled',
+        requireEvidence: 'Require evidence quotes', saveSettings: 'Save Provider Settings', testConnection: 'Test Connection',
+        hasKey: 'API key configured', noKey: 'No API key configured', status: 'Status', actions: 'Actions',
+        edit: 'Edit', deactivate: 'Deactivate', refresh: 'Refresh', loading: 'Loading...'
+    },
+    ar: {
+        title: 'جودة المكالمات', subtitle: 'تقييم بالذكاء الاصطناعي',
+        overview: 'نظرة عامة', evaluations: 'التقييمات', profiles: 'قوالب التقييم', agents: 'وكلاء الذكاء الاصطناعي', settings: 'مزود الذكاء الاصطناعي',
+        newAgent: 'وكيل جديد', editAgent: 'تعديل الوكيل', sipEndpoint: 'نقطة SIP (PJSIP/name)', voice: 'الصوت', transferTarget: 'هدف التحويل', fallbackTarget: 'هدف الاحتياط', maxConcurrency: 'أقصى تزامن', recordingDisclosure: 'إفصاح التسجيل/الذكاء الاصطناعي', personaPrompt: 'شخصية الوكيل / التعليمات', saveAgent: 'حفظ الوكيل', noAgents: 'لا يوجد وكلاء ذكاء اصطناعي.',
+        totalEvaluations: 'التقييمات', avgScore: 'متوسط الدرجة', passRate: 'نسبة النجاح', criticalFails: 'إخفاقات حرجة',
+        recentEvaluations: 'أحدث التقييمات', noEvaluations: 'لا توجد تقييمات بعد. شغّل تقييماً من نص مكالمة مكتمل.',
+        profile: 'القالب', score: 'الدرجة', result: 'النتيجة', date: 'التاريخ', agent: 'الموظف', call: 'المكالمة',
+        pass: 'ناجح', fail: 'راسب', detail: 'تفاصيل التقييم', criteria: 'المعايير', evidence: 'الدليل',
+        transcript: 'النص', summary: 'الملخص', coaching: 'التدريب', override: 'مراجعة بشرية',
+        humanScore: 'درجة المراجع (0-100)', humanNotes: 'ملاحظات المراجعة', saveReview: 'حفظ المراجعة', saved: 'تم الحفظ.',
+        newProfile: 'قالب جديد', editProfile: 'تعديل القالب', name: 'الاسم', scope: 'النطاق', direction: 'الاتجاه',
+        language: 'اللغة', sampling: 'نسبة العينة %', minDuration: 'أقل مدة (ثانية)', context: 'سياق المكالمة',
+        instructions: 'تعليمات التقييم', rubric: 'معايير التقييم JSON', thresholds: 'درجة النجاح', active: 'مفعل',
+        saveProfile: 'حفظ القالب', cancel: 'إلغاء', runEvaluation: 'تشغيل تقييم', uniqueid: 'معرف المكالمة',
+        selectProfile: 'اختر القالب', run: 'تشغيل', noProfiles: 'لا توجد قوالب تقييم.',
+        provider: 'المزود', apiUrl: 'عنوان API', model: 'النموذج', apiKey: 'مفتاح API (اتركه فارغاً للإبقاء على الحالي)',
+        temperature: 'درجة الحرارة', maxTokens: 'أقصى عدد Tokens', budget: 'الميزانية الشهرية (دولار)', enabled: 'مفعل',
+        requireEvidence: 'اشتراط أدلة نصية', saveSettings: 'حفظ إعدادات المزود', testConnection: 'اختبار الاتصال',
+        hasKey: 'مفتاح API مهيأ', noKey: 'لا يوجد مفتاح API', status: 'الحالة', actions: 'إجراءات',
+        edit: 'تعديل', deactivate: 'تعطيل', refresh: 'تحديث', loading: 'جارٍ التحميل...'
+    }
+};
+const t = words[isRtl ? 'ar' : 'en'];
+%>
+<!DOCTYPE html>
+<html lang="<%= currentLang %>" dir="<%= isRtl ? 'rtl' : 'ltr' %>">
+<head>
+    <script>
+        (function() {
+            const theme = localStorage.getItem('theme') || 'dark';
+            if (theme === 'light') document.documentElement.classList.add('light-theme');
+        })();
+    </script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sokrat VOIP - <%= t.title %></title>
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap" rel="stylesheet">
+    <script src="/js/tailwindcss-browser.js"></script>
+    <style>
+        :root {
+            --bg-primary: #000000; --bg-secondary: #0c0c0e; --bg-hover: #1e1e24;
+            --border-primary: #18181c; --text-primary: #f4f4f5; --text-secondary: #a1a1aa;
+            --text-muted: #8e8e93; --accent-color: #e53e3e; --accent-hover: #fc8181;
+        }
+        body.light-theme {
+            --bg-primary: #f4f4f6; --bg-secondary: #ffffff; --bg-hover: #e4e4e9;
+            --border-primary: #e4e4e9; --text-primary: #18181b; --text-secondary: #3f3f46;
+            --text-muted: #71717a; --accent-color: #b91c1c; --accent-hover: #991b1b;
+        }
+        body { font-family: 'JetBrains Mono', 'Cairo', monospace; background: var(--bg-primary); color: var(--text-primary); }
+        .panel { background: var(--bg-secondary); border: 1px solid var(--border-primary); }
+        .q-tab { padding: .55rem .9rem; border-radius: .65rem; font-size: .75rem; font-weight: 800; color: var(--text-secondary); border: 1px solid transparent; cursor: pointer; }
+        .q-tab.active { background: var(--accent-color); color: #fff; border-color: var(--accent-color); }
+        .q-input { width: 100%; background: var(--bg-primary); border: 1px solid var(--border-primary); color: var(--text-primary); border-radius: .55rem; padding: .5rem .65rem; font-size: .75rem; }
+        .q-btn { padding: .5rem .85rem; border-radius: .55rem; font-size: .72rem; font-weight: 800; cursor: pointer; border: 1px solid var(--border-primary); color: var(--text-primary); background: var(--bg-hover); }
+        .q-btn-primary { background: var(--accent-color); border-color: var(--accent-color); color: #fff; }
+        .q-btn-danger { background: #7f1d1d; border-color: #991b1b; color: #fff; }
+        .q-table th { text-align: start; padding: .6rem .5rem; color: var(--text-muted); font-size: .65rem; text-transform: uppercase; letter-spacing: .04em; }
+        .q-table td { padding: .65rem .5rem; border-top: 1px solid var(--border-primary); font-size: .75rem; vertical-align: top; }
+        .q-modal { position: fixed; inset: 0; background: rgba(0,0,0,.65); display: none; align-items: center; justify-content: center; padding: 1rem; z-index: 100; }
+        .q-modal.open { display: flex; }
+        .q-badge-pass { background: rgba(16,185,129,.12); color: #34d399; border: 1px solid rgba(16,185,129,.3); }
+        .q-badge-fail { background: rgba(239,68,68,.12); color: #f87171; border: 1px solid rgba(239,68,68,.3); }
+        .q-badge { padding: .2rem .45rem; border-radius: .35rem; font-size: .62rem; font-weight: 900; }
+        body.light-theme .q-input { background: #fff; color: #18181b; }
+    </style>
+</head>
+<body class="flex flex-col md:flex-row min-h-screen m-0 p-0">
+    <%- include('sidebar') %>
+    <div class="flex-1 p-5 md:p-8 min-h-screen">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-5">
+            <div>
+                <h1 class="text-2xl md:text-3xl font-extrabold"><%= t.title %> <span style="color:var(--accent-color)"><%= t.subtitle %></span></h1>
+                <p class="text-xs mt-1" style="color:var(--text-muted)"><%= isRtl ? 'تقييم المكالمات بالذكاء الاصطناعي وفق سياق ومعايير وتعليمات قابلة للتخصيص.' : 'AI call evaluation with configurable context, rubric, and instructions.' %></p>
+            </div>
+            <div class="flex gap-2 flex-wrap">
+                <button class="q-btn" onclick="loadAll()"><%= t.refresh %></button>
+                <button class="q-btn q-btn-primary" onclick="openRunModal()"><%= t.runEvaluation %></button>
+            </div>
+        </div>
+
+        <div class="flex gap-2 flex-wrap mb-5">
+            <button class="q-tab active" data-qtab="overview" onclick="switchQTab('overview')"><%= t.overview %></button>
+            <button class="q-tab" data-qtab="evaluations" onclick="switchQTab('evaluations')"><%= t.evaluations %></button>
+            <button class="q-tab" data-qtab="profiles" onclick="switchQTab('profiles')"><%= t.profiles %></button>
+            <button class="q-tab" data-qtab="agents" onclick="switchQTab('agents')"><%= t.agents %></button>
+            <button class="q-tab" data-qtab="settings" onclick="switchQTab('settings')"><%= t.settings %></button>
+        </div>
+
+        <div id="qtab-overview" class="qtab-panel">
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+                <div class="panel rounded-xl p-4"><div class="text-[10px] uppercase font-bold" style="color:var(--text-muted)"><%= t.totalEvaluations %></div><div id="statTotal" class="text-2xl font-black mt-1">0</div></div>
+                <div class="panel rounded-xl p-4"><div class="text-[10px] uppercase font-bold" style="color:var(--text-muted)"><%= t.avgScore %></div><div id="statAvg" class="text-2xl font-black mt-1">--</div></div>
+                <div class="panel rounded-xl p-4"><div class="text-[10px] uppercase font-bold" style="color:var(--text-muted)"><%= t.passRate %></div><div id="statPass" class="text-2xl font-black mt-1">--</div></div>
+                <div class="panel rounded-xl p-4"><div class="text-[10px] uppercase font-bold" style="color:var(--text-muted)"><%= t.criticalFails %></div><div id="statCritical" class="text-2xl font-black mt-1">0</div></div>
+            </div>
+            <div class="panel rounded-xl p-4">
+                <div class="flex items-center justify-between mb-3"><h2 class="text-sm font-extrabold"><%= t.recentEvaluations %></h2><span id="evalCount" class="text-[10px]" style="color:var(--text-muted)"></span></div>
+                <div class="overflow-auto"><table class="w-full q-table"><thead><tr><th><%= t.date %></th><th><%= t.profile %></th><th><%= t.agent %></th><th><%= t.score %></th><th><%= t.result %></th><th></th></tr></thead><tbody id="recentEvalBody"></tbody></table></div>
+            </div>
+        </div>
+
+        <div id="qtab-evaluations" class="qtab-panel hidden">
+            <div class="panel rounded-xl p-4">
+                <div class="overflow-auto"><table class="w-full q-table"><thead><tr><th><%= t.date %></th><th><%= t.profile %></th><th><%= t.call %></th><th><%= t.agent %></th><th><%= t.score %></th><th><%= t.result %></th><th></th></tr></thead><tbody id="evalBody"></tbody></table></div>
+            </div>
+        </div>
+
+        <div id="qtab-profiles" class="qtab-panel hidden">
+            <div class="flex justify-between items-center mb-3">
+                <h2 class="text-sm font-extrabold"><%= t.profiles %></h2>
+                <button class="q-btn q-btn-primary" onclick="openProfileModal()">+ <%= t.newProfile %></button>
+            </div>
+            <div class="panel rounded-xl p-4 overflow-auto"><table class="w-full q-table"><thead><tr><th><%= t.name %></th><th><%= t.scope %></th><th><%= t.direction %></th><th><%= t.language %></th><th><%= t.sampling %></th><th><%= t.active %></th><th></th></tr></thead><tbody id="profileBody"></tbody></table></div>
+        </div>
+
+        <div id="qtab-agents" class="qtab-panel hidden">
+            <div class="flex justify-between items-center mb-3">
+                <h2 class="text-sm font-extrabold"><%= t.agents %></h2>
+                <button class="q-btn q-btn-primary" onclick="openAgentModal()">+ <%= t.newAgent %></button>
+            </div>
+            <div class="panel rounded-xl p-4 overflow-auto"><table class="w-full q-table"><thead><tr><th><%= t.name %></th><th><%= t.sipEndpoint %></th><th><%= t.direction %></th><th><%= t.language %></th><th><%= t.maxConcurrency %></th><th><%= t.active %></th><th></th></tr></thead><tbody id="agentBody"></tbody></table></div>
+        </div>
+
+        <div id="qtab-settings" class="qtab-panel hidden">
+            <div class="panel rounded-xl p-5 max-w-3xl">
+                <div class="flex items-center gap-2 mb-4"><h2 class="text-sm font-extrabold"><%= t.settings %></h2><span id="keyBadge" class="q-badge q-badge-fail">--</span></div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <label class="text-[10px] font-bold"><%= t.provider %><select id="setProvider" class="q-input mt-1"><option value="openai">OpenAI</option><option value="anthropic">Anthropic</option><option value="gemini">Gemini</option><option value="groq">Groq</option><option value="openrouter">OpenRouter</option><option value="custom">Custom (OpenAI-compatible)</option></select></label>
+                    <label class="text-[10px] font-bold"><%= t.model %><input id="setModel" class="q-input mt-1" placeholder="gpt-4o-mini"></label>
+                    <label class="text-[10px] font-bold md:col-span-2"><%= t.apiUrl %><input id="setApiUrl" class="q-input mt-1" placeholder="https://api.openai.com/v1"></label>
+                    <label class="text-[10px] font-bold md:col-span-2"><%= t.apiKey %><input id="setApiKey" type="password" class="q-input mt-1" autocomplete="new-password"></label>
+                    <label class="text-[10px] font-bold"><%= t.temperature %><input id="setTemp" type="number" step="0.1" min="0" max="2" class="q-input mt-1"></label>
+                    <label class="text-[10px] font-bold"><%= t.maxTokens %><input id="setMaxTokens" type="number" min="256" class="q-input mt-1"></label>
+                    <label class="text-[10px] font-bold"><%= t.budget %><input id="setBudget" type="number" step="1" min="0" class="q-input mt-1"></label>
+                    <label class="flex items-center gap-2 text-[10px] font-bold mt-5"><input id="setEnabled" type="checkbox" class="w-4 h-4"><%= t.enabled %></label>
+                    <label class="flex items-center gap-2 text-[10px] font-bold mt-5"><input id="setEvidence" type="checkbox" class="w-4 h-4"><%= t.requireEvidence %></label>
+                </div>
+                <div class="flex gap-2 mt-4"><button class="q-btn q-btn-primary" onclick="saveSettings()"><%= t.saveSettings %></button><button class="q-btn" onclick="testSettings()"><%= t.testConnection %></button><span id="settingsMsg" class="text-xs self-center" style="color:var(--text-muted)"></span></div>
+            </div>
+        </div>
+
+        <div id="detailPanel" class="panel rounded-xl p-5 mt-5 hidden">
+            <div class="flex items-center justify-between mb-3"><h2 class="text-sm font-extrabold"><%= t.detail %></h2><button class="q-btn" onclick="document.getElementById('detailPanel').classList.add('hidden')"><%= t.cancel %></button></div>
+            <div id="detailContent"></div>
+        </div>
+    </div>
+
+    <div id="agentModal" class="q-modal">
+        <div class="panel rounded-xl p-5 w-full max-w-2xl max-h-[90vh] overflow-auto">
+            <div class="flex justify-between items-center mb-3"><h3 id="agentModalTitle" class="text-sm font-extrabold"><%= t.newAgent %></h3><button class="q-btn" onclick="closeModal('agentModal')"><%= t.cancel %></button></div>
+            <input id="agentId" type="hidden">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <label class="text-[10px] font-bold"><%= t.name %><input id="aName" class="q-input mt-1"></label>
+                <label class="text-[10px] font-bold"><%= t.sipEndpoint %><input id="aSip" class="q-input mt-1" placeholder="PJSIP/ai-provider"></label>
+                <label class="text-[10px] font-bold"><%= t.direction %><select id="aDirection" class="q-input mt-1"><option value="both">both</option><option value="inbound">inbound</option><option value="outbound">outbound</option></select></label>
+                <label class="text-[10px] font-bold"><%= t.language %><input id="aLanguage" class="q-input mt-1" value="ar"></label>
+                <label class="text-[10px] font-bold"><%= t.voice %><input id="aVoice" class="q-input mt-1" placeholder="provider voice id"></label>
+                <label class="text-[10px] font-bold"><%= t.maxConcurrency %><input id="aConcurrency" type="number" min="1" max="100" class="q-input mt-1" value="1"></label>
+                <label class="text-[10px] font-bold"><%= t.transferTarget %><input id="aTransfer" class="q-input mt-1" placeholder="from-internal,101,1"></label>
+                <label class="text-[10px] font-bold"><%= t.fallbackTarget %><input id="aFallback" class="q-input mt-1" placeholder="ext-local,101,1"></label>
+                <label class="flex items-center gap-2 text-[10px] font-bold mt-5"><input id="aActive" type="checkbox" class="w-4 h-4" checked><%= t.active %></label>
+                <label class="flex items-center gap-2 text-[10px] font-bold mt-5"><input id="aDisclosure" type="checkbox" class="w-4 h-4" checked><%= t.recordingDisclosure %></label>
+            </div>
+            <label class="block text-[10px] font-bold mt-3"><%= t.personaPrompt %><textarea id="aPrompt" rows="5" class="q-input mt-1"></textarea></label>
+            <div class="flex gap-2 mt-4"><button class="q-btn q-btn-primary" onclick="saveAgent()"><%= t.saveAgent %></button><button class="q-btn" onclick="closeModal('agentModal')"><%= t.cancel %></button><span id="agentMsg" class="text-xs self-center" style="color:var(--text-muted)"></span></div>
+        </div>
+    </div>
+
+    <div id="profileModal" class="q-modal">
+        <div class="panel rounded-xl p-5 w-full max-w-3xl max-h-[90vh] overflow-auto">
+            <div class="flex justify-between items-center mb-3"><h3 id="profileModalTitle" class="text-sm font-extrabold"><%= t.newProfile %></h3><button class="q-btn" onclick="closeModal('profileModal')"><%= t.cancel %></button></div>
+            <input id="profileId" type="hidden">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <label class="text-[10px] font-bold"><%= t.name %><input id="pName" class="q-input mt-1"></label>
+                <label class="text-[10px] font-bold"><%= t.scope %><select id="pScope" class="q-input mt-1"><option value="global">global</option><option value="campaign">campaign</option><option value="queue">queue</option><option value="did">did</option><option value="agent">agent</option><option value="team">team</option></select></label>
+                <label class="text-[10px] font-bold"><%= t.direction %><select id="pDirection" class="q-input mt-1"><option value="any">any</option><option value="inbound">inbound</option><option value="outbound">outbound</option><option value="internal">internal</option></select></label>
+                <label class="text-[10px] font-bold"><%= t.language %><input id="pLanguage" class="q-input mt-1" value="ar"></label>
+                <label class="text-[10px] font-bold"><%= t.sampling %><input id="pSampling" type="number" min="0" max="100" class="q-input mt-1" value="100"></label>
+                <label class="text-[10px] font-bold"><%= t.minDuration %><input id="pMinDuration" type="number" min="0" class="q-input mt-1" value="30"></label>
+                <label class="text-[10px] font-bold"><%= t.thresholds %><input id="pPassScore" type="number" min="0" max="100" class="q-input mt-1" value="75"></label>
+                <label class="flex items-center gap-2 text-[10px] font-bold mt-5"><input id="pActive" type="checkbox" class="w-4 h-4" checked><%= t.active %></label>
+            </div>
+            <label class="block text-[10px] font-bold mt-3"><%= t.context %><textarea id="pContext" rows="4" class="q-input mt-1"></textarea></label>
+            <label class="block text-[10px] font-bold mt-3"><%= t.instructions %><textarea id="pInstructions" rows="4" class="q-input mt-1"></textarea></label>
+            <label class="block text-[10px] font-bold mt-3"><%= t.rubric %><textarea id="pRubric" rows="12" class="q-input mt-1 font-mono"></textarea></label>
+            <div class="flex gap-2 mt-4"><button class="q-btn q-btn-primary" onclick="saveProfile()"><%= t.saveProfile %></button><button class="q-btn" onclick="closeModal('profileModal')"><%= t.cancel %></button><span id="profileMsg" class="text-xs self-center" style="color:var(--text-muted)"></span></div>
+        </div>
+    </div>
+
+    <div id="runModal" class="q-modal">
+        <div class="panel rounded-xl p-5 w-full max-w-lg">
+            <div class="flex justify-between items-center mb-3"><h3 class="text-sm font-extrabold"><%= t.runEvaluation %></h3><button class="q-btn" onclick="closeModal('runModal')"><%= t.cancel %></button></div>
+            <label class="block text-[10px] font-bold"><%= t.uniqueid %><input id="runUniqueid" class="q-input mt-1" placeholder="1793..."></label>
+            <label class="block text-[10px] font-bold mt-3"><%= t.selectProfile %><select id="runProfile" class="q-input mt-1"></select></label>
+            <div class="flex gap-2 mt-4"><button class="q-btn q-btn-primary" onclick="runEvaluation()"><%= t.run %></button><span id="runMsg" class="text-xs self-center" style="color:var(--text-muted)"></span></div>
+        </div>
+    </div>
+
+    <script>
+        const I18N = <%- JSON.stringify(t) %>;
+        let profiles = [];
+        let agents = [];
+        let evaluations = [];
+
+        async function api(path, options = {}) {
+            const res = await fetch('/api/ai' + path, {
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+                ...options
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+            return data;
+        }
+
+        function esc(value) {
+            return String(value === null || value === undefined ? '' : value)
+                .replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+        }
+        function fmtDate(value) { return value ? new Date(value).toLocaleString() : ''; }
+        function switchQTab(name) {
+            document.querySelectorAll('.qtab-panel').forEach(el => el.classList.add('hidden'));
+            document.getElementById('qtab-' + name).classList.remove('hidden');
+            document.querySelectorAll('[data-qtab]').forEach(el => el.classList.toggle('active', el.dataset.qtab === name));
+        }
+        function openModal(id) { document.getElementById(id).classList.add('open'); }
+        function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+        async function loadAll() {
+            await Promise.all([loadSettings(), loadProfiles(), loadAgents(), loadEvaluations(), loadScorecards()]);
+        }
+
+        async function loadSettings() {
+            try {
+                const data = await api('/settings');
+                const s = data.settings || {};
+                document.getElementById('setProvider').value = s.provider || 'openai';
+                document.getElementById('setModel').value = s.model || '';
+                document.getElementById('setApiUrl').value = s.api_url || '';
+                document.getElementById('setTemp').value = s.temperature ?? 0;
+                document.getElementById('setMaxTokens').value = s.max_tokens || 4096;
+                document.getElementById('setBudget').value = s.monthly_budget_usd || 0;
+                document.getElementById('setEnabled').checked = Boolean(s.enabled);
+                document.getElementById('setEvidence').checked = Boolean(s.require_evidence);
+                const badge = document.getElementById('keyBadge');
+                badge.textContent = s.has_api_key ? I18N.hasKey : I18N.noKey;
+                badge.className = 'q-badge ' + (s.has_api_key ? 'q-badge-pass' : 'q-badge-fail');
+            } catch (err) { console.error(err); }
+        }
+
+        async function saveSettings() {
+            const msg = document.getElementById('settingsMsg');
+            msg.textContent = '...';
+            try {
+                await api('/settings', {
+                    method: 'PUT',
+                    body: JSON.stringify({
+                        enabled: document.getElementById('setEnabled').checked,
+                        provider: document.getElementById('setProvider').value,
+                        api_url: document.getElementById('setApiUrl').value,
+                        model: document.getElementById('setModel').value,
+                        api_key: document.getElementById('setApiKey').value,
+                        temperature: Number(document.getElementById('setTemp').value || 0),
+                        max_tokens: Number(document.getElementById('setMaxTokens').value || 4096),
+                        monthly_budget_usd: Number(document.getElementById('setBudget').value || 0),
+                        require_evidence: document.getElementById('setEvidence').checked
+                    })
+                });
+                document.getElementById('setApiKey').value = '';
+                msg.textContent = I18N.saved;
+                await loadSettings();
+            } catch (err) { msg.textContent = err.message; }
+        }
+
+        async function testSettings() {
+            const msg = document.getElementById('settingsMsg');
+            msg.textContent = '...';
+            try {
+                const data = await api('/settings/test', { method: 'POST' });
+                msg.textContent = data.success ? ('OK ' + data.latencyMs + 'ms') : ('Failed: ' + (data.error || data.sample || ''));
+            } catch (err) { msg.textContent = err.message; }
+        }
+
+        async function loadAgents() {
+            try {
+                const data = await api('/agents');
+                agents = data.agents || [];
+                const body = document.getElementById('agentBody');
+                body.innerHTML = agents.length ? agents.map(a => `
+                    <tr>
+                        <td class="font-bold">${esc(a.name)}<div class="text-[10px]" style="color:var(--text-muted)">${esc(a.description || '')}</div></td>
+                        <td class="font-mono text-[11px]">${esc(a.sip_endpoint)}</td>
+                        <td>${esc(a.direction)}</td>
+                        <td>${esc(a.language)}</td>
+                        <td>${esc(a.max_concurrency)}</td>
+                        <td>${a.active ? '<span class="q-badge q-badge-pass">active</span>' : '<span class="q-badge q-badge-fail">off</span>'}</td>
+                        <td class="text-end whitespace-nowrap"><button class="q-btn" onclick="openAgentModal(${a.id})">${I18N.edit}</button> <button class="q-btn q-btn-danger" onclick="deactivateAgent(${a.id})">${I18N.deactivate}</button></td>
+                    </tr>`).join('') : `<tr><td colspan="7" class="text-center py-6" style="color:var(--text-muted)">${I18N.noAgents}</td></tr>`;
+            } catch (err) { console.error(err); }
+        }
+
+        function openAgentModal(id) {
+            const a = agents.find(item => Number(item.id) === Number(id));
+            document.getElementById('agentModalTitle').textContent = a ? I18N.editAgent : I18N.newAgent;
+            document.getElementById('agentId').value = a ? a.id : '';
+            document.getElementById('aName').value = a ? a.name : '';
+            document.getElementById('aSip').value = a ? a.sip_endpoint : '';
+            document.getElementById('aDirection').value = a ? a.direction : 'both';
+            document.getElementById('aLanguage').value = a ? a.language : 'ar';
+            document.getElementById('aVoice').value = a ? (a.voice || '') : '';
+            document.getElementById('aConcurrency').value = a ? a.max_concurrency : 1;
+            document.getElementById('aTransfer').value = a ? (a.transfer_target || '') : '';
+            document.getElementById('aFallback').value = a ? (a.fallback_target || '') : '';
+            document.getElementById('aActive').checked = a ? Boolean(a.active) : true;
+            document.getElementById('aDisclosure').checked = a ? Boolean(a.recording_disclosure) : true;
+            document.getElementById('aPrompt').value = a ? (a.persona_prompt || '') : '';
+            openModal('agentModal');
+        }
+
+        async function saveAgent() {
+            const msg = document.getElementById('agentMsg');
+            const id = document.getElementById('agentId').value;
+            const payload = {
+                name: document.getElementById('aName').value,
+                sip_endpoint: document.getElementById('aSip').value,
+                direction: document.getElementById('aDirection').value,
+                language: document.getElementById('aLanguage').value,
+                voice: document.getElementById('aVoice').value,
+                max_concurrency: Number(document.getElementById('aConcurrency').value || 1),
+                transfer_target: document.getElementById('aTransfer').value,
+                fallback_target: document.getElementById('aFallback').value,
+                active: document.getElementById('aActive').checked,
+                recording_disclosure: document.getElementById('aDisclosure').checked,
+                persona_prompt: document.getElementById('aPrompt').value
+            };
+            msg.textContent = '...';
+            try {
+                await api('/agents' + (id ? '/' + id : ''), { method: id ? 'PUT' : 'POST', body: JSON.stringify(payload) });
+                msg.textContent = I18N.saved;
+                closeModal('agentModal');
+                await loadAgents();
+            } catch (err) { msg.textContent = err.message; }
+        }
+
+        async function deactivateAgent(id) {
+            if (!confirm('Deactivate this AI agent?')) return;
+            try { await api('/agents/' + id, { method: 'DELETE' }); await loadAgents(); } catch (err) { alert(err.message); }
+        }
+
+        async function loadProfiles() {
+            try {
+                const data = await api('/profiles');
+                profiles = data.profiles || [];
+                const body = document.getElementById('profileBody');
+                body.innerHTML = profiles.length ? profiles.map(p => `
+                    <tr>
+                        <td class="font-bold">${esc(p.name)}<div class="text-[10px]" style="color:var(--text-muted)">${esc(p.description || '')}</div></td>
+                        <td>${esc(p.scope_type)}${p.scope_id ? ':' + esc(p.scope_id) : ''}</td>
+                        <td>${esc(p.direction)}</td>
+                        <td>${esc(p.language)}</td>
+                        <td>${esc(p.sampling_percent)}%</td>
+                        <td>${p.active ? '<span class="q-badge q-badge-pass">active</span>' : '<span class="q-badge q-badge-fail">off</span>'}</td>
+                        <td class="text-end whitespace-nowrap"><button class="q-btn" onclick="openProfileModal(${p.id})">${I18N.edit}</button> <button class="q-btn q-btn-danger" onclick="deactivateProfile(${p.id})">${I18N.deactivate}</button></td>
+                    </tr>`).join('') : `<tr><td colspan="7" class="text-center py-6" style="color:var(--text-muted)">${I18N.noProfiles}</td></tr>`;
+                const select = document.getElementById('runProfile');
+                select.innerHTML = profiles.filter(p => p.active).map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+            } catch (err) { console.error(err); }
+        }
+
+        function openProfileModal(id) {
+            const p = profiles.find(item => Number(item.id) === Number(id));
+            document.getElementById('profileModalTitle').textContent = p ? I18N.editProfile : I18N.newProfile;
+            document.getElementById('profileId').value = p ? p.id : '';
+            document.getElementById('pName').value = p ? p.name : '';
+            document.getElementById('pScope').value = p ? p.scope_type : 'global';
+            document.getElementById('pDirection').value = p ? p.direction : 'any';
+            document.getElementById('pLanguage').value = p ? p.language : 'ar';
+            document.getElementById('pSampling').value = p ? p.sampling_percent : 100;
+            document.getElementById('pMinDuration').value = p ? p.min_duration_sec : 30;
+            document.getElementById('pPassScore').value = p && p.thresholds ? (p.thresholds.pass_score || 75) : 75;
+            document.getElementById('pActive').checked = p ? Boolean(p.active) : true;
+            document.getElementById('pContext').value = p ? (p.context_text || '') : '';
+            document.getElementById('pInstructions').value = p ? (p.instructions_text || '') : '';
+            document.getElementById('pRubric').value = p && p.rubric && p.rubric.length ? JSON.stringify(p.rubric, null, 2) : JSON.stringify([
+                { key: 'greeting', label: 'Greeting & identification', weight: 10, scale: [1, 5], critical: false },
+                { key: 'discovery', label: 'Needs discovery', weight: 20, scale: [1, 5], critical: false },
+                { key: 'compliance', label: 'Required disclosures', weight: 20, scale: [0, 1], critical: true },
+                { key: 'empathy', label: 'Empathy & tone', weight: 15, scale: [1, 5], critical: false },
+                { key: 'resolution', label: 'Resolution', weight: 20, scale: [1, 5], critical: false },
+                { key: 'closing', label: 'Closing', weight: 15, scale: [1, 5], critical: false }
+            ], null, 2);
+            openModal('profileModal');
+        }
+
+        async function saveProfile() {
+            const msg = document.getElementById('profileMsg');
+            let rubric;
+            try { rubric = JSON.parse(document.getElementById('pRubric').value); }
+            catch (_) { msg.textContent = 'Rubric JSON is invalid'; return; }
+            const id = document.getElementById('profileId').value;
+            const payload = {
+                name: document.getElementById('pName').value,
+                scope_type: document.getElementById('pScope').value,
+                direction: document.getElementById('pDirection').value,
+                language: document.getElementById('pLanguage').value,
+                sampling_percent: Number(document.getElementById('pSampling').value || 100),
+                min_duration_sec: Number(document.getElementById('pMinDuration').value || 30),
+                context_text: document.getElementById('pContext').value,
+                instructions_text: document.getElementById('pInstructions').value,
+                rubric,
+                thresholds: { pass_score: Number(document.getElementById('pPassScore').value || 75) },
+                active: document.getElementById('pActive').checked
+            };
+            msg.textContent = '...';
+            try {
+                await api('/profiles' + (id ? '/' + id : ''), { method: id ? 'PUT' : 'POST', body: JSON.stringify(payload) });
+                msg.textContent = I18N.saved;
+                closeModal('profileModal');
+                await loadProfiles();
+            } catch (err) { msg.textContent = err.message; }
+        }
+
+        async function deactivateProfile(id) {
+            if (!confirm('Deactivate this profile?')) return;
+            try { await api('/profiles/' + id, { method: 'DELETE' }); await loadProfiles(); } catch (err) { alert(err.message); }
+        }
+
+        async function loadEvaluations() {
+            try {
+                const data = await api('/evaluations?limit=100');
+                evaluations = data.evaluations || [];
+                const recent = evaluations.slice(0, 10);
+                const renderRows = rows => rows.length ? rows.map(e => `
+                    <tr>
+                        <td>${fmtDate(e.created_at)}</td>
+                        <td>${esc(e.profile_name || e.profile_id)}</td>
+                        <td>${esc(e.src || '')} → ${esc(e.dst || '')}<div class="text-[10px]" style="color:var(--text-muted)">${esc(e.uniqueid || '')}</div></td>
+                        <td>${e.overall_score ?? '--'}</td>
+                        <td>${e.pass ? '<span class="q-badge q-badge-pass">' + I18N.pass + '</span>' : '<span class="q-badge q-badge-fail">' + I18N.fail + '</span>'}</td>
+                        <td class="text-end"><button class="q-btn" onclick="openEvaluation(${e.id})">${I18N.detail}</button></td>
+                    </tr>`).join('') : `<tr><td colspan="6" class="text-center py-6" style="color:var(--text-muted)">${I18N.noEvaluations}</td></tr>`;
+                document.getElementById('recentEvalBody').innerHTML = renderRows(recent);
+                document.getElementById('evalBody').innerHTML = renderRows(evaluations);
+                document.getElementById('evalCount').textContent = evaluations.length + ' total';
+            } catch (err) { console.error(err); }
+        }
+
+        async function loadScorecards() {
+            try {
+                const data = await api('/scorecards');
+                const list = data.profiles || [];
+                const total = list.reduce((a, b) => a + Number(b.evaluations || 0), 0);
+                const weighted = list.reduce((a, b) => a + Number(b.avg_score || 0) * Number(b.evaluations || 0), 0);
+                const fails = list.reduce((a, b) => a + Number(b.critical_fails || 0), 0);
+                const passes = list.reduce((a, b) => a + (Number(b.pass_rate || 0) / 100) * Number(b.evaluations || 0), 0);
+                document.getElementById('statTotal').textContent = total;
+                document.getElementById('statAvg').textContent = total ? (weighted / total).toFixed(1) : '--';
+                document.getElementById('statPass').textContent = total ? Math.round(passes / total * 100) + '%' : '--';
+                document.getElementById('statCritical').textContent = fails;
+            } catch (err) { console.error(err); }
+        }
+
+        async function openEvaluation(id) {
+            const panel = document.getElementById('detailPanel');
+            const content = document.getElementById('detailContent');
+            panel.classList.remove('hidden');
+            content.innerHTML = '<div class="text-xs" style="color:var(--text-muted)">' + I18N.loading + '</div>';
+            try {
+                const data = await api('/evaluations/' + id);
+                const e = data.evaluation || {};
+                const scores = data.scores || [];
+                const segments = data.segments || [];
+                const audio = e.uniqueid ? `<audio controls preload="none" class="w-full mt-2" src="/api/cdr/audio/${encodeURIComponent(e.uniqueid)}"></audio>` : '';
+                content.innerHTML = `
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <div>
+                            <div class="text-lg font-black">${e.overall_score ?? '--'} / 100 <span class="q-badge ${e.pass ? 'q-badge-pass' : 'q-badge-fail'}">${e.pass ? I18N.pass : I18N.fail}</span></div>
+                            <div class="text-xs mt-1" style="color:var(--text-muted)">${esc(e.profile_name || '')} · ${esc(e.provider || '')} ${esc(e.model || '')} · ${fmtDate(e.created_at)}</div>
+                            ${audio}
+                            <h4 class="text-xs font-extrabold mt-4">${I18N.summary}</h4><p class="text-xs mt-1 whitespace-pre-wrap">${esc(e.summary || '')}</p>
+                            <h4 class="text-xs font-extrabold mt-4">${I18N.override}</h4>
+                            <div class="flex gap-2 mt-1"><input id="overrideScore" type="number" min="0" max="100" class="q-input" style="max-width:110px" value="${e.human_score ?? e.overall_score ?? ''}" placeholder="${I18N.humanScore}"><input id="overrideNotes" class="q-input" placeholder="${I18N.humanNotes}" value="${esc(e.human_notes || '')}"><button class="q-btn" onclick="saveOverride(${e.id})">${I18N.saveReview}</button></div>
+                        </div>
+                        <div>
+                            <h4 class="text-xs font-extrabold">${I18N.criteria}</h4>
+                            <div class="space-y-2 mt-2">${scores.map(s => `
+                                <div class="panel rounded-lg p-2">
+                                    <div class="flex justify-between text-xs font-bold"><span>${esc(s.label || s.criterion_key)}</span><span>${s.score} / ${s.weight}%</span></div>
+                                    <div class="text-[11px] mt-1" style="color:var(--text-secondary)">${esc(s.comment || '')}</div>
+                                    ${(() => { try { const ev = JSON.parse(s.evidence_json || '[]'); return ev.length ? ev.map(x => `<div class="text-[10px] mt-1" style="color:var(--text-muted)">“${esc(x.quote)}” ${x.start_ms != null ? '· ' + (x.start_ms / 1000).toFixed(1) + 's' : ''}</div>`).join('') : ''; } catch (_) { return ''; } })()}
+                                </div>`).join('')}</div>
+                        </div>
+                    </div>
+                    <h4 class="text-xs font-extrabold mt-4">${I18N.transcript}</h4>
+                    <div class="panel rounded-lg p-3 mt-1 max-h-72 overflow-auto text-xs space-y-1">${segments.length ? segments.map(s => `<div><span class="font-bold">${esc(s.speaker)}</span> <span style="color:var(--text-muted)">${s.start_ms != null ? (s.start_ms / 1000).toFixed(1) + 's' : ''}</span> ${esc(s.text)}</div>`).join('') : esc(data.transcript?.transcript || '')}</div>
+                `;
+            } catch (err) { content.innerHTML = `<div class="text-xs" style="color:#f87171">${esc(err.message)}</div>`; }
+        }
+
+        async function saveOverride(id) {
+            try {
+                await api('/evaluations/' + id + '/override', { method: 'POST', body: JSON.stringify({ human_score: Number(document.getElementById('overrideScore').value), human_notes: document.getElementById('overrideNotes').value }) });
+                alert(I18N.saved);
+                await loadAll();
+            } catch (err) { alert(err.message); }
+        }
+
+        function openRunModal() {
+            if (!profiles.length) { alert(I18N.noProfiles); return; }
+            openModal('runModal');
+        }
+
+        async function runEvaluation() {
+            const msg = document.getElementById('runMsg');
+            msg.textContent = '...';
+            try {
+                const data = await api('/evaluations/run', { method: 'POST', body: JSON.stringify({ uniqueid: document.getElementById('runUniqueid').value.trim(), profile_id: Number(document.getElementById('runProfile').value) }) });
+                msg.textContent = data.job ? ('Queued #' + data.job.id) : I18N.saved;
+                setTimeout(loadAll, 1500);
+            } catch (err) { msg.textContent = err.message; }
+        }
+
+        document.addEventListener('keydown', e => { if (e.key === 'Escape') document.querySelectorAll('.q-modal.open').forEach(el => el.classList.remove('open')); });
+        loadAll();
+    </script>
+</body>
+</html>

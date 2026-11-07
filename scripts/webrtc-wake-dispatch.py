@@ -66,6 +66,8 @@ def post(config, path, body, timeout, opener, read_body=True):
 
 
 def dispatch(config, args, opener=urllib.request.urlopen):
+    if not isinstance(config, dict) or not str(config.get('gatewayUrl', '')).startswith('https://'):
+        return False
     if len(args) not in (4, 5):
         return False
     has_websocket_contact = len(args) == 5 and args[4] == '1'
@@ -82,19 +84,26 @@ def dispatch(config, args, opener=urllib.request.urlopen):
         configs.append(read_config(LOCAL_HOOK, allow_http=True))
     except Exception:
         pass
+    dispatched = False
     for candidate in configs:
         try:
-            path = '/api/gateway/incoming-call-live' if has_websocket_contact else '/api/gateway/incoming-call'
-            status, data = post(candidate, path, body, 6, opener)
+            # An open SIP contact is not proof that the app can present the
+            # INVITE: it can be a stale registration, a frozen JS runtime, or a
+            # different client on the same extension. Always send the push and
+            # let the app deduplicate by callId. The return value still controls
+            # the PBX wake wait: only a contact-less extension needs to wait for
+            # a new registration before dialing.
+            status, data = post(candidate, '/api/gateway/incoming-call', body, 6, opener)
             if status != 200 or len(data) > 4096:
                 continue
             result = json.loads(data)
             if (result.get('status') in ('dispatched', 'partial')
                     and type(result.get('count')) is int and result['count'] > 0):
-                return True
+                dispatched = True
+                break
         except Exception:
             continue
-    return False
+    return dispatched and not has_websocket_contact
 
 
 def cancel(config, args, opener=urllib.request.urlopen):

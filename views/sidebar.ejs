@@ -18,7 +18,7 @@ const sidebarWords = {
         vmGreetingResetConfirm: "Reset to default Asterisk voicemail prompts?",
         vmGreetingChangeMode: "Changing mode will save a new greeting. Continue?",
         vmSelectAll: "Select All",
-        dashLink: "Overview", cdrLink: "Call History", vmLink: "Voicemails", empLink: "Employee Metrics", extLink: "Employees", opLink: "Live Panel", dongleLink: "GSM Dongles", softphoneLink: "Sokrat VOICE", configLink: "Configuration", dialerLink: "Auto-Dial", contactsLink: "Contacts", usersLink: "Users", apiKeysLink: "API Keys", storageLink: "SysMon", liveClock: "System Clock", themeLabel: "Theme", langLabel: "Language", settingsTitle: "Settings", rowsLabel: "Rows per page", addRec: "Add a Recording", smtpSettings: "Server SMTP", alertsSettings: "System Alerts", alertsModalTitle: "System Alerts & Monitoring", cpanelLink: "Webmin", userLabel: "User", versionLabel: "Version", issabelGuiLink: "Issabel", gatewayTunnelTitle: "Sokrat Gateway", gatewayTunnelModalTitle: "Sokrat Gateway Connection",
+        dashLink: "Overview", cdrLink: "Call History", vmLink: "Voicemails", empLink: "Employee Metrics", extLink: "Employees", opLink: "Live Panel", dongleLink: "GSM Dongles", softphoneLink: "Sokrat VOICE", configLink: "Configuration", dialerLink: "Auto-Dial", qualityLink: "Call Quality", contactsLink: "Contacts", usersLink: "Users", apiKeysLink: "API Keys", storageLink: "SysMon", liveClock: "System Clock", themeLabel: "Theme", langLabel: "Language", settingsTitle: "Settings", rowsLabel: "Rows per page", addRec: "Add a Recording", smtpSettings: "Server SMTP", alertsSettings: "System Alerts", alertsModalTitle: "System Alerts & Monitoring", cpanelLink: "Webmin", userLabel: "User", versionLabel: "Version", issabelGuiLink: "Issabel", gatewayTunnelTitle: "Sokrat Gateway", gatewayTunnelModalTitle: "Sokrat Gateway Connection",
         logoutLabel: "Sign Out", updateSokrat: "Update Sokrat", restoreBackup: "Restore Backup", gitHistory: "Git History", aiSttSettings: "STT", aiSttModalTitle: "Speech-to-Text Engine", netInfo: "Networks", settingsSubtitle: "Preferences and system controls", preferencesLabel: "Preferences", systemLabel: "System", coreToolsLabel: "Core Tools", systemAdminLabel: "Administration & Tools", appearanceLabel: "Appearance", darkModeLabel: "Dark mode", lightModeLabel: "Light mode",
         recTitle: "Add a Recording", recName: "Recording Name", recPlaceholder: "e.g. welcome_greeting", recFile: "Audio File", recNote: "Accepted: MP3, M4A, WAV, OGG, FLAC, AAC, MPEG (max 50MB)", recUploadStatus: "Uploading...", recCancel: "Cancel", recUpload: "Upload", recComplete: "Complete!", recFailed: "Failed", recSelectFileErr: "Please select a file", recNameErr: "Please enter a recording name",
         timeSettings: "Time Settings", timeModalTitle: "Time & Timezone", currentTime: "Current Time", timezone: "Timezone", searchTimezone: "Search timezone...", ntpSync: "NTP Synchronization", setManually: "Set Manually", dateLabel: "Date", timeLabel: "Time", saveSettings: "Save Settings", saving: "Saving...", savedSuccess: "Time settings saved successfully", saveFailed: "Failed to save time settings", timezoneChanged: "Timezone changed", ntpToggled: "NTP toggled", timeSetManually: "Time set manually", loadingTimezone: "Loading...",
@@ -42,7 +42,7 @@ const sidebarWords = {
         vmGreetingResetConfirm: "إعادة تعيين ترحيب البريد الصوتي للافتراضي؟",
         vmGreetingChangeMode: "تغيير الوضع سيحفظ ترحيباً جديداً. هل تريد المتابعة؟",
         vmSelectAll: "اختر الكل",
-        dashLink: "نظرة عامة", cdrLink: "سجل المكالمات", vmLink: "البريد الصوتي", empLink: "مقاييس الموظفين", extLink: "الموظفين", opLink: "لوحه المراقبه", dongleLink: "شرائح GSM", softphoneLink: "هاتف Sokrat VOICE", configLink: "الإعدادات", dialerLink: "الاتصال التلقائي", contactsLink: "جهات الاتصال", usersLink: "المستخدمين", apiKeysLink: "مفاتيح API", storageLink: "SysMon", liveClock: "ساعة النظام", themeLabel: "المظهر", langLabel: "اللغة", settingsTitle: "الإعدادات", rowsLabel: "عدد الصفوف", addRec: "إضافة تسجيل صوتي", smtpSettings: "إعدادات SMTP", alertsSettings: "تنبيهات النظام", alertsModalTitle: "تنبيهات ومراقبة النظام", cpanelLink: "Webmin", userLabel: "المستخدم", versionLabel: "الإصدار", issabelGuiLink: "Issabel",
+        dashLink: "نظرة عامة", cdrLink: "سجل المكالمات", vmLink: "البريد الصوتي", empLink: "مقاييس الموظفين", extLink: "الموظفين", opLink: "لوحه المراقبه", dongleLink: "شرائح GSM", softphoneLink: "هاتف Sokrat VOICE", configLink: "الإعدادات", dialerLink: "الاتصال التلقائي", qualityLink: "جودة المكالمات", contactsLink: "جهات الاتصال", usersLink: "المستخدمين", apiKeysLink: "مفاتيح API", storageLink: "SysMon", liveClock: "ساعة النظام", themeLabel: "المظهر", langLabel: "اللغة", settingsTitle: "الإعدادات", rowsLabel: "عدد الصفوف", addRec: "إضافة تسجيل صوتي", smtpSettings: "إعدادات SMTP", alertsSettings: "تنبيهات النظام", alertsModalTitle: "تنبيهات ومراقبة النظام", cpanelLink: "Webmin", userLabel: "المستخدم", versionLabel: "الإصدار", issabelGuiLink: "Issabel",
         logoutLabel: "تسجيل الخروج", updateSokrat: "ترقية سقراط الآمنة", restoreBackup: "استعادة النسخة الاحتياطية", gitHistory: "سجل Git للنظام", aiSttSettings: "STT", aiSttModalTitle: "محرك تحويل الصوت إلى نص (STT)", netInfo: "الشبكات", settingsSubtitle: "التفضيلات وعناصر تحكم النظام", preferencesLabel: "التفضيلات", systemLabel: "النظام", coreToolsLabel: "الأدوات الأساسية", systemAdminLabel: "إدارة وأدوات النظام", appearanceLabel: "المظهر", darkModeLabel: "الوضع الداكن", lightModeLabel: "الوضع الفاتح",
         recTitle: "إضافة تسجيل صوتي", recName: "اسم التسجيل", recPlaceholder: "مثال: welcome_greeting", recFile: "ملف الصوت", recNote: "المرفقات المقبولة: MP3, M4A, WAV, OGG, FLAC, AAC, MPEG (الحد الأقصى 50 ميجابايت)", recUploadStatus: "جاري الرفع...", recCancel: "إلغاء", recUpload: "رفع", recComplete: "اكتمل الرفع!", recFailed: "فشل الرفع", recSelectFileErr: "يرجى اختيار ملف", recNameErr: "يرجى إدخال اسم التسجيل",
         timeSettings: "إعدادات الوقت", timeModalTitle: "الوقت والمنطقة الزمنية", currentTime: "الوقت الحالي", timezone: "المنطقة الزمنية", searchTimezone: "ابحث عن المنطقة الزمنية...", ntpSync: "مزامنة NTP", setManually: "ضبط يدوي", dateLabel: "التاريخ", timeLabel: "الوقت", saveSettings: "حفظ الإعدادات", saving: "جاري الحفظ...", savedSuccess: "تم حفظ إعدادات الوقت بنجاح", saveFailed: "فشل حفظ إعدادات الوقت", timezoneChanged: "تم تغيير المنطقة الزمنية", ntpToggled: "تم تبديل NTP", timeSetManually: "تم ضبط الوقت يدوياً", loadingTimezone: "جارٍ التحميل...",
@@ -56,7 +56,7 @@ const isRoot = Boolean((typeof isRootUser !== 'undefined' && isRootUser) || (typ
 const isSuper = (typeof isSuperAdmin !== 'undefined' && isSuperAdmin) || (typeof currentUser !== 'undefined' && (currentUser === 'admin' || currentUser === 'root')) || isRoot;
 const curPage = typeof currentPage !== 'undefined' ? currentPage : '';
 function can(tab) {
-    if (tab === 'campaigns' || tab === 'dialer') return isRoot;
+    if (tab === 'campaigns' || tab === 'dialer' || tab === 'ai-evaluations') return isRoot;
     if (isSuper) return true;
     if (allowed.includes(tab)) return true;
     if (tab === 'call_history' && (allowed.includes('cdr') || allowed.some(p => p.startsWith('cdr-')))) return true;
@@ -3395,6 +3395,18 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
             </a>
             <% } %>
 
+            <!-- 3. AI Call Quality -->
+            <% if (can('ai-evaluations')) { %>
+            <a href="/quality?lang=<%= currentLang %>" title="<%= sbT.qualityLink %>"
+               class="nav-item flex items-center px-4 py-3 rounded-lg transition-all duration-150 text-sm font-semibold relative
+               <%= curPage === '/quality' ? 'bg-[var(--accent-color)] text-white border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
+                <svg class="w-4 h-4 me-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 2l2.4 7.2H22l-6 4.4 2.3 7.2-6.3-4.5-6.3 4.5 2.3-7.2-6-4.4h7.6z"/>
+                </svg>
+                <span class="sidebar-text"><%= sbT.qualityLink %></span>
+            </a>
+            <% } %>
+
             <!-- 3. Live Panel -->
             <% if (can('operator')) { %>
             <a href="/operator?lang=<%= currentLang %>" title="<%= sbT.opLink %>"
@@ -3480,6 +3492,18 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
                <%= curPage === '/users' ? 'bg-[var(--accent-color)] text-white border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
                 <svg class="w-4 h-4 me-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                 <span class="sidebar-text"><%= sbT.usersLink %></span>
+            </a>
+            <% } %>
+
+            <!-- 8b. Cloud Tenants (root only) -->
+            <% if (isRoot) { %>
+            <a href="/tenants?lang=<%= currentLang %>" title="<%= currentLang === 'ar' ? 'المستأجرون السحابيون' : 'Cloud Tenants' %>"
+               class="nav-item flex items-center px-4 py-3 rounded-lg transition-all duration-150 text-sm font-semibold relative
+               <%= curPage === '/tenants' ? 'bg-[var(--accent-color)] text-white border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
+                <svg class="w-4 h-4 me-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-4h6v4"/><path d="M9 9h.01M15 9h.01M9 13h.01M15 13h.01"/>
+                </svg>
+                <span class="sidebar-text"><%= currentLang === 'ar' ? 'المستأجرون السحابيون' : 'Cloud Tenants' %></span>
             </a>
             <% } %>
 
@@ -4329,7 +4353,7 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
                         <option value="munsit" selected>Munsit منصت (Egyptian Arabic AI)</option>
                         <option value="groq">Groq (Whisper-Large-V3)</option>
                         <option value="openai">OpenAI (Whisper-1)</option>
-                        <option value="deepgram">Deepgram (Nova-2)</option>
+                        <option value="deepgram">Deepgram (Nova-3)</option>
                         <option value="custom"><%= isRtl ? 'مزود مخصص (OpenAI-Compatible)' : 'Custom OpenAI API' %></option>
                     </select>
                 </div>
@@ -5087,7 +5111,7 @@ const STT_PROVIDER_DEFAULTS = {
         url: 'https://api.openai.com/v1/audio/transcriptions'
     },
     deepgram: {
-        model: 'nova-2',
+        model: 'nova-3',
         url: 'https://api.deepgram.com/v1/listen'
     },
     custom: {

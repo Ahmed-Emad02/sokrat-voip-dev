@@ -1,5 +1,6 @@
 // Served by GET /js/config-page.js — rendered per language (isRtl) and cached.
         const isRtl = <%= isRtl ? 'true' : 'false' %>;
+        const DEFAULT_OUTBOUND_DIAL_PATTERNS = <%- JSON.stringify(typeof defaultOutboundPatterns !== 'undefined' ? defaultOutboundPatterns : []) %>;
         window.addEventListener('error', function(e) {
             console.error('[PBX Config Runtime Error]:', e.message, 'at', e.filename, 'line', e.lineno);
             try { if (typeof showToast === 'function') showToast('Error: ' + e.message, 'error'); } catch (_) {}
@@ -5741,7 +5742,9 @@
             document.getElementById('outboundForm').reset();
             if (document.getElementById('outCid')) document.getElementById('outCid').value = '';
             if (document.getElementById('outCidOverride')) document.getElementById('outCidOverride').checked = false;
-            modalPatternsList = [];
+            // New routes start with the standard Egyptian patterns; the user can edit/remove them.
+            modalPatternsList = (Array.isArray(DEFAULT_OUTBOUND_DIAL_PATTERNS) ? DEFAULT_OUTBOUND_DIAL_PATTERNS : [])
+                .map(p => ({ ...p }));
             modalTrunksSequence = [];
             editingPatternIndex = -1;
 

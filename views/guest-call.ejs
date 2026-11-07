@@ -1,0 +1,370 @@
+<%
+const lang = currentLang === 'ar' ? 'ar' : 'en';
+const isRtl = lang === 'ar';
+const autoStartEnabled = typeof autoStart === 'undefined' ? true : Boolean(autoStart);
+const t = isRtl ? {
+    callNow: 'اتصل الآن',
+    connecting: 'جارٍ الاتصال...',
+    ringing: 'جارٍ الرنين...',
+    connected: 'المكالمة متصلة',
+    ended: 'انتهت المكالمة',
+    failed: 'تعذر بدء المكالمة',
+    noAnswer: 'لم يرد النشاط التجاري. حاول مرة أخرى.',
+    tryAgain: 'حاول مرة أخرى',
+    tapToCall: 'اضغط للاتصال',
+    enableAudio: 'اضغط لسماع المكالمة',
+    hangup: 'إنهاء',
+    mute: 'كتم',
+    unmute: 'إلغاء الكتم',
+    consent: 'بالضغط على اتصال، سيتم توصيلك بهذا النشاط التجاري. قد يتم تسجيل المكالمة.',
+    poweredBy: 'مدعوم بواسطة Sokrat',
+    noAgents: 'لا يوجد ممثلون متاحون الآن. حاول لاحقاً.',
+    busy: 'كل الخطوط مشغولة الآن. حاول بعد قليل.',
+    micDenied: 'تم رفض إذن الميكروفون. اسمح بالميكروفون ثم أعد المحاولة.',
+    seconds: 'ث'
+} : {
+    callNow: 'Call now',
+    connecting: 'Connecting...',
+    ringing: 'Ringing...',
+    connected: 'Connected',
+    ended: 'Call ended',
+    failed: 'Could not start the call',
+    noAnswer: 'The business did not answer. Please try again.',
+    tryAgain: 'Try again',
+    tapToCall: 'Tap to call',
+    enableAudio: 'Tap to hear the call',
+    hangup: 'Hang up',
+    mute: 'Mute',
+    unmute: 'Unmute',
+    consent: 'By tapping Call, you will be connected to this business. This call may be recorded.',
+    poweredBy: 'Powered by Sokrat',
+    noAgents: 'No agents are available right now. Please try again later.',
+    busy: 'All lines are busy right now. Please try again shortly.',
+    micDenied: 'Microphone permission was denied. Allow the microphone and try again.',
+    seconds: 's'
+};
+const branding = tenant && tenant.branding && typeof tenant.branding === 'object' ? tenant.branding : {};
+const brandColor = /^#[0-9a-fA-F]{3,8}$/.test(String(branding.primary_color || '')) ? branding.primary_color : '#e11d48';
+const logoUrl = typeof branding.logo_url === 'string' && /^https?:\/\//i.test(branding.logo_url) ? branding.logo_url : '';
+const consentText = (tenant && tenant.consent_text) || t.consent;
+const buttonText = (branding.button_text || t.callNow).toString().slice(0, 40);
+%>
+<!DOCTYPE html>
+<html lang="<%= lang %>" dir="<%= isRtl ? 'rtl' : 'ltr' %>">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#050507">
+    <meta name="robots" content="noindex,nofollow">
+    <title><%= tenant.name %> — <%= isRtl ? 'اتصل بنا' : 'Call us' %></title>
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <style>
+        :root {
+            --brand: <%= brandColor %>;
+            --brand-soft: color-mix(in srgb, var(--brand) 22%, transparent);
+            --bg: #050507;
+            --panel: rgba(18, 18, 23, .86);
+            --panel-strong: #121218;
+            --border: rgba(255, 255, 255, .10);
+            --text: #f8fafc;
+            --muted: #a1a1aa;
+            --ok: #34d399;
+            --danger: #ef4444;
+        }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        html, body { height: 100%; min-height: 100%; }
+        body {
+            margin: 0;
+            min-height: 100dvh;
+            overflow: hidden;
+            background:
+                radial-gradient(circle at 50% -10%, var(--brand-soft), transparent 48%),
+                radial-gradient(circle at 90% 90%, rgba(124, 58, 237, .12), transparent 42%),
+                var(--bg);
+            color: var(--text);
+            font-family: 'Cairo', 'JetBrains Mono', 'Segoe UI', Tahoma, Arial, sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: max(18px, env(safe-area-inset-top)) 18px max(18px, env(safe-area-inset-bottom));
+            user-select: none;
+        }
+        .orbs { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 0; }
+        .orb { position: absolute; border-radius: 50%; filter: blur(60px); opacity: .35; animation: sokrFloat 12s ease-in-out infinite; }
+        .orb-a { width: 260px; height: 260px; background: var(--brand); top: -90px; left: -70px; }
+        .orb-b { width: 220px; height: 220px; background: #7c3aed; bottom: -80px; right: -60px; animation-delay: -5s; }
+        .card {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: 430px;
+            padding: 26px 24px 22px;
+            border: 1px solid var(--border);
+            border-radius: 28px;
+            background: linear-gradient(180deg, rgba(28, 28, 36, .92), rgba(11, 11, 15, .94));
+            box-shadow: 0 30px 100px rgba(0, 0, 0, .55), inset 0 1px 0 rgba(255, 255, 255, .06);
+            backdrop-filter: blur(18px);
+            text-align: center;
+            overflow: hidden;
+        }
+        .card::before {
+            content: '';
+            position: absolute;
+            inset: 0 0 auto;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--brand), #a855f7, var(--brand), transparent);
+            opacity: .9;
+            animation: sokrLaser 3.2s ease-in-out infinite;
+        }
+        .brand {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            font-size: 10px;
+            font-weight: 900;
+            letter-spacing: .24em;
+            color: var(--muted);
+            text-transform: uppercase;
+            margin-bottom: 18px;
+        }
+        .brand b { color: var(--text); font-weight: 900; }
+        .brand i {
+            width: 7px; height: 7px; border-radius: 50%;
+            background: var(--brand);
+            box-shadow: 0 0 14px var(--brand);
+            animation: sokrBlink 1.8s ease-in-out infinite;
+        }
+        .avatar-wrap { position: relative; width: 96px; height: 96px; margin: 0 auto 14px; display: grid; place-items: center; }
+        .avatar {
+            width: 78px; height: 78px; border-radius: 50%;
+            display: grid; place-items: center;
+            background: linear-gradient(135deg, var(--brand), #7c3aed);
+            font-size: 30px; font-weight: 900;
+            box-shadow: 0 12px 34px var(--brand-soft);
+            position: relative; z-index: 2;
+            overflow: hidden;
+        }
+        .avatar img { width: 100%; height: 100%; object-fit: cover; }
+        .avatar-wrap::before, .avatar-wrap::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            border: 1px solid var(--brand);
+            opacity: 0;
+        }
+        .card[data-state="ringing"] .avatar-wrap::before,
+        .card[data-state="connected"] .avatar-wrap::before {
+            animation: sokrPulse 2s ease-out infinite;
+        }
+        .card[data-state="ringing"] .avatar-wrap::after,
+        .card[data-state="connected"] .avatar-wrap::after {
+            animation: sokrPulse 2s ease-out 1s infinite;
+        }
+        .card[data-state="connected"] .avatar { box-shadow: 0 0 0 8px rgba(52, 211, 153, .08), 0 12px 34px var(--brand-soft); }
+        h1 { font-size: 22px; line-height: 1.2; margin: 0 0 5px; letter-spacing: -.02em; }
+        .subtitle { color: var(--muted); font-size: 12.5px; margin: 0 0 16px; }
+        .status-row {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            max-width: 100%;
+            padding: 8px 13px;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            background: rgba(255, 255, 255, .035);
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 700;
+            line-height: 1.35;
+        }
+        .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex: 0 0 auto; }
+        .card[data-state="connecting"] .status-dot { background: var(--brand); animation: sokrBlink 1.2s ease-in-out infinite; }
+        .card[data-state="ringing"] .status-dot { background: #fbbf24; animation: sokrBlink 1s ease-in-out infinite; }
+        .card[data-state="connected"] .status-dot { background: var(--ok); box-shadow: 0 0 10px var(--ok); }
+        .card[data-state="failed"] .status-dot { background: var(--danger); }
+        .card[data-state="ended"] .status-dot { background: var(--muted); }
+        .status-text { white-space: normal; overflow-wrap: anywhere; }
+        .status-text.error { color: #fca5a5; }
+        .wave { height: 34px; display: flex; align-items: center; justify-content: center; gap: 5px; margin: 14px 0 2px; opacity: 0; transition: opacity .25s; }
+        .card[data-state="connecting"] .wave,
+        .card[data-state="ringing"] .wave,
+        .card[data-state="connected"] .wave { opacity: 1; }
+        .wave span {
+            display: block; width: 4px; height: 9px; border-radius: 99px;
+            background: linear-gradient(180deg, var(--brand), #a855f7);
+            transform-origin: center;
+            animation: sokrWave 1.05s ease-in-out infinite;
+        }
+        .wave span:nth-child(2) { animation-delay: .12s; }
+        .wave span:nth-child(3) { animation-delay: .24s; }
+        .wave span:nth-child(4) { animation-delay: .36s; }
+        .wave span:nth-child(5) { animation-delay: .48s; }
+        .card[data-state="connected"] .wave span { animation-duration: .68s; background: linear-gradient(180deg, var(--ok), #22d3ee); }
+        .timer {
+            font-size: 42px;
+            font-weight: 900;
+            letter-spacing: -.04em;
+            font-variant-numeric: tabular-nums;
+            margin: 2px 0 14px;
+            text-shadow: 0 0 30px var(--brand-soft);
+        }
+        .call-btn {
+            width: 100%;
+            min-height: 58px;
+            border: 0;
+            border-radius: 18px;
+            padding: 16px 20px;
+            background: linear-gradient(135deg, var(--brand), #be123c);
+            color: #fff;
+            font-family: inherit;
+            font-size: 16px;
+            font-weight: 900;
+            cursor: pointer;
+            box-shadow: 0 14px 34px var(--brand-soft);
+            transition: transform .12s ease, filter .12s ease, box-shadow .12s ease;
+            touch-action: manipulation;
+        }
+        .call-btn:hover { filter: brightness(1.08); }
+        .call-btn:active { transform: scale(.985); }
+        .call-btn:disabled { opacity: .55; cursor: not-allowed; }
+        .call-btn.end { background: #27272a; border: 1px solid var(--border); box-shadow: none; }
+        .controls { display: none; justify-content: center; align-items: center; gap: 44px; margin: 8px 0 4px; }
+        .card[data-state="connected"] .controls { display: flex; }
+        .control-group { display: flex; flex-direction: column; align-items: center; gap: 7px; }
+        .control {
+            width: 64px; height: 64px; border-radius: 50%;
+            border: 1px solid var(--border);
+            background: rgba(255, 255, 255, .06);
+            color: var(--text);
+            display: grid; place-items: center;
+            cursor: pointer;
+            transition: transform .12s ease, background .12s ease;
+            touch-action: manipulation;
+        }
+        .control svg { width: 24px; height: 24px; }
+        .control:active { transform: scale(.94); }
+        .control.end { background: linear-gradient(135deg, #ef4444, #b91c1c); border-color: transparent; box-shadow: 0 12px 30px rgba(239, 68, 68, .28); }
+        .control-label { font-size: 10px; font-weight: 800; color: var(--muted); letter-spacing: .02em; }
+        .consent { color: var(--muted); font-size: 10.5px; line-height: 1.65; margin: 18px 0 0; }
+        .powered { color: #52525b; font-size: 9px; margin-top: 14px; letter-spacing: .12em; text-transform: uppercase; }
+        .powered b { color: var(--brand); font-weight: 900; }
+        .hidden { display: none !important; }
+        @keyframes sokrPulse {
+            0% { transform: scale(.86); opacity: .65; }
+            100% { transform: scale(1.45); opacity: 0; }
+        }
+        @keyframes sokrWave {
+            0%, 100% { transform: scaleY(.55); opacity: .7; }
+            50% { transform: scaleY(2.6); opacity: 1; }
+        }
+        @keyframes sokrBlink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .35; }
+        }
+        @keyframes sokrLaser {
+            0%, 100% { transform: translateX(-60%); opacity: .55; }
+            50% { transform: translateX(60%); opacity: 1; }
+        }
+        @keyframes sokrFloat {
+            0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+            50% { transform: translate3d(18px, 24px, 0) scale(1.08); }
+        }
+        @media (max-width: 560px) {
+            body { padding: 0; }
+            .card {
+                max-width: none;
+                min-height: 100dvh;
+                border: 0;
+                border-radius: 0;
+                padding: calc(28px + env(safe-area-inset-top)) 22px calc(22px + env(safe-area-inset-bottom));
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                box-shadow: none;
+            }
+            .card::before { height: 3px; }
+            .brand { margin-bottom: 14px; }
+            .avatar-wrap { width: 104px; height: 104px; margin-bottom: 12px; }
+            .avatar { width: 84px; height: 84px; font-size: 32px; }
+            h1 { font-size: 24px; }
+            .timer { font-size: 46px; }
+            .call-btn { min-height: 62px; font-size: 17px; }
+            .control { width: 68px; height: 68px; }
+            .consent { font-size: 11px; margin-top: 22px; }
+        }
+        @media (max-height: 640px) {
+            .card { padding-top: 18px; padding-bottom: 16px; }
+            .avatar-wrap { width: 78px; height: 78px; margin-bottom: 8px; }
+            .avatar { width: 66px; height: 66px; font-size: 26px; }
+            .timer { font-size: 34px; margin-bottom: 8px; }
+            .wave { height: 24px; margin: 8px 0 0; }
+            .consent { margin-top: 10px; }
+            .powered { margin-top: 8px; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+        }
+    </style>
+</head>
+<body>
+    <div class="orbs" aria-hidden="true"><div class="orb orb-a"></div><div class="orb orb-b"></div></div>
+    <main class="card" id="callCard" data-state="<%= autoStartEnabled ? 'connecting' : 'idle' %>">
+        <div class="brand"><i></i><span><b>SOKRAT</b> VOICE</span></div>
+        <div class="avatar-wrap">
+            <div class="avatar">
+                <% if (logoUrl) { %>
+                    <img src="<%= logoUrl %>" alt="<%= tenant.name %>">
+                <% } else { %>
+                    <%= String(tenant.name || '?').trim().charAt(0).toUpperCase() %>
+                <% } %>
+            </div>
+        </div>
+        <h1><%= tenant.name %></h1>
+        <p class="subtitle"><%= link.label || (isRtl ? 'اتصل بنا مباشرة' : 'Speak to us directly') %></p>
+
+        <div class="status-row"><span class="status-dot"></span><span id="guestStatus" class="status-text" aria-live="polite"><%= autoStartEnabled ? t.connecting : (isRtl ? 'اضغط على الزر لبدء المكالمة' : 'Tap the button to start the call') %></span></div>
+        <div class="wave" id="guestWave" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
+        <div id="guestTimer" class="timer hidden">00:00</div>
+
+        <button id="guestCallBtn" type="button" class="call-btn<%= autoStartEnabled ? ' hidden' : '' %>"><%= buttonText %></button>
+        <button id="guestAudioBtn" type="button" class="call-btn hidden" style="margin-top:10px"><%= t.enableAudio %></button>
+
+        <div class="controls hidden" id="guestInCallActions">
+            <div class="control-group">
+                <button id="guestMuteBtn" type="button" class="control" aria-label="<%= t.mute %>">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+                </button>
+                <span id="guestMuteLabel" class="control-label"><%= t.mute %></span>
+            </div>
+            <div class="control-group">
+                <button id="guestEndBtn" type="button" class="control end" aria-label="<%= t.hangup %>">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v2a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.2 2 2 0 0 1 4.11 2h2a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L7.09 9.91a16 16 0 0 0 .17 3.4"/></svg>
+                </button>
+                <span class="control-label"><%= t.hangup %></span>
+            </div>
+        </div>
+
+        <p class="consent"><%= consentText %></p>
+        <p class="powered"><b>SOKRAT</b> · <%= t.poweredBy %></p>
+    </main>
+
+    <div id="sokratGuestConfig"
+         data-tenant="<%= tenant.public_id %>"
+         data-link="<%= link.slug %>"
+         data-lang="<%= lang %>"
+         data-embedded="<%= isEmbedded ? '1' : '0' %>"
+         data-autostart="<%= autoStartEnabled ? '1' : '0' %>"
+         data-labels="<%= JSON.stringify({
+             connecting: t.connecting, ringing: t.ringing, connected: t.connected,
+             ended: t.ended, failed: t.failed, tryAgain: t.tryAgain, tapToCall: t.tapToCall,
+             enableAudio: t.enableAudio,
+             hangup: t.hangup, mute: t.mute, unmute: t.unmute,
+             noAgents: t.noAgents, busy: t.busy, micDenied: t.micDenied, noAnswer: t.noAnswer
+         }) %>"
+         data-call-label="<%= buttonText %>"></div>
+
+    <script src="/js/jssip.min.js?v=<%= typeof assetVersion !== 'undefined' ? assetVersion : '1' %>"></script>
+    <script src="/js/guest-call.js?v=<%= typeof assetVersion !== 'undefined' ? assetVersion : '1' %>"></script>
+</body>
+</html>

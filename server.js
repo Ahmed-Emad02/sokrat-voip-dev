@@ -33,9 +33,17 @@ try {
 
 const createCrmRouter = require('./routes/crm-integration');
 const createExtensionContactsRouter = require('./routes/extension-contacts');
+const { requireExtensionSignature } = require('./lib/extension-auth');
+const { parseCallStateLines } = require('./lib/call-state');
+const { dbToAsteriskVolume } = require('./lib/call-volume');
+const { DEFAULT_OUTBOUND_DIAL_PATTERNS, resolveOutboundDialPatterns } = require('./lib/outbound-routes');
 const createExtensionChatRouter = require('./routes/extension-chat');
 const createExtensionVideoRouter = require('./routes/extension-video');
 const createExtensionAgentStatusRouter = require('./routes/extension-agent-status');
+const createAiEvaluationRouter = require('./routes/ai-evaluation');
+const createTenantCallsRouter = require('./routes/tenant-calls');
+const { TenantCallService, normalizeOrigin } = require('./lib/tenant-calls');
+const { isRootSession, isAiCampaignRow, canAccessAiCampaign } = require('./lib/ai/access');
 const agentStatusService = require('./lib/agent-status');
 const { attachChatSocket } = require('./lib/chat/socket');
 const chatStore = require('./lib/chat/store');
@@ -922,6 +930,7 @@ async function initAuthDb() {
             reset_token VARCHAR(255) DEFAULT NULL,
             reset_expires DATETIME DEFAULT NULL,
             group_id INT DEFAULT NULL,
+            tenant_id INT UNSIGNED DEFAULT NULL,
             extension VARCHAR(512) DEFAULT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
@@ -931,6 +940,7 @@ async function initAuthDb() {
 
     // Add group_id and extension columns if they don't exist (for existing installs)
     await ensureDbColumn(conn, 'dashboard_users', 'group_id', 'INT DEFAULT NULL');
+    await ensureDbColumn(conn, 'dashboard_users', 'tenant_id', 'INT UNSIGNED DEFAULT NULL');
     await ensureDbColumn(conn, 'dashboard_users', 'reset_token_expires', 'DATETIME DEFAULT NULL');
     await ensureDbColumn(conn, 'dashboard_users', 'extension', 'VARCHAR(512) DEFAULT NULL');
     // Existing installs may still have the old VARCHAR(20) column: widen it
@@ -947,6 +957,7 @@ async function initAuthDb() {
     } catch (_) {}
     try { await conn.execute('ALTER TABLE dashboard_users ADD UNIQUE KEY idx_unique_email (email)'); } catch (_) {}
     try { await conn.execute('ALTER TABLE dashboard_users ADD KEY idx_dash_users_extension (extension)'); } catch (_) {}
+    try { await conn.execute('ALTER TABLE dashboard_users ADD KEY idx_dash_users_tenant (tenant_id)'); } catch (_) {}
     await conn.execute(`
         CREATE TABLE IF NOT EXISTS dashboard_user_dongles (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -1409,6 +1420,184 @@ async function initAuthDb() {
         await ensureDbColumn(conn, `asteriskcdrdb.${table}`, 'error_message', 'VARCHAR(500) DEFAULT NULL');
     }
     await conn.execute('INSERT IGNORE INTO `asterisk`.`stt_settings` (id) VALUES (1)');
+
+    // --- AI call evaluation / quality schema ---
+    await conn.execute(`
+        CREATE TABLE IF NOT EXISTS \`asterisk\`.\`ai_evaluation_settings\` (
+            \`id\` INT PRIMARY KEY DEFAULT 1,
+            \`enabled\` TINYINT(1) DEFAULT 0,
+            \`provider\` VARCHAR(32) DEFAULT 'openai',
+            \`api_key_enc\` TEXT DEFAULT NULL,
+            \`api_url\` VARCHAR(255) DEFAULT 'https://api.openai.com/v1',
+            \`model\` VARCHAR(128) DEFAULT 'gpt-4o-mini',
+            \`temperature\` DECIMAL(2,1) DEFAULT 0.0,
+            \`max_tokens\` INT DEFAULT 4096,
+            \`monthly_budget_usd\` DECIMAL(10,2) DEFAULT 0,
+            \`require_evidence\` TINYINT(1) DEFAULT 1,
+            \`updated_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+    await conn.execute(`
+        CREATE TABLE IF NOT EXISTS \`asterisk\`.\`evaluation_profiles\` (
+            \`id\` INT AUTO_INCREMENT PRIMARY KEY,
+            \`name\` VARCHAR(120) NOT NULL,
+            \`description\` TEXT DEFAULT NULL,
+            \`scope_type\` ENUM('global','campaign','queue','did','agent','team') DEFAULT 'global',
+            \`scope_id\` VARCHAR(64) DEFAULT NULL,
+            \`direction\` ENUM('any','inbound','outbound','internal') DEFAULT 'any',
+            \`language\` VARCHAR(16) DEFAULT 'ar',
+            \`context_text\` MEDIUMTEXT DEFAULT NULL,
+            \`instructions_text\` MEDIUMTEXT DEFAULT NULL,
+            \`rubric_json\` LONGTEXT NOT NULL,
+            \`thresholds_json\` TEXT DEFAULT NULL,
+            \`sampling_percent\` TINYINT DEFAULT 100,
+            \`min_duration_sec\` INT DEFAULT 30,
+            \`temperature\` DECIMAL(2,1) DEFAULT 0.0,
+            \`version\` INT NOT NULL DEFAULT 1,
+            \`active\` TINYINT(1) NOT NULL DEFAULT 1,
+            \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            \`updated_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            KEY \`idx_eval_profile_active\` (\`active\`, \`scope_type\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+    await conn.execute(`
+        CREATE TABLE IF NOT EXISTS \`asteriskcdrdb\`.\`transcript_segments\` (
+            \`id\` BIGINT AUTO_INCREMENT PRIMARY KEY,
+            \`transcription_type\` ENUM('call','voicemail') NOT NULL,
+            \`transcription_id\` BIGINT NOT NULL,
+            \`seq\` INT NOT NULL DEFAULT 0,
+            \`speaker\` VARCHAR(32) DEFAULT 'unknown',
+            \`start_ms\` INT DEFAULT NULL,
+            \`end_ms\` INT DEFAULT NULL,
+            \`text\` TEXT NOT NULL,
+            \`confidence\` DECIMAL(5,4) DEFAULT NULL,
+            \`language\` VARCHAR(16) DEFAULT NULL,
+            \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            KEY \`idx_segment_target\` (\`transcription_type\`, \`transcription_id\`, \`seq\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+    `);
+    await conn.execute(`
+        CREATE TABLE IF NOT EXISTS \`asteriskcdrdb\`.\`evaluation_jobs\` (
+            \`id\` BIGINT AUTO_INCREMENT PRIMARY KEY,
+            \`target_type\` ENUM('call','voicemail') NOT NULL DEFAULT 'call',
+            \`target_id\` VARCHAR(128) NOT NULL,
+            \`transcription_id\` BIGINT DEFAULT NULL,
+            \`uniqueid\` VARCHAR(32) DEFAULT NULL,
+            \`profile_id\` INT NOT NULL,
+            \`profile_version\` INT NOT NULL DEFAULT 1,
+            \`profile_snapshot_json\` LONGTEXT DEFAULT NULL,
+            \`status\` ENUM('pending','processing','completed','failed','skipped') NOT NULL DEFAULT 'pending',
+            \`attempt_count\` INT NOT NULL DEFAULT 0,
+            \`error_message\` VARCHAR(500) DEFAULT NULL,
+            \`provider\` VARCHAR(32) DEFAULT NULL,
+            \`model\` VARCHAR(128) DEFAULT NULL,
+            \`cost_usd\` DECIMAL(10,6) DEFAULT 0,
+            \`processing_started_at\` DATETIME DEFAULT NULL,
+            \`completed_at\` DATETIME DEFAULT NULL,
+            \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY \`uniq_eval_target\` (\`profile_id\`, \`target_type\`, \`target_id\`, \`profile_version\`),
+            KEY \`idx_eval_status\` (\`status\`, \`id\`),
+            KEY \`idx_eval_uniqueid\` (\`uniqueid\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+    `);
+    await ensureDbColumn(conn, 'asteriskcdrdb.evaluation_jobs', 'profile_snapshot_json', 'LONGTEXT DEFAULT NULL');
+
+    await conn.execute(`
+        CREATE TABLE IF NOT EXISTS \`asteriskcdrdb\`.\`call_evaluations\` (
+            \`id\` BIGINT AUTO_INCREMENT PRIMARY KEY,
+            \`job_id\` BIGINT NOT NULL,
+            \`target_type\` ENUM('call','voicemail') NOT NULL DEFAULT 'call',
+            \`target_id\` VARCHAR(128) NOT NULL,
+            \`uniqueid\` VARCHAR(32) DEFAULT NULL,
+            \`profile_id\` INT NOT NULL,
+            \`profile_version\` INT NOT NULL DEFAULT 1,
+            \`overall_score\` DECIMAL(5,2) DEFAULT NULL,
+            \`pass\` TINYINT(1) DEFAULT NULL,
+            \`critical_fail\` TINYINT(1) DEFAULT 0,
+            \`summary\` LONGTEXT DEFAULT NULL,
+            \`warnings_json\` LONGTEXT DEFAULT NULL,
+            \`raw_response_json\` LONGTEXT DEFAULT NULL,
+            \`provider\` VARCHAR(32) DEFAULT NULL,
+            \`model\` VARCHAR(128) DEFAULT NULL,
+            \`prompt_hash\` VARCHAR(64) DEFAULT NULL,
+            \`human_score\` DECIMAL(5,2) DEFAULT NULL,
+            \`human_notes\` TEXT DEFAULT NULL,
+            \`reviewer_id\` INT DEFAULT NULL,
+            \`reviewed_at\` DATETIME DEFAULT NULL,
+            \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY \`uniq_eval_job\` (\`job_id\`),
+            KEY \`idx_eval_profile_time\` (\`profile_id\`, \`created_at\`),
+            KEY \`idx_eval_uniqueid\` (\`uniqueid\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+    `);
+    await conn.execute(`
+        CREATE TABLE IF NOT EXISTS \`asteriskcdrdb\`.\`evaluation_scores\` (
+            \`id\` BIGINT AUTO_INCREMENT PRIMARY KEY,
+            \`evaluation_id\` BIGINT NOT NULL,
+            \`criterion_key\` VARCHAR(64) NOT NULL,
+            \`label\` VARCHAR(120) DEFAULT NULL,
+            \`score\` DECIMAL(6,2) DEFAULT NULL,
+            \`weight\` DECIMAL(6,2) DEFAULT NULL,
+            \`weighted_score\` DECIMAL(7,2) DEFAULT NULL,
+            \`critical\` TINYINT(1) DEFAULT 0,
+            \`evidence_json\` LONGTEXT DEFAULT NULL,
+            \`comment\` TEXT DEFAULT NULL,
+            KEY \`idx_eval_score\` (\`evaluation_id\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+    `);
+    for (const table of ['cdr_transcriptions', 'voicemail_transcriptions']) {
+        await ensureDbColumn(conn, `asteriskcdrdb.${table}`, 'segments_json', 'LONGTEXT DEFAULT NULL');
+        await ensureDbColumn(conn, `asteriskcdrdb.${table}`, 'provider', 'VARCHAR(32) DEFAULT NULL');
+        await ensureDbColumn(conn, `asteriskcdrdb.${table}`, 'language_detected', 'VARCHAR(16) DEFAULT NULL');
+        await ensureDbColumn(conn, `asteriskcdrdb.${table}`, 'confidence_avg', 'DECIMAL(5,4) DEFAULT NULL');
+        await ensureDbColumn(conn, `asteriskcdrdb.${table}`, 'cost_usd', 'DECIMAL(10,6) DEFAULT 0');
+    }
+    await conn.execute('INSERT IGNORE INTO `asterisk`.`ai_evaluation_settings` (id) VALUES (1)');
+
+    // --- SIP-hosted AI voice agents ---
+    await conn.execute(`
+        CREATE TABLE IF NOT EXISTS \`asterisk\`.\`ai_agents\` (
+            \`id\` INT AUTO_INCREMENT PRIMARY KEY,
+            \`name\` VARCHAR(120) NOT NULL,
+            \`description\` TEXT DEFAULT NULL,
+            \`direction\` ENUM('inbound','outbound','both') NOT NULL DEFAULT 'both',
+            \`language\` VARCHAR(16) DEFAULT 'ar',
+            \`voice\` VARCHAR(80) DEFAULT NULL,
+            \`persona_prompt\` MEDIUMTEXT DEFAULT NULL,
+            \`sip_endpoint\` VARCHAR(255) NOT NULL,
+            \`transfer_target\` VARCHAR(128) DEFAULT NULL,
+            \`fallback_target\` VARCHAR(128) DEFAULT NULL,
+            \`max_concurrency\` INT NOT NULL DEFAULT 1,
+            \`recording_disclosure\` TINYINT(1) NOT NULL DEFAULT 1,
+            \`active\` TINYINT(1) NOT NULL DEFAULT 1,
+            \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            \`updated_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+    await conn.execute(`
+        CREATE TABLE IF NOT EXISTS \`asteriskcdrdb\`.\`ai_sessions\` (
+            \`id\` BIGINT AUTO_INCREMENT PRIMARY KEY,
+            \`uniqueid\` VARCHAR(64) DEFAULT NULL,
+            \`attempt_uuid\` VARCHAR(64) DEFAULT NULL,
+            \`linkedid\` VARCHAR(64) DEFAULT NULL,
+            \`agent_id\` INT NOT NULL,
+            \`direction\` ENUM('inbound','outbound') NOT NULL,
+            \`campaign_id\` INT DEFAULT NULL,
+            \`lead_id\` INT DEFAULT NULL,
+            \`caller\` VARCHAR(80) DEFAULT NULL,
+            \`status\` ENUM('started','answered','completed','failed','transferred') NOT NULL DEFAULT 'started',
+            \`transfer_target\` VARCHAR(128) DEFAULT NULL,
+            \`error_message\` VARCHAR(500) DEFAULT NULL,
+            \`started_at\` DATETIME DEFAULT CURRENT_TIMESTAMP,
+            \`ended_at\` DATETIME DEFAULT NULL,
+            KEY \`idx_ai_session_agent\` (\`agent_id\`, \`started_at\`),
+            KEY \`idx_ai_session_uniqueid\` (\`uniqueid\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+    `);
+    await ensureDbColumn(conn, 'asteriskcdrdb.ai_sessions', 'attempt_uuid', 'VARCHAR(64) DEFAULT NULL');
+    await ensureDbColumn(conn, 'dialer_campaigns', 'agent_kind', "ENUM('human','ai') NOT NULL DEFAULT 'human'");
+    await ensureDbColumn(conn, 'dialer_campaigns', 'ai_agent_id', 'INT DEFAULT NULL');
+    await ensureDbColumn(conn, 'dialer_call_attempts', 'ai_agent_id', 'INT DEFAULT NULL');
     // Default dispositions
     const defaultDispositions = [
         ['Interested', 'interested'],
@@ -1621,6 +1810,17 @@ function hasRootAccess(req) {
     ));
 }
 
+
+function getTenantId(req) {
+    const id = Number(req && req.session && req.session.tenantId);
+    return Number.isInteger(id) && id > 0 ? id : null;
+}
+
+function getTenantAccountcode(req) {
+    const id = getTenantId(req);
+    return id ? `WEB${id}` : null;
+}
+
 function isSuperAdmin(req) {
     if (isFederationTrusted(req)) return true;
     if (req && req.isApiKeyAuthenticated && req.apiKey) {
@@ -1635,6 +1835,9 @@ function isSuperAdmin(req) {
 
 function getUserScopedExtensions(req) {
     if (!req || !req.session) return null;
+    // Tenant isolation is enforced by CDR accountcode; do not apply a second
+    // extension filter here or a stale assignment could hide the tenant's calls.
+    if (getTenantId(req)) return null;
     if (isSuperAdmin(req)) return null; // null means unrestricted / all extensions
     if (Array.isArray(req.session.allowedExtensions) && req.session.allowedExtensions.length > 0) {
         return req.session.allowedExtensions.map(e => String(e).trim()).filter(Boolean);
@@ -1665,8 +1868,8 @@ voicemails: '/voicemails',
         campaigns: '/dialer',
         'chat-logs': '/chat-logs',
 dialer: '/dialer',
-storage: '/storage',
-config: '/config'
+        storage: '/storage',
+        config: '/config'
 };
 for (const p of perms) {
 if (tabToRoute[p]) return tabToRoute[p];
@@ -2284,6 +2487,7 @@ const TAB_ROUTE_MAP = {
     '/contacts': 'contacts',
     '/users': 'users',
     '/config': 'config',
+    '/quality': 'ai-evaluations',
     '/dialer': 'campaigns',
     '/chat-logs': 'chat-logs',
     '/storage': 'storage'
@@ -2470,7 +2674,7 @@ app.use((req, res, next) => {
         '/401', '/403', '/404', '/api/telephony/camp-on/dialplan-trigger',
         '/api/federation/v1/ping'
     ];
-    if (publicPaths.includes(req.path) || req.path.startsWith('/public/') || req.path.startsWith('/api/extension-policy/') || req.path.startsWith('/api/integrations/crm/v1/') || req.path.startsWith('/api/extension/v1/') || req.path.startsWith('/api/extension-chat/v1/') || req.path.startsWith('/api/extension-video/v1/') || req.path.startsWith('/api/extension-agent-status/v1/')) {
+    if (publicPaths.includes(req.path) || req.path.startsWith('/public/') || req.path.startsWith('/c/') || req.path.startsWith('/api/public/') || req.path.startsWith('/api/extension-policy/') || req.path.startsWith('/api/integrations/crm/v1/') || req.path.startsWith('/api/extension/v1/') || req.path.startsWith('/api/extension-chat/v1/') || req.path.startsWith('/api/extension-video/v1/') || req.path.startsWith('/api/extension-agent-status/v1/')) {
         return next();
     }
     requireAuth(req, res, next);
@@ -2478,8 +2682,17 @@ app.use((req, res, next) => {
 
 // --- TAB PERMISSION MIDDLEWARE ---
 app.use(async (req, res, next) => {
+    const tenantId = getTenantId(req);
+    if (tenantId) {
+        const blockedPages = ['/config', '/users', '/groups', '/operator', '/ext-stats', '/storage', '/contacts', '/voicemails', '/chat-logs', '/gsm-dongles', '/dialer', '/quality', '/api-keys', '/tenants'];
+        if (blockedPages.some(page => req.path === page || req.path.startsWith(page + '/'))) {
+            return res.status(403).render('403', { currentLang: res.locals.currentLang || 'en', isRtl: res.locals.currentLang === 'ar' });
+        }
+    }
     res.locals.isSuperAdmin = isSuperAdmin(req);
     res.locals.isRootUser = hasRootAccess(req);
+    res.locals.tenantId = req.session && req.session.tenantId ? Number(req.session.tenantId) : null;
+    res.locals.tenantName = (req.session && req.session.tenantName) || null;
     const scopedExts = getUserScopedExtensions(req);
     res.locals.userExtensions = scopedExts;
     res.locals.userExtension = (scopedExts && scopedExts.length > 0) ? scopedExts.join(',') : null;
@@ -2534,9 +2747,9 @@ app.use(async (req, res, next) => {
     if (tab === 'gsm-dongles' && userPerms.some(p => p.startsWith('gsm-'))) {
         return next();
     }
-if (tab === 'config' && userPerms.some(p => p.startsWith('config-'))) {
-return next();
-}
+    if (tab === 'config' && userPerms.some(p => p.startsWith('config-'))) {
+        return next();
+    }
     // Denied — redirect to the first tab they can access, or /no-access
     const firstAllowed = getFirstAllowedRoute(userPerms);
     if (firstAllowed && firstAllowed !== req.path) {
@@ -2559,6 +2772,9 @@ return next();
 
 // --- CONFIG SUB-TAB API PERMISSIONS MIDDLEWARE ---
 app.use('/api/config', (req, res, next) => {
+    if (getTenantId(req)) {
+        return res.status(403).json({ success: false, error: 'Business accounts cannot access PBX configuration.' });
+    }
     if (isSuperAdmin(req)) return next();
 
     let subTab = null;
@@ -2702,6 +2918,24 @@ function instrumentPool(dbPool, label) {
 instrumentPool(pool, 'cdr');
 instrumentPool(asteriskPool, 'pbx');
 
+// Public click-to-call tenants. The service is created before the route
+// middleware so /api/public/* and /c/:slug can use it without a session.
+const tenantCallService = new TenantCallService({
+    db: asteriskPool,
+    cdrDb: pool,
+    encrypt,
+    decrypt,
+    config: {
+        publicBaseUrl: process.env.SOKRAT_PUBLIC_BASE_URL || '',
+        wssUrl: process.env.SOKRAT_GUEST_WSS_URL || '',
+        sipDomain: process.env.SOKRAT_GUEST_SIP_DOMAIN || '',
+        rateMax: Number.parseInt(process.env.SOKRAT_GUEST_RATE_MAX || '6', 10) || 6
+    }
+});
+void tenantCallService.ensureSchema().catch((error) => {
+    console.error('[tenant-calls] schema init:', error.message);
+});
+
 
 let activeCalls = {};
 // Extensions that currently have a live Asterisk channel. Maintained by the
@@ -2731,7 +2965,46 @@ app.use('/api/integrations/crm/v1', createCrmRouter(pool, {
     notifyCrmLive: () => notifyCrmLiveBroadcaster()
 }));
 
+// Authenticated live microphone gain for the mobile app.
+app.post('/api/extension/v1/call-volume', requireExtensionSignature(pool), async (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    try {
+        const extension = String(req.sokratExtension || '').trim();
+        const gainDb = Math.max(-24, Math.min(42, parseFloat(req.body?.micGainDb ?? req.body?.gainDb) || 0));
+        const output = await execFileAsync(ASTERISK_BIN, ['-rx', 'core show channels concise']);
+        const state = parseCallStateLines(String(output || '').split('\n'), extension);
+        if (!state.callerChannel) {
+            return res.status(404).json({ success: false, error: 'No active channel for extension' });
+        }
+        if (!/^PJSIP\/[0-9]{1,12}-[0-9a-f]+$/i.test(state.callerChannel)) {
+            return res.status(400).json({ success: false, error: 'Unexpected channel name' });
+        }
+        const factor = dbToAsteriskVolume(gainDb);
+        const result = await execFileAsync(ASTERISK_BIN, ['-rx', `dialplan set chanvar ${state.callerChannel} VOLUME(RX) ${factor}`]);
+        if (/no such channel|no such command|response:\s*error/i.test(result)) {
+            return res.status(404).json({ success: false, error: 'Asterisk rejected volume control' });
+        }
+        return res.json({ success: true, channel: state.callerChannel, gainDb, factor });
+    } catch (err) {
+        console.error('[extension-call-volume] failed:', err.message);
+        return res.status(503).json({ success: false, error: 'Volume control unavailable' });
+    }
+});
+
 // Mount the Chrome extension's direct address-book API (no CRM required)
+// Live extension/trunk state for the mobile dongle reconciler.
+app.get('/api/extension/v1/call-state', requireExtensionSignature(pool), async (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    try {
+        const extension = String(req.sokratExtension || '').trim();
+        const output = await execFileAsync(ASTERISK_BIN, ['-rx', 'core show channels concise']);
+        return res.json({ success: true, ...parseCallStateLines(String(output || '').split('\n'), extension) });
+    } catch (err) {
+        console.error('[extension-call-state] failed:', err.message);
+        return res.status(503).json({ success: false, error: 'Call state unavailable' });
+    }
+});
+
 app.use('/api/extension/v1', createExtensionContactsRouter(pool));
 
 // Internal extension-to-extension chat (HMAC, server-side transcript).
@@ -2745,6 +3018,20 @@ app.use('/api/extension-agent-status/v1', createExtensionAgentStatusRouter(pool,
         try { io.emit('agentStatus:changed', payload); } catch (_) {}
         try { notifyCrmLiveBroadcaster(); } catch (_) {}
     }
+}));
+
+// AI call-quality evaluation and configuration.
+app.use('/api/ai', createAiEvaluationRouter({
+    pool,
+    encrypt,
+    decrypt,
+    isSuperAdmin,
+    hasRootAccess: isRootSession
+}));
+
+// Public click-to-call sessions and platform tenant management.
+app.use('/api', createTenantCallsRouter(tenantCallService, {
+    isRootRequest: (req) => isRootSession(req)
 }));
 
 // Register /crm-live Socket.io namespace
@@ -4532,6 +4819,15 @@ app.use(async (req, res, next) => {
                 customStatusDefinitions = defRows;
             }
         } catch (_) {}
+        if (getTenantId(req)) {
+            const tenantExtSet = new Set((req.session.tenantExtensions || []).map(String));
+            roster = roster.filter(emp => tenantExtSet.has(String(emp.extension)));
+            const scopedActive = {};
+            for (const [ext, call] of Object.entries(activeCalls || {})) {
+                if (tenantExtSet.has(String(ext))) scopedActive[ext] = call;
+            }
+            res.locals.activeCalls = scopedActive;
+        }
         res.locals.agentStatusDefinitions = customStatusDefinitions;
         res.locals.employeeGroups = cachedEmployeeGroupNames;
         res.locals.roster = roster.map(emp => {
@@ -4764,6 +5060,9 @@ app.post('/login', async (req, res) => {
             req.session.username = ROOT_USER;
             req.session.userGroup = 'super admins';
             req.session.isRoot = true;
+            req.session.tenantId = null;
+            req.session.tenantName = null;
+            req.session.tenantExtensions = [];
             req.session.extension = null;
             req.session.allowedExtensions = [];
             req.session.extensions = [];
@@ -4810,9 +5109,27 @@ app.post('/login', async (req, res) => {
             userExtensions = String(user.extension).split(',').map(e => e.trim()).filter(Boolean);
         }
 
+        const tenantId = user.tenant_id ? Number(user.tenant_id) : null;
+        let tenantName = null;
+        let tenantExtensions = [];
+        if (tenantId) {
+            try {
+                const [tenantRows] = await conn.execute('SELECT name FROM sokrat_tenants WHERE id = ? AND status <> \'deleted\' LIMIT 1', [tenantId]);
+                tenantName = tenantRows.length ? tenantRows[0].name : null;
+            } catch (_) {}
+            try {
+                const [agentRows] = await conn.execute('SELECT extension FROM sokrat_tenant_agents WHERE tenant_id = ? ORDER BY CAST(extension AS UNSIGNED)', [tenantId]);
+                tenantExtensions = agentRows.map(row => String(row.extension));
+            } catch (_) {}
+        }
         req.session.userId = user.id;
         req.session.username = user.username;
-        req.session.userGroup = user.group_name || null;
+        // A tenant-attached user is never a platform super admin, even if the
+        // selected group accidentally carries super-admin tabs.
+        req.session.userGroup = tenantId ? 'tenant' : (user.group_name || null);
+        req.session.tenantId = tenantId;
+        req.session.tenantName = tenantName;
+        req.session.tenantExtensions = tenantExtensions;
         req.session.allowedExtensions = userExtensions;
         req.session.extension = userExtensions.length > 0 ? userExtensions.join(',') : null;
         req.session.extensions = userExtensions;
@@ -5042,7 +5359,7 @@ app.get('/users', async (req, res) => {
     try {
         const conn = asteriskPool;
         const [userRows] = await conn.execute(`
-            SELECT u.id, u.username, u.email, u.group_id, u.extension, u.created_at, g.name AS group_name
+            SELECT u.id, u.username, u.email, u.group_id, u.tenant_id, u.extension, u.created_at, g.name AS group_name
             FROM dashboard_users u
             LEFT JOIN dashboard_groups g ON g.id = u.group_id
             WHERE u.username != ?
@@ -5075,16 +5392,24 @@ app.get('/users', async (req, res) => {
             if (!userExtensionsMap.has(m.user_id)) userExtensionsMap.set(m.user_id, []);
             userExtensionsMap.get(m.user_id).push(m.extension);
         }
+        let tenants = [];
+        try {
+            const [tenantRows] = await conn.execute(`SELECT id, name, status FROM sokrat_tenants WHERE status <> 'deleted' ORDER BY name ASC`);
+            tenants = tenantRows;
+        } catch (_) {}
+        const tenantNameMap = new Map(tenants.map(t => [Number(t.id), t.name]));
         for (const u of userRows) {
             u.allowed_dongles = userDonglesMap.get(u.id) || [];
             u.allowed_extensions = userExtensionsMap.get(u.id) || (u.extension ? String(u.extension).split(',').map(e => e.trim()).filter(Boolean) : []);
             u.extension = u.allowed_extensions.join(', ') || null;
+            u.tenant_name = u.tenant_id ? (tenantNameMap.get(Number(u.tenant_id)) || null) : null;
         }
         const availableDongles = await getAllServerDongles();
 
         res.render('users', {
             users: userRows,
             groups,
+            tenants,
             availableDongles,
             allTabs: ALL_TABS,
             permissionCategories: PERMISSION_CATEGORIES,
@@ -5095,6 +5420,31 @@ app.get('/users', async (req, res) => {
     } catch (err) {
         res.status(500).send('Users error: ' + err.message);
     }
+});
+
+// GET /tenants - platform-admin cloud tenant management (interactive root only)
+app.get('/tenants', requireAuth, async (req, res) => {
+    const currentLang = res.locals.currentLang || 'en';
+    if (!isRootSession(req)) {
+        return res.status(403).render('403', { currentLang, isRtl: currentLang === 'ar' });
+    }
+    let assignedExtensions = [];
+    try {
+        const [assignedRows] = await asteriskPool.execute('SELECT DISTINCT extension FROM sokrat_tenant_agents');
+        assignedExtensions = assignedRows.map(row => String(row.extension));
+    } catch (_) {}
+    res.render('tenants', {
+        currentPage: '/tenants',
+        currentLang,
+        isRtl: currentLang === 'ar',
+        isSuperAdmin: isSuperAdmin(req),
+        isRootUser: isRootSession(req),
+        allowedTabs: res.locals.allowedTabs || [],
+        currentUser: req.session ? req.session.username : '',
+        clientName: process.env.CLIENT_NAME || '',
+        roster: res.locals.roster || [],
+        assignedExtensions
+    });
 });
 
 // POST /users/add - add new user
@@ -5138,6 +5488,17 @@ app.post('/users/add', async (req, res) => {
         }
 
         const conn = asteriskPool;
+        const tenantId = req.body.tenant_id ? parseInt(req.body.tenant_id, 10) : null;
+        if (tenantId) {
+            const [tenantRows] = await conn.execute('SELECT id, name FROM sokrat_tenants WHERE id = ? AND status <> \'deleted\' LIMIT 1', [tenantId]);
+            if (!tenantRows.length) {
+                return res.redirect('/users?error=' + encodeURIComponent('Selected business was not found'));
+            }
+            const [groupRows] = await conn.execute('SELECT name FROM dashboard_groups WHERE id = ?', [group_id]);
+            if (String(groupRows[0] && groupRows[0].name || '').toLowerCase() === 'super admins') {
+                return res.redirect('/users?error=' + encodeURIComponent('A business-attached user cannot be a Super Admin'));
+            }
+        }
         if (cleanEmail) {
             if (!cleanEmail.includes('@')) {
                 return res.redirect('/users?error=' + encodeURIComponent('If provided, email must be valid'));
@@ -5148,7 +5509,7 @@ app.post('/users/add', async (req, res) => {
             }
         }
         const hash = await bcrypt.hash(password, 10);
-        const [result] = await conn.execute('INSERT INTO dashboard_users (username, email, password_hash, group_id, extension) VALUES (?, ?, ?, ?, ?)', [username, cleanEmail, hash, group_id, cleanExt]);
+        const [result] = await conn.execute('INSERT INTO dashboard_users (username, email, password_hash, group_id, tenant_id, extension) VALUES (?, ?, ?, ?, ?, ?)', [username, cleanEmail, hash, group_id, tenantId || null, cleanExt]);
         const newUserId = result.insertId;
         for (const ext of allowedExtensionsList) {
             try {
@@ -5203,6 +5564,17 @@ app.post('/users/edit', async (req, res) => {
         }
 
         const conn = asteriskPool;
+        const tenantId = req.body.tenant_id ? parseInt(req.body.tenant_id, 10) : null;
+        if (tenantId) {
+            const [tenantRows] = await conn.execute('SELECT id, name FROM sokrat_tenants WHERE id = ? AND status <> \'deleted\' LIMIT 1', [tenantId]);
+            if (!tenantRows.length) {
+                return res.redirect('/users?error=' + encodeURIComponent('Selected business was not found'));
+            }
+            const [groupRows] = await conn.execute('SELECT name FROM dashboard_groups WHERE id = ?', [group_id]);
+            if (String(groupRows[0] && groupRows[0].name || '').toLowerCase() === 'super admins') {
+                return res.redirect('/users?error=' + encodeURIComponent('A business-attached user cannot be a Super Admin'));
+            }
+        }
         if (cleanEmail) {
             if (!cleanEmail.includes('@')) {
                 return res.redirect('/users?error=' + encodeURIComponent('If provided, email must be valid'));
@@ -5212,7 +5584,7 @@ app.post('/users/edit', async (req, res) => {
                 return res.redirect('/users?error=' + encodeURIComponent('Email is already in use by another user'));
             }
         }
-        await conn.execute('UPDATE dashboard_users SET email = ?, group_id = ?, extension = ? WHERE id = ?', [cleanEmail, group_id, cleanExt, id]);
+        await conn.execute('UPDATE dashboard_users SET email = ?, group_id = ?, tenant_id = ?, extension = ? WHERE id = ?', [cleanEmail, group_id, tenantId || null, cleanExt, id]);
         try {
             await conn.execute('DELETE FROM dashboard_user_extensions WHERE user_id = ?', [id]);
             for (const ext of allowedExtensionsList) {
@@ -6313,6 +6685,7 @@ async function parseDashboardFilters(req) {
         dashDonglesList,
         availableTrunks,
         scopedExts,
+        tenantAccountcode: getTenantAccountcode(req),
         searchSrc: req.query.searchSrc || '',
         searchDst: req.query.searchDst || '',
         searchDid: req.query.searchDid || '',
@@ -6381,18 +6754,20 @@ function buildCdrFilterClauses(filters, dashDonglesList, dashTrunksList) {
 function buildDashboardCdrQuery(filters, res) {
     const cdrSource = buildCdrSource(res.locals.federationScope);
     const extra = buildCdrFilterClauses(filters, filters.dashDonglesList, filters.dashTrunksList);
+    const tenantClause = filters.tenantAccountcode ? ' AND c.accountcode = ?' : '';
     const query = `
         SELECT c.src, c.dst, c.billsec, ${CDR_DISPOSITION_SQL} as disposition, c.channel, c.dstchannel, c.calldate, c.did, c.uniqueid, COALESCE(u.name, NULLIF(TRIM(c.cnam), ''), 'No Name') as src_name
         FROM ${cdrSource.table} c
         LEFT JOIN ${tables.users} u ON c.src = u.extension
         WHERE c.calldate BETWEEN ? AND ?
+        ${tenantClause}
         ${cdrSource.filtersSql}
         ${cdrSource.nodeFilterSql}
         ${extra.clause}
     `;
     return {
         query,
-        queryParams: [filters.startDate, filters.endDate, ...cdrSource.nodeFilterParams, ...extra.params],
+        queryParams: [filters.startDate, filters.endDate, ...(filters.tenantAccountcode ? [filters.tenantAccountcode] : []), ...cdrSource.nodeFilterParams, ...extra.params],
         cdrSource
     };
 }
@@ -6401,6 +6776,7 @@ function buildDetailedCdrQuery(filters, res) {
     const cdrSource = buildCdrSource(res.locals.federationScope);
     const extra = buildCdrFilterClauses(filters, filters.dashDonglesList, filters.dashTrunksList);
     const nodeColumns = cdrSource.isUnion ? ', c.node_site_code, c.node_name, c.is_local' : '';
+    const tenantClause = filters.tenantAccountcode ? ' AND c.accountcode = ?' : '';
     const query = `
         SELECT c.calldate, c.src, c.dst, c.dcontext, c.lastdata, c.duration, c.billsec,
         ${CDR_DISPOSITION_SQL} as disposition, c.uniqueid, c.recordingfile, c.channel, c.dstchannel, c.did, c.userfield,
@@ -6409,6 +6785,7 @@ function buildDetailedCdrQuery(filters, res) {
         FROM ${cdrSource.table} c
         LEFT JOIN ${tables.users} u ON c.src = u.extension
         WHERE c.calldate BETWEEN ? AND ?
+        ${tenantClause}
         ${cdrSource.filtersSql}
         ${cdrSource.nodeFilterSql}
         ${extra.clause}
@@ -6416,7 +6793,7 @@ function buildDetailedCdrQuery(filters, res) {
     `;
     return {
         query,
-        queryParams: [filters.startDate, filters.endDate, ...cdrSource.nodeFilterParams, ...extra.params],
+        queryParams: [filters.startDate, filters.endDate, ...(filters.tenantAccountcode ? [filters.tenantAccountcode] : []), ...cdrSource.nodeFilterParams, ...extra.params],
         cdrSource
     };
 }
@@ -7199,16 +7576,19 @@ app.get('/cdr', async (req, res) => {
 
         const searchTranscript = req.query.searchTranscript ? String(req.query.searchTranscript).trim() : '';
 
+        const tenantAccountcode = getTenantAccountcode(req);
+        const tenantClause = tenantAccountcode ? ' AND c.accountcode = ?' : '';
         let countQuery = `
             SELECT COUNT(*) as total
             FROM ${cdrSource.table} c
             LEFT JOIN ${tables.users} u ON c.src = u.extension
             LEFT JOIN \`asteriskcdrdb\`.\`cdr_transcriptions\` stt ON stt.uniqueid = c.uniqueid
             WHERE c.calldate BETWEEN ? AND ?
+            ${tenantClause}
             ${cdrSource.filtersSql}
             ${cdrSource.nodeFilterSql}
         `;
-        let countParams = [startDate, endDate, ...cdrSource.nodeFilterParams];
+        let countParams = [startDate, endDate, ...(tenantAccountcode ? [tenantAccountcode] : []), ...cdrSource.nodeFilterParams];
 
         let query = `
             SELECT c.calldate, c.src, c.dst, c.dcontext, c.lastdata, c.duration, c.billsec, ${CDR_DISPOSITION_SQL} as disposition, c.uniqueid, c.recordingfile, c.channel, c.dstchannel, c.did, c.userfield,
@@ -7222,10 +7602,11 @@ app.get('/cdr', async (req, res) => {
             LEFT JOIN ${tables.users} u_dst ON c.dst = u_dst.extension
             LEFT JOIN \`asteriskcdrdb\`.\`cdr_transcriptions\` stt ON stt.uniqueid = c.uniqueid
             WHERE c.calldate BETWEEN ? AND ?
+            ${tenantClause}
             ${cdrSource.filtersSql}
             ${cdrSource.nodeFilterSql}
         `;
-        let queryParams = [startDate, endDate, ...cdrSource.nodeFilterParams];
+        let queryParams = [startDate, endDate, ...(tenantAccountcode ? [tenantAccountcode] : []), ...cdrSource.nodeFilterParams];
 
         if (targetExtensionFilter !== 'ALL') {
             const exts = targetExtensionFilter;
@@ -7439,6 +7820,8 @@ app.get('/cdr/export', requireAuth, requireActionPermission('cdr-export'), async
         const callScopeCase = CDR_CALL_SCOPE_CASE;
         const cdrSource = buildCdrSource(res.locals.federationScope);
         const nodeColumns = cdrSource.isUnion ? ', c.node_site_code, c.node_name, c.is_local' : '';
+        const tenantAccountcode = getTenantAccountcode(req);
+        const tenantClause = tenantAccountcode ? ' AND c.accountcode = ?' : '';
         let query = `
             SELECT c.calldate, c.src, c.dst, c.dcontext, c.lastdata, c.duration, c.billsec, ${CDR_DISPOSITION_SQL} as disposition, c.uniqueid, c.recordingfile, c.channel, c.dstchannel, c.did, c.userfield, COALESCE(u.name, NULLIF(TRIM(c.cnam), ''), 'No Name') as src_name${nodeColumns},
             ${directionCase} as direction,
@@ -7446,10 +7829,11 @@ app.get('/cdr/export', requireAuth, requireActionPermission('cdr-export'), async
             FROM ${cdrSource.table} c
             LEFT JOIN ${tables.users} u ON c.src = u.extension
             WHERE c.calldate BETWEEN ? AND ?
+            ${tenantClause}
             ${cdrSource.filtersSql}
             ${cdrSource.nodeFilterSql}
         `;
-        let queryParams = [startDate, endDate, ...cdrSource.nodeFilterParams];
+        let queryParams = [startDate, endDate, ...(tenantAccountcode ? [tenantAccountcode] : []), ...cdrSource.nodeFilterParams];
 
         if (targetExtensionFilter !== 'ALL') {
             const exts = targetExtensionFilter;
@@ -7710,6 +8094,11 @@ app.post('/api/cdr/delete', requireAuth, async (req, res) => {
 
         let query = `DELETE FROM ${tables.cdr} WHERE uniqueid = ?`;
         let params = [uniqueid];
+        const tenantAccountcode = getTenantAccountcode(req);
+        if (tenantAccountcode) {
+            query += ` AND accountcode = ?`;
+            params.push(tenantAccountcode);
+        }
         if (calldate) {
             query += ` AND calldate = ?`;
             params.push(calldate);
@@ -7738,6 +8127,8 @@ async function handleCdrSingleRecord(req, res) {
 
         const detailSource = buildCdrSource(res.locals.federationScope);
         const detailNodeColumns = detailSource.isUnion ? ', c.node_site_code, c.node_name, c.is_local' : '';
+        const tenantAccountcode = getTenantAccountcode(req);
+        const tenantClause = tenantAccountcode ? ' AND c.accountcode = ?' : '';
         const [rows] = await pool.query(`
             SELECT c.calldate, c.src, c.dst, c.dcontext, c.lastapp, c.lastdata,
                    c.duration, c.billsec, ${CDR_DISPOSITION_SQL} as disposition,
@@ -7752,9 +8143,10 @@ async function handleCdrSingleRecord(req, res) {
             LEFT JOIN ${tables.users} u_src ON c.src = u_src.extension
             LEFT JOIN ${tables.users} u_dst ON c.dst = u_dst.extension
             WHERE (c.uniqueid = ? OR (c.linkedid = ? AND c.linkedid != '' AND c.linkedid IS NOT NULL))
+            ${tenantClause}
             ${detailSource.nodeFilterSql}
             ORDER BY c.calldate ASC, c.sequence ASC
-        `, [uniqueid, uniqueid, ...detailSource.nodeFilterParams]);
+        `, [uniqueid, uniqueid, ...(tenantAccountcode ? [tenantAccountcode] : []), ...detailSource.nodeFilterParams]);
 
         if (!rows || rows.length === 0) {
             return res.status(404).json({ success: false, error: 'Call record not found', uniqueid });
@@ -7909,6 +8301,13 @@ async function handleCdrPhoneSearch(req, res) {
         let whereClauses = [];
         let queryParams = [];
 
+        const tenantAccountcode = getTenantAccountcode(req);
+        if (tenantAccountcode) {
+            // Tenant owners only see calls attributed to their business.
+            whereClauses.push('c.accountcode = ?');
+            queryParams.push(tenantAccountcode);
+        }
+
         // Match phone variants in src, dst, cnum, did, or clid
         whereClauses.push('(c.src IN (?) OR c.dst IN (?) OR c.cnum IN (?) OR c.did IN (?) OR c.clid LIKE ?)');
         queryParams.push(variants, variants, variants, variants, `%${digitsOnly || cleaned}%`);
@@ -8017,6 +8416,17 @@ async function handleCdrAudioStream(req, res) {
         const uniqueid = String(req.params.uniqueid || req.query.uniqueid || '').trim();
         if (!uniqueid) {
             return res.status(400).json({ success: false, error: 'uniqueid parameter is required' });
+        }
+
+        const tenantAccountcode = getTenantAccountcode(req);
+        if (tenantAccountcode) {
+            const [scopeRows] = await pool.query(
+                'SELECT 1 FROM `asteriskcdrdb`.`cdr` WHERE (uniqueid = ? OR linkedid = ?) AND accountcode = ? LIMIT 1',
+                [uniqueid, uniqueid, tenantAccountcode]
+            );
+            if (!scopeRows.length) {
+                return res.status(404).json({ success: false, error: 'Recording audio file not found on server' });
+            }
         }
 
         const recordingPath = await resolveRecordingPath(uniqueid, pool, RECORDING_ROOT);
@@ -8573,10 +8983,17 @@ app.get('/api/transcripts/recent', requireAuth, requireTranscriptPermission('cdr
             LEFT JOIN \`asteriskcdrdb\`.\`cdr\` c ON c.uniqueid = t.uniqueid
         `;
         const params = [];
+        const clauses = [];
+        const tenantAccountcode = getTenantAccountcode(req);
+        if (tenantAccountcode) {
+            clauses.push('c.accountcode = ?');
+            params.push(tenantAccountcode);
+        }
         if (allowed !== null && allowed.length > 0) {
-            query += ' WHERE (c.src IN (?) OR c.dst IN (?))';
+            clauses.push('(c.src IN (?) OR c.dst IN (?))');
             params.push(allowed, allowed);
         }
+        if (clauses.length) query += ' WHERE ' + clauses.join(' AND ');
         query += ' ORDER BY t.id DESC LIMIT 50';
         const [rows] = await pool.query(query, params);
         res.json({ success: true, transcripts: rows });
@@ -8589,8 +9006,12 @@ app.get('/api/transcripts/recent', requireAuth, requireTranscriptPermission('cdr
 app.get('/api/transcripts/call/:uniqueid', requireAuth, requireTranscriptPermission('cdr'), async (req, res) => {
     try {
         const { uniqueid } = req.params;
-        const [scopeRows] = await pool.query('SELECT src, dst FROM `asteriskcdrdb`.`cdr` WHERE uniqueid = ? LIMIT 1', [uniqueid]);
+        const [scopeRows] = await pool.query('SELECT src, dst, accountcode FROM `asteriskcdrdb`.`cdr` WHERE uniqueid = ? LIMIT 1', [uniqueid]);
         if (!scopeRows.length) return res.status(404).json({ success: false, error: 'Call not found.' });
+        const tenantAccountcode = getTenantAccountcode(req);
+        if (tenantAccountcode && String(scopeRows[0].accountcode || '') !== tenantAccountcode) {
+            return res.status(403).json({ success: false, error: 'Access denied for this call.' });
+        }
         const allowed = getUserScopedExtensions(req);
         if (allowed !== null && !allowed.includes(String(scopeRows[0].src)) && !allowed.includes(String(scopeRows[0].dst))) {
             return res.status(403).json({ success: false, error: 'Access denied for this call.' });
@@ -13525,6 +13946,10 @@ app.get('/api/storage/export/pc', requireAuth, requireTabPermission('storage'), 
     const path = require('path');
     const { spawn } = require('child_process');
 
+    if (getTenantId(req)) {
+        return res.status(403).json({ success: false, error: 'Business accounts cannot export the full server archive.' });
+    }
+
     const startDate = req.query.startDate || '';
     const endDate = req.query.endDate || '';
     const extension = req.query.extension || '';
@@ -14568,7 +14993,7 @@ app.get('/js/config-page.js', requireAuth, (req, res) => {
     res.type('application/javascript; charset=utf-8');
     res.setHeader('Cache-Control', 'private, max-age=86400, must-revalidate');
     res.setHeader('Vary', 'Accept-Encoding');
-    res.render('scripts/config-page', { isRtl: lang === 'ar' }, (err, js) => {
+    res.render('scripts/config-page', { isRtl: lang === 'ar', defaultOutboundPatterns: DEFAULT_OUTBOUND_DIAL_PATTERNS }, (err, js) => {
         if (err) {
             console.error('config-page bundle render error:', err.message);
             return res.status(500).send('// bundle error');
@@ -14577,8 +15002,26 @@ app.get('/js/config-page.js', requireAuth, (req, res) => {
     });
 });
 
+app.get('/quality', requireAuth, (req, res) => {
+    const currentLang = res.locals.currentLang || 'en';
+    if (!isRootSession(req)) {
+        return res.status(403).render('403', { currentLang, isRtl: currentLang === 'ar' });
+    }
+    res.render('quality', {
+        moment,
+        currentPage: '/quality',
+        currentLang,
+        isRtl: currentLang === 'ar',
+        isSuperAdmin: isSuperAdmin(req),
+        isRootUser: hasRootAccess(req)
+    });
+});
+
 app.get('/config', requireAuth, (req, res) => {
     const currentLang = res.locals.currentLang || 'en';
+    if (getTenantId(req)) {
+        return res.status(403).render('403', { currentLang, isRtl: currentLang === 'ar' });
+    }
     const isRoot = hasRootAccess(req);
     res.render('config', {
         moment,
@@ -19063,12 +19506,13 @@ app.post('/api/config/routes/outbound', async (req, res) => {
         if (!name || !name.trim()) {
             return res.status(400).json({ success: false, error: 'Route Name is required.' });
         }
-        if (!patterns || !Array.isArray(patterns) || patterns.length === 0) {
-            return res.status(400).json({ success: false, error: 'At least one Dial Pattern is required.' });
-        }
         if (!trunks || !Array.isArray(trunks) || trunks.length === 0) {
             return res.status(400).json({ success: false, error: 'At least one Trunk in sequence is required.' });
         }
+
+        // New routes default to the standard Egyptian local + international
+        // patterns unless the caller supplied explicit patterns.
+        const routePatterns = resolveOutboundDialPatterns(patterns);
 
         const routeName = String(name).trim();
 
@@ -19083,7 +19527,7 @@ app.post('/api/config/routes/outbound', async (req, res) => {
         const routeId = rResult.insertId;
 
         // 2. Insert patterns
-        for (const p of patterns) {
+        for (const p of routePatterns) {
             await pool.query(`
                 INSERT INTO \`asterisk\`.\`outbound_route_patterns\` (route_id, match_pattern_prefix, match_pattern_pass, match_cid, prepend_digits)
                 VALUES (?, ?, ?, ?, ?)
@@ -23303,6 +23747,123 @@ async function runDialerPacerCycle() {
                 continue;
             }
 
+            // AI campaigns do not reserve a human agent. The AI SIP endpoint is
+            // the second leg; the pacer still awards one lead per free dongle.
+            const isAiCampaign = String(camp.agent_kind || 'human') === 'ai' && Number(camp.ai_agent_id) > 0;
+            if (isAiCampaign) {
+                let aiAllowedDongles = null;
+                if (camp.allowed_dongles) {
+                    try {
+                        const parsed = typeof camp.allowed_dongles === 'string' ? JSON.parse(camp.allowed_dongles) : camp.allowed_dongles;
+                        if (Array.isArray(parsed) && parsed.length > 0) aiAllowedDongles = new Set(parsed.map(d => String(d).trim().toLowerCase()));
+                    } catch (_) {
+                        const parts = String(camp.allowed_dongles).split(',').map(d => d.trim().toLowerCase()).filter(Boolean);
+                        if (parts.length > 0) aiAllowedDongles = new Set(parts);
+                    }
+                }
+
+                const aiFreeDongles = [];
+                let aiFreeCount = Math.max(0, maxCap - countInflight);
+                if (aiAllowedDongles && aiAllowedDongles.size > 0) {
+                    for (const dId of aiAllowedDongles) {
+                        const occupied = liveChannels.some(chan => chan.toLowerCase().startsWith(`dongle/${dId}-`));
+                        if (!occupied && (activeTrunkMap.get(dId) || 0) < 1) aiFreeDongles.push(dId);
+                    }
+                    aiFreeCount = Math.min(aiFreeDongles.length, aiFreeCount);
+                } else if (camp.outbound_route_id) {
+                    const [aiTrunks] = await pool.query(`
+                        SELECT rt.trunk_id, t.channelid, t.name AS trunk_name
+                        FROM \`asterisk\`.\`outbound_route_trunks\` rt
+                        LEFT JOIN \`asterisk\`.\`trunks\` t ON t.trunkid = rt.trunk_id
+                        WHERE rt.route_id = ?
+                        ORDER BY rt.seq ASC
+                    `, [camp.outbound_route_id]);
+                    let freeChannels = 0;
+                    for (const row of aiTrunks) {
+                        const info = parseTrunkIdentifier(row.channelid, row.trunk_name);
+                        const id = info ? info.id : `trunk_${row.trunk_id}`;
+                        let occupied = false;
+                        if (info) {
+                            for (const chan of liveChannels) {
+                                const c = chan.toLowerCase();
+                                if (info.tech === 'dongle' && c.startsWith(`dongle/${id}-`)) { occupied = true; break; }
+                                if ((info.tech === 'sip' || info.tech === 'pjsip') &&
+                                    (c.startsWith(`sip/${id}-`) || c.startsWith(`pjsip/${id}-`))) { occupied = true; break; }
+                            }
+                        }
+                        if (!occupied && (activeTrunkMap.get(id) || 0) < 1) {
+                            freeChannels++;
+                            if (info && info.tech === 'dongle') aiFreeDongles.push(id);
+                        }
+                    }
+                    aiFreeCount = Math.min(freeChannels, aiFreeCount);
+                }
+
+                let aiAgentMax = maxCap;
+                try {
+                    const [agentRows] = await pool.query('SELECT direction, max_concurrency, active FROM `asterisk`.`ai_agents` WHERE id = ?', [Number(camp.ai_agent_id)]);
+                    const agent = agentRows?.[0];
+                    if (!agent || !Number(agent.active) || !['outbound', 'both'].includes(agent.direction)) continue;
+                    const [agentActiveRows] = await pool.query(
+                        'SELECT COUNT(*) AS cnt FROM `asterisk`.`dialer_call_attempts` WHERE ai_agent_id = ? AND active_flag = 1',
+                        [Number(camp.ai_agent_id)]
+                    );
+                    aiAgentMax = Math.max(0, Number(agent.max_concurrency || 1) - Number(agentActiveRows?.[0]?.cnt || 0));
+                } catch (_) {}
+                const aiSlots = Math.min(aiFreeCount, Math.max(0, maxCap - countInflight), aiAgentMax);
+                if (aiSlots <= 0) continue;
+
+                for (let i = 0; i < aiSlots; i++) {
+                    const claim = await claimNextLeadAtomic(campId);
+                    if (!claim) break;
+                    const { attemptUuid, lead } = claim;
+                    const selectedDongle = aiFreeDongles.length > 0 ? aiFreeDongles.shift() : null;
+                    const cleanPhone = sanitizeAmiValue(lead.phone_number);
+                    const displayedPhone = camp.mask_phone_numbers ? maskPhoneNumber(lead.phone_number) : cleanPhone;
+                    const cleanAttemptUuid = sanitizeAmiValue(attemptUuid);
+                    const cleanAgentId = sanitizeAmiValue(String(camp.ai_agent_id));
+                    const cleanDialTarget = selectedDongle ? `Dongle/${selectedDongle}` : '';
+                    const cleanCid = sanitizeAmiValue(camp.origination_caller_id || '101');
+                    const leadFullName = (lead.first_name ? `${lead.first_name} ${lead.last_name || ''}` : lead.phone_number).trim();
+                    const cleanLeadName = sanitizeAmiValue(leadFullName);
+
+                    await pool.query(
+                        'UPDATE `asterisk`.`dialer_call_attempts` SET ai_agent_id = ?, dongle_id = ? WHERE attempt_uuid = ?',
+                        [Number(camp.ai_agent_id), selectedDongle, attemptUuid]
+                    );
+                    if (selectedDongle) activeTrunkMap.set(selectedDongle, 1);
+                    try {
+                        await pool.query(
+                            `INSERT INTO \`asteriskcdrdb\`.\`ai_sessions\`
+                             (uniqueid, attempt_uuid, agent_id, direction, campaign_id, lead_id, caller, status)
+                             VALUES (NULL, ?, ?, 'outbound', ?, ?, ?, 'started')`,
+                            [attemptUuid, Number(camp.ai_agent_id), campId, lead.id, cleanPhone]
+                        );
+                    } catch (_) {}
+                    broadcastDialerAttempt(attemptUuid, 'dialing', {
+                        leadPhone: cleanPhone,
+                        dongleId: selectedDongle || 'default',
+                        agentExtension: `AI:${camp.ai_agent_id}`
+                    });
+
+                    if (amiClient) {
+                        const variables = [
+                            `Variable: __ATTEMPT_UUID=${cleanAttemptUuid}`,
+                            `Variable: __CAMPAIGN_ID=${campId}`,
+                            `Variable: __LEAD_ID=${lead.id}`,
+                            `Variable: __LEAD_NUMBER=${cleanPhone}`,
+                            `Variable: __DIAL_TARGET=${cleanDialTarget}`,
+                            `Variable: __AI_AGENT_ID=${cleanAgentId}`,
+                            `Variable: __AI_CALLER_ID=${cleanCid}`,
+                            `Variable: __LEAD_NAME=${cleanLeadName}`
+                        ].join('\r\n');
+                        const aiCallerId = `"AI Agent" <${cleanCid}>`;
+                        amiClient.write(`Action: Originate\r\nActionID: ${cleanAttemptUuid}\r\nChannel: Local/s@ai-agent-dial/n\r\nContext: ai-agent-connect\r\nExten: s\r\nPriority: 1\r\nAsync: true\r\nCallerID: ${aiCallerId}\r\n${variables}\r\n\r\n`);
+                    }
+                }
+                continue;
+            }
+
             // 1. Resolve Assigned Agents Distribution
             let assignedAgentSet = null;
             if (camp.assigned_agents) {
@@ -23566,10 +24127,51 @@ function handleDialerAmiEvents(event) {
                 const termStatus = dialStatus === 'ANSWER' ? 'completed' : (dialStatus === 'BUSY' ? 'busy' : (dialStatus === 'NOANSWER' ? 'no_answer' : 'failed'));
                 finalizeAttempt(attemptUuid, termStatus, cause);
             }
+        } else if (event.UserEvent === 'AiSessionEvent') {
+            const agentId = Number(event.AgentID);
+            const direction = event.Direction === 'inbound' ? 'inbound' : 'outbound';
+            if (agentId) {
+                if (event.Status === 'started') {
+                    pool.query(
+                        `INSERT INTO \`asteriskcdrdb\`.\`ai_sessions\`
+                         (uniqueid, linkedid, agent_id, direction, caller, status)
+                         VALUES (?, ?, ?, ?, ?, 'started')`,
+                        [event.Uniqueid || null, event.Linkedid || null, agentId, direction, event.Caller || null]
+                    ).catch(() => {});
+                } else if (event.Status === 'ended') {
+                    const dialStatus = String(event.DialStatus || '').toUpperCase();
+                    const finalStatus = dialStatus === 'ANSWER' ? 'completed' : 'failed';
+                    pool.query(
+                        `UPDATE \`asteriskcdrdb\`.\`ai_sessions\`
+                         SET status = ?, ended_at = NOW()
+                         WHERE uniqueid = ? AND agent_id = ? AND direction = ?
+                         ORDER BY id DESC LIMIT 1`,
+                        [finalStatus, event.Uniqueid || '', agentId, direction]
+                    ).catch(() => {});
+                }
+            }
         } else if (event.UserEvent === 'AutoDialerEvent') {
             const attemptUuid = event.AttemptUUID;
             const status = event.Status;
             if (attemptUuid) {
+                if (status === 'LeadAnswered' || status === 'AgentAnswered') {
+                    pool.query(
+                        'UPDATE `asteriskcdrdb`.`ai_sessions` SET status = "answered", uniqueid = COALESCE(?, uniqueid) WHERE attempt_uuid = ?',
+                        [event.Uniqueid || null, attemptUuid]
+                    ).catch(() => {});
+                } else if (status === 'ProgressiveCompleted') {
+                    const ds = String(event.DialStatus || '').toUpperCase();
+                    const fs = ds === 'ANSWER' ? 'completed' : 'failed';
+                    pool.query(
+                        'UPDATE `asteriskcdrdb`.`ai_sessions` SET status = ?, ended_at = NOW() WHERE attempt_uuid = ?',
+                        [fs, attemptUuid]
+                    ).catch(() => {});
+                } else if (status === 'Abandoned') {
+                    pool.query(
+                        'UPDATE `asteriskcdrdb`.`ai_sessions` SET status = "failed", ended_at = NOW() WHERE attempt_uuid = ?',
+                        [attemptUuid]
+                    ).catch(() => {});
+                }
                 if (status === 'LeadAnswered') {
                     updateAttemptStatus(attemptUuid, 'lead_answered', event.Uniqueid, event.Linkedid, event.Channel);
                 } else if (status === 'AmdPassed') {
@@ -23719,6 +24321,58 @@ function requireRootForDialer(req, res, next) {
     next();
 }
 
+function denyAiRootOnly(res) {
+    return res.status(403).json({ success: false, error: 'Access denied. AI campaigns are restricted to the root session only.' });
+}
+
+async function campaignAccessRow(campaignId) {
+    if (!campaignId) return null;
+    try {
+        const [rows] = await pool.query(
+            'SELECT agent_kind, ai_agent_id FROM `asterisk`.`dialer_campaigns` WHERE id = ?',
+            [campaignId]
+        );
+        return rows?.[0] || null;
+    } catch (_) {
+        return null;
+    }
+}
+
+async function ensureAiCampaignAccess(req, res, campaignId) {
+    if (isRootSession(req)) return true;
+    const row = await campaignAccessRow(campaignId);
+    if (isAiCampaignRow(row)) {
+        denyAiRootOnly(res);
+        return false;
+    }
+    return true;
+}
+
+async function leadCampaignId(leadId) {
+    try {
+        const [rows] = await pool.query(
+            'SELECT campaign_id FROM `asterisk`.`dialer_leads` WHERE id = ?',
+            [leadId]
+        );
+        return rows?.[0]?.campaign_id || null;
+    } catch (_) {
+        return null;
+    }
+}
+
+async function attemptCampaignId(attemptUuid) {
+    if (!attemptUuid) return null;
+    try {
+        const [rows] = await pool.query(
+            'SELECT campaign_id FROM `asterisk`.`dialer_call_attempts` WHERE attempt_uuid = ?',
+            [attemptUuid]
+        );
+        return rows?.[0]?.campaign_id || null;
+    } catch (_) {
+        return null;
+    }
+}
+
 // GET /api/dialer/attempts/recent - Recent attempt ledger logs for live monitoring
 app.get('/api/dialer/attempts/recent', requireAuth, requireRootForDialer, async (req, res) => {
     try {
@@ -23726,17 +24380,24 @@ app.get('/api/dialer/attempts/recent', requireAuth, requireRootForDialer, async 
         if (dialerRecentAttempts.length > 0) {
             localAttempts = dialerRecentAttempts.slice(0, 30);
         } else {
+            const aiFilter = isRootSession(req) ? '' : "WHERE (c.agent_kind IS NULL OR c.agent_kind <> 'ai')";
             const [attempts] = await pool.query(`
                 SELECT a.attempt_uuid AS attemptUuid, l.phone_number AS leadPhone,
                        COALESCE(a.dongle_id, 'default') AS dongleId,
                        COALESCE(a.agent_extension, '') AS agentExtension,
-                       a.status, a.created_at AS timestamp
+                       a.status, a.created_at AS timestamp,
+                       c.agent_kind, c.ai_agent_id
                 FROM \`asterisk\`.\`dialer_call_attempts\` a
                 LEFT JOIN \`asterisk\`.\`dialer_leads\` l ON l.id = a.lead_id
+                LEFT JOIN \`asterisk\`.\`dialer_campaigns\` c ON c.id = a.campaign_id
+                ${aiFilter}
                 ORDER BY a.created_at DESC
                 LIMIT 30
             `);
             localAttempts = attempts || [];
+        }
+        if (!isRootSession(req)) {
+            localAttempts = localAttempts.filter(a => !String(a.agentExtension || '').startsWith('AI:') && !isAiCampaignRow(a));
         }
 
         if (isFederationTrusted(req)) {
@@ -23762,7 +24423,7 @@ app.get('/api/dialer/attempts/recent', requireAuth, requireRootForDialer, async 
             } else {
                 const read = readsBySite.get(site);
                 if (read && read.data && Array.isArray(read.data.attempts)) {
-                    read.data.attempts.forEach(a => {
+                    read.data.attempts.filter(a => isRootSession(req) || (!String(a.agentExtension || '').startsWith('AI:') && !isAiCampaignRow(a))).forEach(a => {
                         mergedAttempts.push({ ...a, nodeSite: site, nodeName });
                     });
                 }
@@ -23845,8 +24506,12 @@ app.get('/api/dialer/campaigns', requireAuth, requireRootForDialer, async (req, 
             c.lead_fields = normalizeDialerFieldDefinitions(c.lead_fields);
         }
 
+        const visibleCampaigns = isRootSession(req)
+            ? campaigns
+            : campaigns.filter(c => !isAiCampaignRow(c));
+
         if (isFederationTrusted(req)) {
-            return res.json({ success: true, campaigns });
+            return res.json({ success: true, campaigns: visibleCampaigns });
         }
 
         const scope = res.locals.federationScope;
@@ -23863,7 +24528,7 @@ app.get('/api/dialer/campaigns', requireAuth, requireRootForDialer, async (req, 
 
             if (node.is_local) {
                 if (includeLocal) {
-                    campaigns.forEach(c => {
+                    visibleCampaigns.forEach(c => {
                         mergedCampaigns.push({
                             ...c,
                             nodeSite: site,
@@ -23876,7 +24541,7 @@ app.get('/api/dialer/campaigns', requireAuth, requireRootForDialer, async (req, 
             } else {
                 const read = readsBySite.get(site);
                 if (read && read.data && Array.isArray(read.data.campaigns)) {
-                    read.data.campaigns.forEach(c => {
+                    read.data.campaigns.filter(c => isRootSession(req) || !isAiCampaignRow(c)).forEach(c => {
                         mergedCampaigns.push({
                             ...c,
                             nodeSite: site,
@@ -23903,6 +24568,7 @@ app.get('/api/dialer/campaigns/:id', requireAuth, requireRootForDialer, async (r
         const [rows] = await pool.query('SELECT * FROM `asterisk`.`dialer_campaigns` WHERE id = ?', [id]);
         if (rows.length === 0) return res.status(404).json({ success: false, error: 'Campaign not found' });
         const campaign = rows[0];
+        if (!isRootSession(req) && isAiCampaignRow(campaign)) return denyAiRootOnly(res);
         campaign.lead_fields = normalizeDialerFieldDefinitions(campaign.lead_fields);
         res.json({ success: true, campaign, lead_fields: campaign.lead_fields });
     } catch (err) {
@@ -23916,8 +24582,11 @@ app.post('/api/dialer/campaigns', requireAuth, requireRootForDialer, async (req,
     }
 
     try {
-        const { name, outbound_route_id, allowed_dongles, assigned_agents, origination_caller_id, wrapup_time_sec, max_concurrent_dials, mask_phone_numbers, lead_fields, followup_fields } = req.body;
+        const { name, outbound_route_id, allowed_dongles, assigned_agents, origination_caller_id, wrapup_time_sec, max_concurrent_dials, mask_phone_numbers, lead_fields, followup_fields, agent_kind, ai_agent_id } = req.body;
         if (!name || !name.trim()) return res.status(400).json({ success: false, error: 'Campaign name is required' });
+        const aiAgentId = agent_kind === 'ai' && Number(ai_agent_id) > 0 ? Number(ai_agent_id) : null;
+        if (agent_kind === 'ai' && !aiAgentId) return res.status(400).json({ success: false, error: 'ai_agent_id is required for AI campaigns' });
+        if (!isRootSession(req) && (agent_kind === 'ai' || aiAgentId || ai_agent_id)) return denyAiRootOnly(res);
 
         const cidNum = origination_caller_id ? sanitizeAmiValue(origination_caller_id) : '101';
 
@@ -23934,8 +24603,8 @@ app.post('/api/dialer/campaigns', requireAuth, requireRootForDialer, async (req,
 
         const [r] = await pool.query(`
             INSERT INTO \`asterisk\`.\`dialer_campaigns\`
-            (name, mode, outbound_route_id, allowed_dongles, assigned_agents, origination_caller_id, wrapup_time_sec, max_concurrent_dials)
-            VALUES (?, 'progressive', ?, ?, ?, ?, ?, ?)
+            (name, mode, outbound_route_id, allowed_dongles, assigned_agents, origination_caller_id, wrapup_time_sec, max_concurrent_dials, agent_kind, ai_agent_id)
+            VALUES (?, 'progressive', ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
             name.trim(),
             outbound_route_id ? parseInt(outbound_route_id, 10) : null,
@@ -23943,7 +24612,9 @@ app.post('/api/dialer/campaigns', requireAuth, requireRootForDialer, async (req,
             cleanAgents,
             cidNum,
             parseInt(wrapup_time_sec, 10) || 15,
-            parseInt(max_concurrent_dials, 10) || 1
+            parseInt(max_concurrent_dials, 10) || 1,
+            aiAgentId ? 'ai' : 'human',
+            aiAgentId
         ]);
 
         if (mask_phone_numbers !== undefined) {
@@ -23968,8 +24639,14 @@ app.put('/api/dialer/campaigns/:id', requireAuth, requireRootForDialer, async (r
     }
     try {
         const id = parseInt(req.params.id, 10);
-        const { name, outbound_route_id, allowed_dongles, assigned_agents, origination_caller_id, wrapup_time_sec, max_concurrent_dials, mask_phone_numbers, lead_fields, followup_fields } = req.body;
+        const { name, outbound_route_id, allowed_dongles, assigned_agents, origination_caller_id, wrapup_time_sec, max_concurrent_dials, mask_phone_numbers, lead_fields, followup_fields, agent_kind, ai_agent_id } = req.body;
         if (!name || !name.trim()) return res.status(400).json({ success: false, error: 'Campaign name is required' });
+        const aiAgentId = agent_kind === 'ai' && Number(ai_agent_id) > 0 ? Number(ai_agent_id) : null;
+        if (agent_kind === 'ai' && !aiAgentId) return res.status(400).json({ success: false, error: 'ai_agent_id is required for AI campaigns' });
+        const existingAccess = await campaignAccessRow(id);
+        if (!isRootSession(req) && (isAiCampaignRow(existingAccess) || agent_kind === 'ai' || aiAgentId || ai_agent_id)) {
+            return denyAiRootOnly(res);
+        }
 
         let cleanDongles = null;
         if (allowed_dongles) {
@@ -23986,7 +24663,7 @@ app.put('/api/dialer/campaigns/:id', requireAuth, requireRootForDialer, async (r
             UPDATE \`asterisk\`.\`dialer_campaigns\`
             SET name = ?, outbound_route_id = ?, allowed_dongles = ?, assigned_agents = ?,
                 origination_caller_id = ?, wrapup_time_sec = ?, max_concurrent_dials = ?,
-                mask_phone_numbers = ?
+                mask_phone_numbers = ?, agent_kind = ?, ai_agent_id = ?
             WHERE id = ?
         `, [
             name.trim(),
@@ -23997,6 +24674,8 @@ app.put('/api/dialer/campaigns/:id', requireAuth, requireRootForDialer, async (r
             parseInt(wrapup_time_sec, 10) || 15,
             parseInt(max_concurrent_dials, 10) || 1,
             mask_phone_numbers ? 1 : 0,
+            aiAgentId ? 'ai' : 'human',
+            aiAgentId,
             id
         ]);
         const cleanLeadFields = normalizeDialerFieldDefinitions(lead_fields);
@@ -24031,6 +24710,8 @@ app.post('/api/dialer/campaigns/:id/control', requireAuth, requireRootForDialer,
         if (!['start', 'pause', 'stop', 'reset', 'delete'].includes(action)) {
             return res.status(400).json({ success: false, error: 'Invalid action' });
         }
+        const controlAccess = await campaignAccessRow(id);
+        if (!isRootSession(req) && isAiCampaignRow(controlAccess)) return denyAiRootOnly(res);
 
         if (action === 'reset') {
             await pool.query(`
@@ -24067,6 +24748,7 @@ app.get('/api/dialer/leads/template', requireAuth, requireRootForDialer, async (
     let leadFields = [];
     const campaignId = parseInt(req.query.campaign_id, 10);
     if (Number.isInteger(campaignId) && campaignId > 0) {
+        if (!(await ensureAiCampaignAccess(req, res, campaignId))) return;
         try { leadFields = await getCampaignLeadFields(campaignId); } catch (_) {}
     }
     const headers = ['Name', 'Phone Number', ...leadFields.map(field => field.label)];
@@ -24119,6 +24801,7 @@ app.get('/api/dialer/leads/:campaignId', requireAuth, requireRootForDialer, asyn
         if (!Number.isInteger(campaignId) || campaignId <= 0) {
             return res.status(400).json({ success: false, error: 'Invalid campaign ID' });
         }
+        if (!(await ensureAiCampaignAccess(req, res, campaignId))) return;
 
         const page = Math.max(1, parseInt(req.query.page, 10) || 1);
         const limit = Math.min(2000, Math.max(10, parseInt(req.query.limit, 10) || 500));
@@ -24170,6 +24853,7 @@ app.get('/api/dialer/leads/:campaignId', requireAuth, requireRootForDialer, asyn
 app.get('/api/dialer/campaigns/:id/export', requireAuth, requireRootForDialer, requireActionPermission('campaigns-export-leads'), async (req, res) => {
     try {
         const id = parseInt(req.params.id, 10);
+        if (!(await ensureAiCampaignAccess(req, res, id))) return;
         const [cRows] = await pool.query('SELECT name, lead_fields FROM `asterisk`.`dialer_campaigns` WHERE id = ?', [id]);
         if (cRows.length === 0) return res.status(404).send('Campaign not found');
 
@@ -24242,6 +24926,7 @@ app.get('/api/dialer/campaigns/:id/export', requireAuth, requireRootForDialer, r
 app.delete('/api/dialer/leads/:id', requireAuth, requireRootForDialer, async (req, res) => {
     try {
         const id = parseInt(req.params.id, 10);
+        if (!(await ensureAiCampaignAccess(req, res, await leadCampaignId(id)))) return;
         await pool.query('DELETE FROM `asterisk`.`dialer_leads` WHERE id = ?', [id]);
         res.json({ success: true, message: 'Lead deleted successfully' });
     } catch (err) {
@@ -24253,6 +24938,7 @@ app.delete('/api/dialer/leads/:id', requireAuth, requireRootForDialer, async (re
 app.post('/api/dialer/leads/:id/reset', requireAuth, requireRootForDialer, async (req, res) => {
     try {
         const id = parseInt(req.params.id, 10);
+        if (!(await ensureAiCampaignAccess(req, res, await leadCampaignId(id)))) return;
         await pool.query("UPDATE `asterisk`.`dialer_leads` SET status = 'pending', attempts = 0, last_called_at = NULL, disposition = NULL WHERE id = ?", [id]);
         res.json({ success: true, message: 'Lead reset to pending' });
     } catch (err) {
@@ -24267,6 +24953,7 @@ app.post('/api/dialer/disposition', requireAuth, async (req, res) => {
         if (!leadId || !disposition) {
             return res.status(400).json({ success: false, error: 'Lead ID and Disposition are required' });
         }
+        if (!(await ensureAiCampaignAccess(req, res, await attemptCampaignId(attemptUuid) || await leadCampaignId(leadId)))) return;
 
         await pool.query('UPDATE `asterisk`.`dialer_leads` SET disposition = ?, status = "connected" WHERE id = ?', [disposition, leadId]);
 
@@ -24310,6 +24997,7 @@ app.get('/api/dialer/followups', requireAuth, requireRootForDialer, async (req, 
             WHERE 1 = 1
         `;
         const params = [];
+        if (!isRootSession(req)) sql += " AND (c.agent_kind IS NULL OR c.agent_kind <> 'ai')";
         if (campaignId) { sql += ' AND f.campaign_id = ?'; params.push(campaignId); }
         if (from) { sql += ' AND f.submitted_at >= ?'; params.push(from + ' 00:00:00'); }
         if (to) { sql += ' AND f.submitted_at <= ?'; params.push(to + ' 23:59:59'); }
@@ -24327,7 +25015,7 @@ app.get('/api/dialer/followups', requireAuth, requireRootForDialer, async (req, 
 app.get('/api/dialer/followups/:attemptUuid', requireAuth, requireRootForDialer, async (req, res) => {
     try {
         const [rows] = await pool.query(`
-            SELECT f.*, c.name AS campaign_name, c.followup_fields,
+            SELECT f.*, c.name AS campaign_name, c.followup_fields, c.agent_kind,
                    l.phone_number, l.first_name, l.last_name, l.company, l.custom_data,
                    u.name AS agent_name
             FROM \`asterisk\`.\`dialer_followups\` f
@@ -24341,6 +25029,7 @@ app.get('/api/dialer/followups/:attemptUuid', requireAuth, requireRootForDialer,
             return res.status(404).json({ success: false, error: 'Follow-up not found' });
         }
         const row = rows[0];
+        if (!isRootSession(req) && isAiCampaignRow(row)) return denyAiRootOnly(res);
         let data = row.data;
         if (typeof data === 'string') {
             try { data = JSON.parse(data); } catch (_) { data = {}; }
@@ -24447,6 +25136,7 @@ app.post('/api/dialer/leads', requireAuth, requireRootForDialer, async (req, res
         if (!Number.isInteger(campaignId) || campaignId <= 0) {
             return res.status(400).json({ success: false, error: 'Campaign ID is required' });
         }
+        if (!(await ensureAiCampaignAccess(req, res, campaignId))) return;
         const [campaignRows] = await pool.query('SELECT id, lead_fields FROM `asterisk`.`dialer_campaigns` WHERE id = ?', [campaignId]);
         if (campaignRows.length === 0) return res.status(404).json({ success: false, error: 'Campaign not found' });
 
@@ -24492,6 +25182,10 @@ app.post('/api/dialer/leads/import', requireAuth, requireRootForDialer, requireA
         if (!campaignId) {
             if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
             return res.status(400).json({ success: false, error: 'Campaign ID is required' });
+        }
+        if (!(await ensureAiCampaignAccess(req, res, campaignId))) {
+            if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+            return;
         }
         const [campaignRows] = await pool.query('SELECT id, lead_fields FROM `asterisk`.`dialer_campaigns` WHERE id = ?', [campaignId]);
         if (campaignRows.length === 0) {
@@ -25617,6 +26311,54 @@ app.post('/integrations/crm/clients/:id/update', requireAuth, async (req, res) =
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// --- PUBLIC CLOUD TENANT CALL PAGE ---
+app.get('/c/:slug', async (req, res) => {
+    try {
+        const resolved = await tenantCallService.resolvePublicLink(req.params.slug);
+        const tenant = {
+            ...resolved.tenant,
+            branding: {
+                ...(resolved.tenant.branding || {}),
+                ...(resolved.link.branding || {})
+            }
+        };
+        const link = resolved.link;
+        const origins = Array.isArray(link.allowed_origins) ? link.allowed_origins : [];
+        const referer = req.get('referer');
+        if (origins.length && referer) {
+            const proto = String(req.headers['x-forwarded-proto'] || req.protocol || 'https').split(',')[0].trim();
+            const selfOrigin = normalizeOrigin(`${proto}://${req.get('host')}`);
+            const refererOrigin = normalizeOrigin(referer);
+            if (!refererOrigin || (refererOrigin !== selfOrigin && !origins.includes(refererOrigin))) {
+                return res.status(403).type('html').send('<!doctype html><html><body style="background:#0b0b0f;color:#f8fafc;font-family:Arial,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0"><div style="text-align:center"><h1 style="font-size:20px">This call link is not allowed on this website.</h1></div></body></html>');
+            }
+        }
+        res.setHeader('Content-Security-Policy', `frame-ancestors ${origins.length ? `'self' ${origins.join(' ')}` : '*'}`);
+        res.setHeader('Permissions-Policy', 'microphone=(self)');
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.setHeader('Referrer-Policy', 'no-referrer');
+        res.setHeader('Cache-Control', 'no-store');
+        const lang = req.query.lang === 'ar' ? 'ar' : (req.query.lang === 'en' ? 'en' : (res.locals.currentLang || 'en'));
+        return res.render('guest-call', {
+            tenant,
+            link,
+            currentLang: lang,
+            isEmbedded: req.query.embed === '1',
+            autoStart: req.query.autostart !== '0'
+        });
+    } catch (error) {
+        const status = Number(error.status) || 404;
+        const message = error.code === 'LINK_EXPIRED'
+            ? 'This call link has expired.'
+            : (error.code === 'TENANT_NO_AGENTS'
+                ? 'This business has no agents available yet.'
+                : (error.code === 'LINK_INACTIVE' || error.code === 'TENANT_INACTIVE'
+                    ? 'This business is not accepting calls right now.'
+                    : 'Call link not found.'));
+        return res.status(status).type('html').send(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Call unavailable</title></head><body style="background:#0b0b0f;color:#f8fafc;font-family:Arial,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0"><div style="max-width:380px;padding:24px;text-align:center"><h1 style="font-size:20px;margin:0 0 8px">${message}</h1><p style="color:#a1a1aa;font-size:13px">Please contact the business directly.</p></div></body></html>`);
     }
 });
 

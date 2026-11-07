@@ -891,10 +891,12 @@ ensure_db_column_width() {
 }
 
 ensure_db_column "dashboard_users" "group_id" "INT DEFAULT NULL"
+ensure_db_column "dashboard_users" "tenant_id" "INT UNSIGNED DEFAULT NULL"
 ensure_db_column "dashboard_users" "extension" "VARCHAR(512) DEFAULT NULL"
 ensure_db_column_width "dashboard_users" "extension" "VARCHAR(512) DEFAULT NULL" 512
 ensure_db_column "dashboard_users" "reset_token_expires" "DATETIME DEFAULT NULL"
 ensure_db_index "dashboard_users" "idx_dash_users_extension" "KEY \`idx_dash_users_extension\` (\`extension\`)"
+ensure_db_index "dashboard_users" "idx_dash_users_tenant" "KEY \`idx_dash_users_tenant\` (\`tenant_id\`)"
 ensure_db_index "dashboard_users" "idx_unique_email" "UNIQUE KEY \`idx_unique_email\` (\`email\`)"
 
 mysql -u root -p"$MYSQL_ROOT_PWD" asterisk -e "
@@ -2157,6 +2159,89 @@ exten => s,1,NoOp(=== Progressive Dialer Hangup: ${CAMPAIGN_ID} / ${LEAD_ID} ===
 same => n,UserEvent(DialerProgressiveHangup,AttemptUUID: ${ATTEMPT_UUID},CampaignID: ${CAMPAIGN_ID},LeadID: ${LEAD_ID},AgentExtension: ${TARGET_AGENT},DialStatus: ${DIALSTATUS},HangupCause: ${HANGUPCAUSE})
 same => n,Return()
 AUTODIALER_CTX
+
+# SIP-hosted AI agents. Inbound: DID/custom destination -> ai-agent,<id>,1.
+# Outbound: campaign originates Local/s@ai-agent-dial/n (lead-facing) first.
+# When the lead answers, Asterisk runs [ai-agent-connect] in the originate
+# context, which dials the provider SIP bot. No second cellular call is made.
+append_context '[ai-agent]' '[ai-agent]' << 'AIAGENT'
+
+[ai-agent]
+exten => _[0-9],1,NoOp(=== SIP AI Agent ${EXTEN} inbound ===)
+same => n,Set(AI_AGENT_ID=${EXTEN})
+same => n,Goto(handler,1)
+exten => _X.,1,NoOp(=== SIP AI Agent ${EXTEN} inbound ===)
+same => n,Set(AI_AGENT_ID=${EXTEN})
+same => n,Goto(handler,1)
+exten => handler,1,NoOp(=== SIP AI Agent ${AI_AGENT_ID} inbound ===)
+same => n,Set(AI_SIP=${DB(AI_AGENT/${AI_AGENT_ID}/sip_endpoint)})
+same => n,GotoIf($["${AI_SIP}"=""]?missing)
+same => n,GotoIf($["${DB(AI_AGENT/${AI_AGENT_ID}/active)}"!="1"]?missing)
+same => n,GotoIf($["${DB(AI_AGENT/${AI_AGENT_ID}/direction)}"="outbound"]?missing)
+same => n,Set(CHANNEL(hangup_handler_push)=ai-agent-hangup,s,1)
+same => n,UserEvent(AiSessionEvent,AgentID:${AI_AGENT_ID},Direction:inbound,Status:started,Uniqueid:${UNIQUEID},Caller:${CALLERID(num)})
+same => n,Dial(${AI_SIP},60)
+same => n,GotoIf($["${DIALSTATUS}"="ANSWER"]?done:fallback)
+same => n(fallback),Set(AI_FALLBACK=${DB(AI_AGENT/${AI_AGENT_ID}/fallback_target)})
+same => n,GotoIf($["${AI_FALLBACK}"=""]?done)
+same => n,Goto(${AI_FALLBACK})
+same => n(done),Hangup()
+same => n(missing),Playback(ss-noservice)
+same => n,Hangup()
+
+[ai-agent-hangup]
+exten => s,1,UserEvent(AiSessionEvent,AgentID:${AI_AGENT_ID},Direction:inbound,Status:ended,Uniqueid:${UNIQUEID},DialStatus:${DIALSTATUS},HangupCause:${HANGUPCAUSE})
+same => n,Return()
+
+; Outbound lead leg. Originate dials this Local channel first; when the lead
+; answers, the Local channel answers and Asterisk starts the Originate context
+; [ai-agent-connect], which dials the provider SIP endpoint. No polling flag.
+[ai-agent-dial]
+exten => s,1,NoOp(=== SIP AI Agent ${AI_AGENT_ID} outbound lead ${LEAD_NUMBER} ===)
+same => n,Set(CHANNEL(hangup_handler_push)=sub-ai-outbound-hangup,s,1)
+same => n,ExecIf($["${AI_CALLER_ID}"!=""]?Set(CALLERID(num)=${AI_CALLER_ID}))
+same => n,Set(__MON_FMT=wav)
+same => n,Set(__MIXMON_DIR=/var/spool/asterisk/monitor/)
+same => n,Set(MIXMON_OPTS=v(1)V(1))
+same => n,Set(NOW=${EPOCH})
+same => n,Set(__DAY=${STRFTIME(${NOW},,%d)})
+same => n,Set(__MONTH=${STRFTIME(${NOW},,%m)})
+same => n,Set(__YEAR=${STRFTIME(${NOW},,%Y)})
+same => n,Set(__TIMESTR=${YEAR}${MONTH}${DAY}-${STRFTIME(${NOW},,%H%M%S)})
+same => n,Set(__CALLFILENAME=ai-out-${AI_AGENT_ID}-${LEAD_ID}-${TIMESTR}-${UNIQUEID})
+same => n,MixMonitor(${MIXMON_DIR}${YEAR}/${MONTH}/${DAY}/${CALLFILENAME}.${MON_FMT},a${MIXMON_OPTS})
+same => n,Set(CDR(recordingfile)=${CALLFILENAME}.${MON_FMT})
+same => n,GotoIf($["${DIAL_TARGET}"!=""]?target:route)
+same => n(target),Dial(${DIAL_TARGET}/${LEAD_NUMBER},60,U(sub-ai-lead-answered^${ATTEMPT_UUID}))
+same => n,Hangup()
+same => n(route),Dial(Local/${LEAD_NUMBER}@outbound-allroutes,60,U(sub-ai-lead-answered^${ATTEMPT_UUID}))
+same => n,Hangup()
+
+; Post-answer context from Originate. It runs only after the lead-facing Local
+; channel has answered, then connects the provider SIP bot to that channel.
+[ai-agent-connect]
+exten => s,1,NoOp(=== SIP AI Agent ${AI_AGENT_ID} bot leg ===)
+same => n,Set(AI_SIP=${DB(AI_AGENT/${AI_AGENT_ID}/sip_endpoint)})
+same => n,GotoIf($["${AI_SIP}"=""]?missing)
+same => n,ExecIf($["${AI_CALLER_ID}"!=""]?Set(CALLERID(num)=${AI_CALLER_ID}))
+same => n,Dial(${AI_SIP},60,U(sub-ai-bot-answered^${ATTEMPT_UUID}))
+same => n,Hangup()
+same => n(missing),UserEvent(AutoDialerEvent,AttemptUUID:${ATTEMPT_UUID},Status:Abandoned,CampaignID:${CAMPAIGN_ID},LeadID:${LEAD_ID},AgentID:${AI_AGENT_ID})
+same => n,Hangup()
+
+[sub-ai-lead-answered]
+exten => s,1,UserEvent(AutoDialerEvent,AttemptUUID:${ARG1},Status:LeadAnswered,CampaignID:${CAMPAIGN_ID},LeadID:${LEAD_ID},AgentID:${AI_AGENT_ID},Channel:${CHANNEL},Uniqueid:${UNIQUEID})
+same => n,Return()
+
+[sub-ai-bot-answered]
+exten => s,1,UserEvent(AutoDialerEvent,AttemptUUID:${ARG1},Status:AgentAnswered,CampaignID:${CAMPAIGN_ID},LeadID:${LEAD_ID},AgentID:${AI_AGENT_ID},Channel:${CHANNEL})
+same => n,Return()
+
+[sub-ai-outbound-hangup]
+exten => s,1,UserEvent(AutoDialerEvent,AttemptUUID:${ATTEMPT_UUID},Status:ProgressiveCompleted,CampaignID:${CAMPAIGN_ID},LeadID:${LEAD_ID},AgentID:${AI_AGENT_ID},DialStatus:${DIALSTATUS},HangupCause:${HANGUPCAUSE},Uniqueid:${UNIQUEID})
+same => n,Return()
+
+AIAGENT
 
 # Ensure [macro-exten-vm] Camp-On override in /etc/asterisk/extensions_override_issabel.conf
 OVERRIDE_CONF="/etc/asterisk/extensions_override_issabel.conf"
