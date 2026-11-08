@@ -704,8 +704,8 @@ if [ -f "$INSTALL_DIR/scripts/install-webrtc-wake.py" ]; then
     # Repair managed metadata even when content is unchanged, then test access
     # as Asterisk. Never chmod the root-owned dispatcher to root-only 0750.
     python3 "$INSTALL_DIR/scripts/install-webrtc-wake.py" --apply --no-reload --verify-access || echo "  Warning: mobile incoming wake is NOT verified; review dispatcher/config permissions and compiler output"
-    if ! grep -q 'incoming-call-live' /usr/local/bin/sokrat-webrtc-wake-dispatch.py 2>/dev/null; then
-        echo "  Warning: installed wake dispatcher is missing the live-session gate; review compiler output" >&2
+    if ! grep -q "post(candidate, '/api/gateway/incoming-call'" /usr/local/bin/sokrat-webrtc-wake-dispatch.py 2>/dev/null; then
+        echo "  Warning: installed wake dispatcher is missing the parallel incoming-call push; review compiler output" >&2
     fi
     if [ -f "$INSTALL_DIR/systemd/sokrat-webrtc-wake-apply.path" ]; then
         install -m 0644 "$INSTALL_DIR/systemd/sokrat-webrtc-wake-apply.service" /etc/systemd/system/sokrat-webrtc-wake-apply.service

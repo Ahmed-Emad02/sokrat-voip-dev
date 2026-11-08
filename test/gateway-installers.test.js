@@ -36,6 +36,14 @@ test('all PBX installation paths install the PJSIP transport sanitizer', () => {
     }
 });
 
+test('WebRTC wake watcher does not watch the files its compiler rewrites', () => {
+    const pathUnit = fs.readFileSync(path.join(root, 'systemd/sokrat-webrtc-wake-apply.path'), 'utf8');
+    const serviceUnit = fs.readFileSync(path.join(root, 'systemd/sokrat-webrtc-wake-apply.service'), 'utf8');
+    assert.doesNotMatch(pathUnit, /extensions\.conf/);
+    assert.match(pathUnit, /PathChanged=\/etc\/asterisk\/extensions_additional\.conf/);
+    assert.match(serviceUnit, /StartLimitIntervalSec=0/);
+});
+
 test('all PBX installation paths install the debounced dialplan reload watcher', () => {
     const script = path.join(root, 'scripts/reload-dialplan.sh');
     assert.equal(fs.existsSync(script), true);
