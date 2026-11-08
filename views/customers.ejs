@@ -224,6 +224,7 @@ const t = isRtl ? {
 
     <script>
         const T = <%- JSON.stringify(t) %>;
+        const RTL = <%- isRtl ? 'true' : 'false' %>;
         const BOOT = {
             isRoot: <%- isRootUser ? 'true' : 'false' %>,
             tenantId: <%- tenantId == null ? 'null' : Number(tenantId) %>,
@@ -337,7 +338,7 @@ const t = isRtl ? {
             state.fields.forEach(field => {
                 const label = document.createElement('label');
                 label.className = 'block text-[11px] font-bold text-[var(--text-secondary)] mb-1';
-                label.textContent = (field.label_en || field.label_ar || field.key) + (field.required ? ' *' : '');
+                label.textContent = ((RTL && field.label_ar) ? field.label_ar : (field.label_en || field.label_ar || field.key)) + (field.required ? ' *' : '');
                 const value = data && data[field.key] != null ? String(data[field.key]) : '';
                 const holder = document.createElement('div');
                 let input;
@@ -354,7 +355,7 @@ const t = isRtl ? {
                     (field.options || []).forEach(option => {
                         const opt = document.createElement('option');
                         opt.value = option.value;
-                        opt.textContent = option.label_en || option.value;
+                        opt.textContent = (RTL && option.label_ar) ? option.label_ar : (option.label_en || option.value);
                         input.appendChild(opt);
                     });
                     input.value = value;
