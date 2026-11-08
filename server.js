@@ -5410,16 +5410,19 @@ app.get('/users', async (req, res) => {
     }
 });
 
-// GET /customers - business customers. Tenant users are owner-scoped by the API.
+// GET /customers - combined businesses (cloud tenants) and business customers.
+// Root users get both views in one page; tenant users are owner-scoped by the API.
 app.get('/customers', requireAuth, async (req, res) => {
     const currentLang = res.locals.currentLang || 'en';
     const root = isRootSession(req);
+    const initialView = root && String(req.query.view || '') === 'businesses' ? 'businesses' : 'customers';
     let tenantId = root ? Number(req.query.tenant_id) || null : getTenantId(req);
     if (!root && !tenantId) {
         return res.status(403).render('403', { currentLang, isRtl: currentLang === 'ar' });
     }
     let tenants = [];
     let tenantName = res.locals.tenantName || null;
+    let assignedExtensions = [];
     try {
         if (root) {
             const [rows] = await asteriskPool.execute(
@@ -5427,6 +5430,8 @@ app.get('/customers', requireAuth, async (req, res) => {
             );
             tenants = rows.map(row => ({ id: Number(row.id), name: row.name }));
             if (!tenantId && tenants.length) tenantId = tenants[0].id;
+            const [assignedRows] = await asteriskPool.execute('SELECT DISTINCT extension FROM sokrat_tenant_agents');
+            assignedExtensions = assignedRows.map(row => String(row.extension));
         }
         if (tenantId && !tenantName) {
             const [rows] = await asteriskPool.execute(
@@ -5445,35 +5450,22 @@ app.get('/customers', requireAuth, async (req, res) => {
         tenantId,
         tenantName,
         tenants,
+        initialView,
+        roster: res.locals.roster || [],
+        assignedExtensions,
         currentUser: req.session ? req.session.username : '',
         clientName: process.env.CLIENT_NAME || '',
         allowedTabs: res.locals.allowedTabs || []
     });
 });
 
-// GET /tenants - platform-admin cloud tenant management (interactive root only)
+// Legacy /tenants entry point; the combined businesses view lives on /customers.
 app.get('/tenants', requireAuth, async (req, res) => {
     const currentLang = res.locals.currentLang || 'en';
     if (!isRootSession(req)) {
         return res.status(403).render('403', { currentLang, isRtl: currentLang === 'ar' });
     }
-    let assignedExtensions = [];
-    try {
-        const [assignedRows] = await asteriskPool.execute('SELECT DISTINCT extension FROM sokrat_tenant_agents');
-        assignedExtensions = assignedRows.map(row => String(row.extension));
-    } catch (_) {}
-    res.render('tenants', {
-        currentPage: '/tenants',
-        currentLang,
-        isRtl: currentLang === 'ar',
-        isSuperAdmin: isSuperAdmin(req),
-        isRootUser: isRootSession(req),
-        allowedTabs: res.locals.allowedTabs || [],
-        currentUser: req.session ? req.session.username : '',
-        clientName: process.env.CLIENT_NAME || '',
-        roster: res.locals.roster || [],
-        assignedExtensions
-    });
+    return res.redirect(`/customers?view=businesses&lang=${encodeURIComponent(currentLang)}`);
 });
 
 // POST /users/add - add new user
