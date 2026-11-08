@@ -16076,6 +16076,11 @@ app.put('/api/config/extensions/:extension', async (req, res) => {
         const devDial = isWebRTC ? `PJSIP/${extNum}` : `SIP/${extNum}`;
 
         await pool.query('UPDATE `asterisk`.`devices` SET tech = ?, dial = ? WHERE id = ?', [devTech, devDial, extNum]);
+        // The dialplan reads DEVICE/<ext>/dial at call time. Keep it in sync
+        // with the channel driver chosen above, otherwise switching an
+        // extension to WebRTC leaves it unreachable through the old SIP driver.
+        await execFileAsync(ASTERISK_BIN, ['-rx', `database put DEVICE/${extNum} dial "${devDial}"`]);
+        await execFileAsync(ASTERISK_BIN, ['-rx', `database put DEVICE/${extNum} tech "${devTech}"`]);
         if (displayName) {
             await pool.query('UPDATE `asterisk`.`devices` SET description = ? WHERE id = ?', [displayName, extNum]);
             await pool.query('UPDATE `asterisk`.`users` SET name = ? WHERE extension = ?', [displayName, extNum]);
