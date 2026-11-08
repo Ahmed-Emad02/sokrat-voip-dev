@@ -23,6 +23,7 @@ const t = isRtl ? {
     selectAll: 'تحديد الكل',
     clearAll: 'مسح',
     noExtensions: 'لا توجد تحويلات معرفة',
+    assigned: 'مُسند',
     linkAutoNote: 'يتم إنشاء رابط الاتصال تلقائياً بعد الحفظ، ثم يظهر الرابط وكود التضمين.',
     concurrency: 'أقصى مكالمات متزامنة',
     poolSize: 'حجم خطوط الضيوف',
@@ -38,11 +39,12 @@ const t = isRtl ? {
     snippet: 'كود التضمين',
     publicLink: 'الرابط العام',
     close: 'إغلاق',
-    manageAgents: 'إدارة الموظفين',
+    edit: 'تعديل',
+    editBusiness: 'تعديل النشاط التجاري',
+    updated: 'تم تحديث النشاط التجاري',
     save: 'حفظ',
     selectAtLeastOneAgent: 'اختر موظفاً واحداً على الأقل',
-    noAgents: 'لا يوجد موظفون',
-    agentsFor: 'موظفو النشاط'
+    noAgents: 'لا يوجد موظفون'
 } : {
     title: 'Cloud Tenants',
     subtitle: 'Public call links and ring groups for every business',
@@ -66,6 +68,7 @@ const t = isRtl ? {
     selectAll: 'Select all',
     clearAll: 'Clear',
     noExtensions: 'No extensions configured',
+    assigned: 'assigned',
     linkAutoNote: 'The public call link is generated automatically after saving; the URL and embed code are shown next.',
     concurrency: 'Max Concurrent Calls',
     poolSize: 'Guest Line Pool Size',
@@ -81,11 +84,12 @@ const t = isRtl ? {
     snippet: 'Embed Code',
     publicLink: 'Public Link',
     close: 'Close',
-    manageAgents: 'Agents',
+    edit: 'Edit',
+    editBusiness: 'Edit Business',
+    updated: 'Business updated',
     save: 'Save',
     selectAtLeastOneAgent: 'Select at least one agent',
-    noAgents: 'No agents',
-    agentsFor: 'Agents for'
+    noAgents: 'No agents'
 };
 %>
 <!DOCTYPE html>
@@ -101,12 +105,13 @@ const t = isRtl ? {
         :root { --bg-primary:#000; --bg-secondary:#121212; --bg-card:#18181b; --bg-hover:#27272a; --border-primary:#27272a; --text-primary:#fff; --text-secondary:#a1a1aa; --text-muted:#71717a; --accent-color:#e11d48; }
         body { background: var(--bg-primary); color: var(--text-primary); font-family: 'Cairo','Segoe UI',sans-serif; min-height:100vh; }
         .panel-surface { background: var(--bg-secondary); border:1px solid var(--border-primary); border-radius:1rem; }
-        .config-input { width:100%; background:#09090b; border:1px solid var(--border-primary); border-radius:.7rem; padding:.65rem .8rem; color:var(--text-primary); font-size:.8rem; outline:none; }
+        .config-input { width:100%; background:var(--bg-primary); border:1px solid var(--border-primary); border-radius:.7rem; padding:.65rem .8rem; color:var(--text-primary); font-size:.8rem; outline:none; }
         .config-input:focus { border-color:var(--accent-color); }
         .badge { display:inline-flex; align-items:center; padding:.2rem .55rem; border-radius:999px; font-size:.65rem; font-weight:800; }
         .badge-active { background:rgba(16,185,129,.12); color:#34d399; border:1px solid rgba(16,185,129,.25); }
         .badge-suspended { background:rgba(245,158,11,.12); color:#fbbf24; border:1px solid rgba(245,158,11,.25); }
 .multi-menu { position:absolute; top:calc(100% + 6px); left:0; right:0; z-index:80; max-height:220px; overflow-y:auto; background:var(--bg-card); border:1px solid var(--border-primary); border-radius:.8rem; padding:.55rem; box-shadow:0 18px 50px rgba(0,0,0,.55); }
+.multi-list { max-height:220px; overflow-y:auto; background:var(--bg-card); border:1px solid var(--border-primary); border-radius:.7rem; padding:.55rem; }
         .multi-option { display:flex; align-items:center; gap:.5rem; padding:.42rem .5rem; border-radius:.5rem; cursor:pointer; font-size:.72rem; }
         .multi-option:hover { background:var(--bg-hover); }
         .multi-option input { accent-color: var(--accent-color); width:14px; height:14px; }
@@ -116,9 +121,9 @@ const t = isRtl ? {
         .modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.75); display:none; align-items:center; justify-content:center; padding:16px; z-index:1000; }
         .modal-backdrop.open { display:flex; }
         .modal { width:min(560px,96vw); max-height:92vh; overflow:auto; background:var(--bg-card); border:1px solid var(--border-primary); border-radius:1.25rem; padding:22px; }
-        .toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:#18181b; border:1px solid var(--border-primary); padding:12px 18px; border-radius:.8rem; font-size:.8rem; z-index:2000; opacity:0; pointer-events:none; transition:.2s; }
+        .toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:var(--bg-card); border:1px solid var(--border-primary); padding:12px 18px; border-radius:.8rem; font-size:.8rem; z-index:2000; opacity:0; pointer-events:none; transition:.2s; }
         .toast.show { opacity:1; }
-        .code { font-family:monospace; font-size:.7rem; background:#09090b; border:1px solid var(--border-primary); border-radius:.6rem; padding:.65rem; overflow:auto; white-space:pre-wrap; word-break:break-all; }
+        .code { font-family:monospace; font-size:.7rem; background:var(--bg-primary); border:1px solid var(--border-primary); border-radius:.6rem; padding:.65rem; overflow:auto; white-space:pre-wrap; word-break:break-all; }
     </style>
 </head>
 <body class="flex flex-col md:flex-row min-h-screen m-0 p-0">
@@ -228,18 +233,42 @@ const t = isRtl ? {
         </div>
     </div>
 
-    <div class="modal-backdrop" id="agentsModal">
+    <div class="modal-backdrop" id="editTenantModal">
         <div class="modal">
             <div class="flex items-center justify-between mb-4">
-                <h2 class="text-lg font-black"><%= t.agentsFor %> <span id="agentsTenantName" class="text-[var(--accent-color)]"></span></h2>
-                <button type="button" class="btn" onclick="closeAgentsModal()">✕</button>
+                <h2 class="text-lg font-black"><%= t.editBusiness %> <span id="editTenantHeadingName" class="text-[var(--accent-color)]"></span></h2>
+                <button type="button" class="btn" onclick="closeEditTenant()">✕</button>
             </div>
-            <p class="text-[10px] text-[var(--text-muted)] mb-3"><%= isRtl ? 'التحويلات المرتبطة بنشاط آخر تظهر معطلة. اختر موظفي هذا النشاط.' : 'Extensions assigned to another business are disabled. Select the agents for this business.' %></p>
-            <select id="tenantAgentsEdit" multiple size="9" class="config-input h-auto"></select>
-            <div class="flex justify-end gap-2 pt-4">
-                <button type="button" class="btn" onclick="closeAgentsModal()"><%= t.cancel %></button>
-                <button type="button" class="btn btn-primary" id="saveTenantAgentsBtn" onclick="saveTenantAgents()"><%= t.save %></button>
-            </div>
+            <form id="editTenantForm" class="space-y-3">
+                <input type="hidden" id="editTenantId">
+                <div>
+                    <label for="editTenantName" class="block text-[11px] font-bold text-[var(--text-secondary)] mb-1"><%= t.name %></label>
+                    <input id="editTenantName" class="config-input" required maxlength="120">
+                </div>
+                <div>
+                    <span id="editTenantAgentsLabel" class="block text-[11px] font-bold text-[var(--text-secondary)] mb-1"><%= t.agents %></span>
+                    <div class="flex items-center justify-between pb-1.5 mb-1 border-b border-[var(--border-primary)] text-[10px]">
+                        <button type="button" class="text-[var(--accent-color)] font-bold" onclick="selectAgentCheckboxes('editTenantAgentCheckbox', true)"><%= t.selectAll %></button>
+                        <button type="button" class="text-[var(--text-muted)] font-bold" onclick="selectAgentCheckboxes('editTenantAgentCheckbox', false)"><%= t.clearAll %></button>
+                    </div>
+                    <div id="editTenantAgentsList" class="multi-list" role="group" aria-labelledby="editTenantAgentsLabel"></div>
+                    <p class="text-[10px] text-[var(--text-muted)] mt-1"><%= isRtl ? 'التحويلات المرتبطة بنشاط آخر تظهر معطلة.' : 'Extensions assigned to another business are disabled.' %></p>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label for="editTenantConcurrency" class="block text-[11px] font-bold text-[var(--text-secondary)] mb-1"><%= t.concurrency %></label>
+                        <input id="editTenantConcurrency" type="number" min="1" max="50" class="config-input" value="5">
+                    </div>
+                    <label class="flex items-center gap-2 text-xs font-bold text-[var(--text-secondary)] mt-6">
+                        <input id="editTenantRecording" type="checkbox">
+                        <%= t.recording %>
+                    </label>
+                </div>
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" class="btn" onclick="closeEditTenant()"><%= t.cancel %></button>
+                    <button type="submit" class="btn btn-primary" id="saveEditTenantBtn"><%= t.save %></button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -272,7 +301,7 @@ const t = isRtl ? {
         const T = <%- JSON.stringify(t) %>;
         const ROSTER = <%- JSON.stringify((typeof roster !== 'undefined' ? roster : []).map(e => ({ extension: String(e.extension), name: e.name || '' }))).replace(/</g, '\\u003c') %>;
         let tenants = [];
-        let agentsTenantId = null;
+        let editingTenantId = null;
         let modalLink = null;
 
         function escapeHtml(value) {
@@ -311,13 +340,68 @@ const t = isRtl ? {
             updateTenantAgentSummary();
         }
 
-        function openAgentsModal(tenantId) {
+        function fillAgentCheckList(containerId, current, otherAssigned, checkboxClass) {
+            const list = document.getElementById(containerId);
+            if (!list) return;
+            list.innerHTML = '';
+            if (!ROSTER.length) {
+                const empty = document.createElement('p');
+                empty.className = 'py-3 text-center text-[10px] text-[var(--text-muted)]';
+                empty.textContent = T.noExtensions;
+                list.appendChild(empty);
+                return;
+            }
+            ROSTER.forEach(emp => {
+                const ext = String(emp.extension);
+                const blocked = otherAssigned.has(ext);
+                const label = document.createElement('label');
+                label.className = 'multi-option';
+                if (blocked) {
+                    label.style.opacity = '.45';
+                    label.style.cursor = 'not-allowed';
+                }
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.className = checkboxClass;
+                cb.value = ext;
+                cb.disabled = blocked;
+                cb.checked = current.has(ext);
+                const code = document.createElement('span');
+                code.className = 'font-mono font-bold text-[var(--text-primary)]';
+                code.textContent = ext;
+                const name = document.createElement('span');
+                name.className = 'truncate text-[var(--text-muted)]';
+                name.textContent = emp.name;
+                label.appendChild(cb);
+                label.appendChild(code);
+                label.appendChild(name);
+                if (blocked) {
+                    const tag = document.createElement('span');
+                    tag.className = 'ms-auto text-[9px] font-bold text-[var(--text-muted)]';
+                    tag.textContent = T.assigned;
+                    label.appendChild(tag);
+                }
+                list.appendChild(label);
+            });
+        }
+        function selectAgentCheckboxes(className, checked) {
+            document.querySelectorAll('.' + className).forEach(cb => {
+                if (!cb.disabled) cb.checked = Boolean(checked);
+            });
+        }
+
+        function openEditTenant(tenantId) {
             const tenant = tenants.find(item => Number(item.id) === Number(tenantId));
             if (!tenant) return;
-            agentsTenantId = tenant.id;
-            document.getElementById('agentsTenantName').textContent = tenant.name;
-            const select = document.getElementById('tenantAgentsEdit');
-            select.innerHTML = '';
+            editingTenantId = tenant.id;
+            document.getElementById('editTenantId').value = tenant.id;
+            document.getElementById('editTenantHeadingName').textContent = tenant.name || '';
+            document.getElementById('editTenantName').value = tenant.name || '';
+            const concInput = document.getElementById('editTenantConcurrency');
+            const maxConc = Math.max(1, Math.min(50, Number(tenant.pool_total) || 50));
+            concInput.max = String(maxConc);
+            concInput.value = Math.min(Number(tenant.max_concurrency || 5), maxConc);
+            document.getElementById('editTenantRecording').checked = Boolean(tenant.recording_enabled);
             const current = new Set((tenant.agents || []).map(String));
             const otherAssigned = new Set();
             tenants.forEach(item => {
@@ -325,46 +409,44 @@ const t = isRtl ? {
                     (item.agents || []).forEach(ext => otherAssigned.add(String(ext)));
                 }
             });
-            if (!ROSTER.length) {
-                const option = document.createElement('option');
-                option.textContent = T.noExtensions;
-                option.disabled = true;
-                select.appendChild(option);
+            fillAgentCheckList('editTenantAgentsList', current, otherAssigned, 'editTenantAgentCheckbox');
+            document.getElementById('editTenantModal').classList.add('open');
+        }
+        function closeEditTenant() {
+            document.getElementById('editTenantModal').classList.remove('open');
+            editingTenantId = null;
+        }
+        async function saveEditTenant(event) {
+            event.preventDefault();
+            if (!editingTenantId) return;
+            const name = document.getElementById('editTenantName').value.trim();
+            if (name.length < 2) {
+                toast(T.failed);
+                return;
             }
-            ROSTER.forEach(emp => {
-                const option = document.createElement('option');
-                option.value = emp.extension;
-                option.textContent = emp.extension + ' - ' + emp.name;
-                option.disabled = otherAssigned.has(String(emp.extension));
-                option.selected = current.has(String(emp.extension));
-                select.appendChild(option);
-            });
-            document.getElementById('agentsModal').classList.add('open');
-        }
-        function closeAgentsModal() {
-            document.getElementById('agentsModal').classList.remove('open');
-        }
-        async function saveTenantAgents() {
-            if (!agentsTenantId) return;
-            const select = document.getElementById('tenantAgentsEdit');
-            const selected = Array.from(select.options).filter(option => option.selected && !option.disabled).map(option => option.value);
+            const selected = Array.from(document.querySelectorAll('.editTenantAgentCheckbox:checked:not(:disabled)')).map(cb => cb.value);
             if (selected.length === 0) {
                 toast(T.selectAtLeastOneAgent);
                 return;
             }
-            const button = document.getElementById('saveTenantAgentsBtn');
+            const button = document.getElementById('saveEditTenantBtn');
             button.disabled = true;
             try {
-                const response = await fetch('/api/admin/tenants/' + agentsTenantId, {
+                const response = await fetch('/api/admin/tenants/' + editingTenantId, {
                     method: 'PUT',
                     credentials: 'same-origin',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ agent_extensions: selected.join(',') })
+                    body: JSON.stringify({
+                        name,
+                        agent_extensions: selected.join(','),
+                        max_concurrency: Number(document.getElementById('editTenantConcurrency').value || 5),
+                        recording_enabled: document.getElementById('editTenantRecording').checked
+                    })
                 });
                 const data = await response.json();
                 if (!response.ok || !data.success) throw new Error(data.error || T.failed);
-                closeAgentsModal();
-                toast(T.created);
+                closeEditTenant();
+                toast(T.updated);
                 await loadTenants();
             } catch (error) {
                 toast(error.message);
@@ -415,7 +497,7 @@ const t = isRtl ? {
                     '<td class="p-3 font-mono">' + (tenant.pool_free ?? '—') + ' / ' + (tenant.pool_total ?? '—') + '</td>' +
                     '<td class="p-3 font-mono">' + (tenant.active_sessions ?? 0) + '</td>' +
                     '<td class="p-3">' + linkCell + '</td>' +
-                    '<td class="p-3"><div class="flex gap-2"><button class="btn" onclick="openAgentsModal(' + tenant.id + ')">' + T.manageAgents + '</button>' + toggle + '</div></td>' +
+                    '<td class="p-3"><div class="flex flex-wrap gap-2"><button class="btn" onclick="openEditTenant(' + tenant.id + ')">' + T.edit + '</button>' + toggle + '</div></td>' +
                     '</tr>';
             }).join('');
         }
@@ -514,6 +596,7 @@ const t = isRtl ? {
                 button.disabled = false;
             }
         });
+        document.getElementById('editTenantForm').addEventListener('submit', saveEditTenant);
         document.querySelectorAll('.modal-backdrop').forEach(el => {
             el.addEventListener('click', event => { if (event.target === el) el.classList.remove('open'); });
         });
