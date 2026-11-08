@@ -1,6 +1,10 @@
 'use strict';
 
 const express = require('express');
+const fs = require('fs/promises');
+const path = require('path');
+const multer = require('multer');
+const { normalizeBranding, isPngBuffer } = require('../lib/branding');
 
 function httpError(status, code, message) {
     const error = new Error(message);
@@ -12,6 +16,42 @@ function httpError(status, code, message) {
 function createCustomersRouter({ service, isRootRequest, getTenantId }) {
     if (!service) throw new Error('createCustomersRouter requires a customer service');
     const router = express.Router();
+    const LOGO_DIR = path.join(__dirname, '..', 'public', 'uploads', 'tenant-logos');
+    const logoUpload = multer({
+        storage: multer.memoryStorage(),
+        limits: { fileSize: 2 * 1024 * 1024 },
+        fileFilter: (req, file, cb) => cb(null, /^image\/png$/i.test(file.mimetype))
+    });
+
+    function parseBranding(raw) {
+        if (!raw) return {};
+        try {
+            const parsed = JSON.parse(raw);
+            return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+        } catch (_) {
+            return {};
+        }
+    }
+
+    async function readBranding(tenantId) {
+        const [rows] = await service.db.query('SELECT branding_json FROM sokrat_tenants WHERE id = ? LIMIT 1', [tenantId]);
+        if (!rows.length) throw httpError(404, 'TENANT_NOT_FOUND', 'Tenant not found.');
+        return parseBranding(rows[0].branding_json);
+    }
+
+    async function writeBranding(tenantId, branding) {
+        await service.db.query('UPDATE sokrat_tenants SET branding_json = ? WHERE id = ?', [JSON.stringify(branding), tenantId]);
+        return branding;
+    }
+
+    async function removeTenantLogos(tenantId, keep) {
+        try {
+            const names = await fs.readdir(LOGO_DIR);
+            await Promise.all(names
+                .filter(name => name.startsWith(`tenant-${tenantId}-`) && name.endsWith('.png') && name !== keep)
+                .map(name => fs.unlink(path.join(LOGO_DIR, name)).catch(() => {})));
+        } catch (_) {}
+    }
 
     router.use((req, res, next) => {
         res.set('Cache-Control', 'no-store');
@@ -171,6 +211,57 @@ function createCustomersRouter({ service, isRootRequest, getTenantId }) {
         });
         if (!deleted) throw httpError(404, 'CUSTOMER_NOT_FOUND', 'Customer not found.');
         return res.json({ success: true });
+    }));
+
+    // Per-business guest-page branding (colors + PNG logo).
+    router.get('/tenant/branding', handle(async (req, res) => {
+        const scope = resolveScope(req, req.query.tenant_id);
+        const branding = await readBranding(scope.tenantId);
+        return res.json({ success: true, branding });
+    }));
+
+    router.put('/tenant/branding', handle(async (req, res) => {
+        const scope = resolveScope(req, req.body && req.body.tenant_id);
+        const current = await readBranding(scope.tenantId);
+        const branding = normalizeBranding(req.body && req.body.branding, current);
+        if (branding.logo_url && branding.logo_url.startsWith('/uploads/tenant-logos/')
+            && !branding.logo_url.startsWith(`/uploads/tenant-logos/tenant-${scope.tenantId}-`)) {
+            delete branding.logo_url;
+        }
+        await writeBranding(scope.tenantId, branding);
+        return res.json({ success: true, branding });
+    }));
+
+    router.post('/tenant/branding/logo', (req, res, next) => {
+        logoUpload.single('logo')(req, res, (error) => {
+            if (error) {
+                return res.status(400).json({ success: false, code: 'INVALID_LOGO', error: 'Upload a PNG logo up to 2 MB.' });
+            }
+            next();
+        });
+    }, handle(async (req, res) => {
+        const scope = resolveScope(req, req.body && req.body.tenant_id);
+        if (!req.file || !isPngBuffer(req.file.buffer)) {
+            throw httpError(400, 'INVALID_LOGO', 'A valid PNG logo is required.');
+        }
+        const current = await readBranding(scope.tenantId);
+        await fs.mkdir(LOGO_DIR, { recursive: true });
+        const filename = `tenant-${scope.tenantId}-${Date.now()}.png`;
+        await fs.writeFile(path.join(LOGO_DIR, filename), req.file.buffer, { mode: 0o644 });
+        await removeTenantLogos(scope.tenantId, filename);
+        const logoUrl = `/uploads/tenant-logos/${filename}`;
+        const branding = normalizeBranding({ logo_url: logoUrl }, current);
+        await writeBranding(scope.tenantId, branding);
+        return res.json({ success: true, branding, logo_url: logoUrl });
+    }));
+
+    router.delete('/tenant/branding/logo', handle(async (req, res) => {
+        const scope = resolveScope(req, req.query.tenant_id);
+        await removeTenantLogos(scope.tenantId);
+        const current = await readBranding(scope.tenantId);
+        const branding = normalizeBranding({ logo_url: '' }, current);
+        await writeBranding(scope.tenantId, branding);
+        return res.json({ success: true, branding });
     }));
 
     return router;

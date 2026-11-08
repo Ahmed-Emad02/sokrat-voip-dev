@@ -19,6 +19,20 @@ const t = isRtl ? {
     close: 'إغلاق',
     search: 'بحث',
     noCustomers: 'لا يوجد عملاء بعد.',
+    branding: 'الهوية',
+    brandingTitle: 'هوية النشاط التجاري',
+    logo: 'الشعار',
+    uploadLogo: 'رفع شعار PNG',
+    removeLogo: 'إزالة الشعار',
+    primaryColor: 'اللون الأساسي',
+    secondaryColor: 'اللون الثانوي',
+    backgroundColor: 'لون الخلفية',
+    textColor: 'لون النص',
+    mutedColor: 'لون النص الثانوي',
+    buttonTextColor: 'لون نص الزر',
+    buttonText: 'نص زر الاتصال',
+    brandingSaved: 'تم حفظ الهوية',
+    logoInvalid: 'اختر ملف PNG صالحاً',
     noFields: 'لم يتم إعداد حقول العملاء لهذا النشاط بعد.',
     fieldsTitle: 'حقول العملاء',
     fieldLabel: 'اسم الحقل',
@@ -61,6 +75,20 @@ const t = isRtl ? {
     close: 'Close',
     search: 'Search',
     noCustomers: 'No customers yet.',
+    branding: 'Branding',
+    brandingTitle: 'Business Branding',
+    logo: 'Logo',
+    uploadLogo: 'Upload PNG logo',
+    removeLogo: 'Remove logo',
+    primaryColor: 'Primary color',
+    secondaryColor: 'Secondary color',
+    backgroundColor: 'Background color',
+    textColor: 'Text color',
+    mutedColor: 'Muted text color',
+    buttonTextColor: 'Button text color',
+    buttonText: 'Call button text',
+    brandingSaved: 'Branding saved',
+    logoInvalid: 'Choose a valid PNG file',
     noFields: 'No customer fields are configured for this business yet.',
     fieldsTitle: 'Customer Fields',
     fieldLabel: 'Label',
@@ -140,6 +168,7 @@ const t = isRtl ? {
                     <% } else { %>
                     <span class="badge"><%= tenantName || t.business %></span>
                     <% } %>
+                    <button type="button" class="btn" id="brandingBtn" onclick="openBranding()"><%= t.branding %></button>
                     <button type="button" class="btn" id="fieldsBtn" onclick="openFields()"><%= t.configureFields %></button>
                     <button type="button" class="btn btn-primary" id="addCustomerBtn" onclick="openCustomer()" disabled><%= t.addCustomer %></button>
                 </div>
@@ -218,6 +247,44 @@ const t = isRtl ? {
         </div>
     </div>
 
+
+    <div class="modal-backdrop" id="brandingModal">
+        <div class="modal">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-black"><%= t.brandingTitle %></h2>
+                <button type="button" class="btn" onclick="closeBranding()">✕</button>
+            </div>
+            <div class="space-y-3">
+                <div class="field-row">
+                    <div class="text-[11px] font-bold text-[var(--text-secondary)] mb-2"><%= t.logo %></div>
+                    <div class="flex items-center gap-3 flex-wrap">
+                        <img id="brandLogoPreview" alt="" style="max-height:64px;max-width:180px;display:none;background:#fff;padding:4px;border-radius:8px;">
+                        <input id="brandLogoFile" type="file" accept="image/png" class="config-input max-w-[240px]">
+                        <button type="button" class="btn" onclick="uploadBrandingLogo()"><%= t.uploadLogo %></button>
+                        <button type="button" class="btn" onclick="removeBrandingLogo()"><%= t.removeLogo %></button>
+                    </div>
+                    <p class="muted mt-1">PNG · max 2 MB</p>
+                </div>
+                <div class="field-grid">
+                    <div><label class="text-[10px] text-[var(--text-muted)]"><%= t.primaryColor %></label><input id="brandPrimary" type="color" class="config-input" value="#e11d48"></div>
+                    <div><label class="text-[10px] text-[var(--text-muted)]"><%= t.secondaryColor %></label><input id="brandSecondary" type="color" class="config-input" value="#7c3aed"></div>
+                    <div><label class="text-[10px] text-[var(--text-muted)]"><%= t.backgroundColor %></label><input id="brandBackground" type="color" class="config-input" value="#050507"></div>
+                    <div><label class="text-[10px] text-[var(--text-muted)]"><%= t.textColor %></label><input id="brandText" type="color" class="config-input" value="#f8fafc"></div>
+                    <div><label class="text-[10px] text-[var(--text-muted)]"><%= t.mutedColor %></label><input id="brandMuted" type="color" class="config-input" value="#a1a1aa"></div>
+                    <div><label class="text-[10px] text-[var(--text-muted)]"><%= t.buttonTextColor %></label><input id="brandButtonTextColor" type="color" class="config-input" value="#ffffff"></div>
+                </div>
+                <div>
+                    <label class="text-[10px] text-[var(--text-muted)]"><%= t.buttonText %></label>
+                    <input id="brandButtonText" class="config-input" maxlength="40" placeholder="Call us">
+                </div>
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" class="btn" onclick="closeBranding()"><%= t.cancel %></button>
+                    <button type="button" class="btn btn-primary" id="saveBrandingBtn" onclick="saveBranding()"><%= t.save %></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="toast" id="toast"></div>
 
     <script>
@@ -231,7 +298,7 @@ const t = isRtl ? {
             ['text', T.typeText], ['textarea', T.typeTextarea], ['number', T.typeNumber],
             ['date', T.typeDate], ['select', T.typeSelect], ['checkbox', T.typeCheckbox]
         ];
-        const state = { tenantId: BOOT.tenantId, tenantName: BOOT.tenantName, fields: [], customers: [], editingId: null, fieldRows: [] };
+        const state = { tenantId: BOOT.tenantId, tenantName: BOOT.tenantName, branding: {}, fields: [], customers: [], editingId: null, fieldRows: [] };
 
         function escapeHtml(value) {
             return String(value == null ? '' : value).replace(/[&<>"']/g, ch => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[ch]));
@@ -262,7 +329,111 @@ const t = isRtl ? {
             const hint = document.getElementById('scopeHint');
             if (!hint) return;
             hint.textContent = state.tenantId ? (state.tenantName || '') : T.selectBusiness;
-            document.getElementById('addCustomerBtn').disabled = !state.tenantId;
+            ['addCustomerBtn', 'brandingBtn', 'fieldsBtn'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.disabled = !state.tenantId;
+            });
+        }
+
+        function brandColor(id, fallback) {
+            const el = document.getElementById(id);
+            return el && /^#[0-9a-fA-F]{6}$/.test(el.value) ? el.value : fallback;
+        }
+        function setBrandColor(id, value, fallback) {
+            const el = document.getElementById(id);
+            if (el) el.value = /^#[0-9a-fA-F]{6}$/.test(String(value || '')) ? value : fallback;
+        }
+        function renderBrandLogo(url) {
+            const preview = document.getElementById('brandLogoPreview');
+            if (!preview) return;
+            if (url) {
+                preview.src = url;
+                preview.style.display = 'block';
+            } else {
+                preview.removeAttribute('src');
+                preview.style.display = 'none';
+            }
+        }
+        async function openBranding() {
+            if (!state.tenantId) { toast(T.selectBusiness); return; }
+            try {
+                const data = await api(withTenant('/api/tenant/branding'));
+                const branding = data.branding || {};
+                state.branding = branding;
+                setBrandColor('brandPrimary', branding.primary_color, '#e11d48');
+                setBrandColor('brandSecondary', branding.secondary_color, '#7c3aed');
+                setBrandColor('brandBackground', branding.background_color, '#050507');
+                setBrandColor('brandText', branding.text_color, '#f8fafc');
+                setBrandColor('brandMuted', branding.muted_color, '#a1a1aa');
+                setBrandColor('brandButtonTextColor', branding.button_text_color, '#ffffff');
+                document.getElementById('brandButtonText').value = branding.button_text || '';
+                renderBrandLogo(branding.logo_url || '');
+                document.getElementById('brandingModal').classList.add('open');
+            } catch (error) {
+                toast(error.message);
+            }
+        }
+        function closeBranding() { document.getElementById('brandingModal').classList.remove('open'); }
+        async function saveBranding() {
+            if (!state.tenantId) { toast(T.selectBusiness); return; }
+            const branding = {
+                primary_color: brandColor('brandPrimary', '#e11d48'),
+                secondary_color: brandColor('brandSecondary', '#7c3aed'),
+                background_color: brandColor('brandBackground', '#050507'),
+                text_color: brandColor('brandText', '#f8fafc'),
+                muted_color: brandColor('brandMuted', '#a1a1aa'),
+                button_text_color: brandColor('brandButtonTextColor', '#ffffff'),
+                button_text: document.getElementById('brandButtonText').value.trim()
+            };
+            const payload = { branding };
+            if (BOOT.isRoot) payload.tenant_id = state.tenantId;
+            const button = document.getElementById('saveBrandingBtn');
+            button.disabled = true;
+            try {
+                const data = await api('/api/tenant/branding', { method: 'PUT', body: JSON.stringify(payload) });
+                state.branding = data.branding || branding;
+                toast(T.brandingSaved);
+                closeBranding();
+            } catch (error) {
+                toast(error.message);
+            } finally {
+                button.disabled = false;
+            }
+        }
+        async function uploadBrandingLogo() {
+            if (!state.tenantId) { toast(T.selectBusiness); return; }
+            const input = document.getElementById('brandLogoFile');
+            const file = input && input.files && input.files[0];
+            if (!file) return;
+            if (!/^image\/png$/i.test(file.type) || file.size > 2 * 1024 * 1024) {
+                toast(T.logoInvalid);
+                return;
+            }
+            const form = new FormData();
+            form.append('logo', file);
+            if (BOOT.isRoot) form.append('tenant_id', String(state.tenantId));
+            try {
+                const response = await fetch('/api/tenant/branding/logo', { method: 'POST', credentials: 'same-origin', body: form });
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok || data.success === false) throw new Error(data.error || T.failed);
+                state.branding = data.branding || state.branding;
+                renderBrandLogo(data.logo_url || '');
+                input.value = '';
+                toast(T.brandingSaved);
+            } catch (error) {
+                toast(error.message);
+            }
+        }
+        async function removeBrandingLogo() {
+            if (!state.tenantId) { toast(T.selectBusiness); return; }
+            try {
+                await api(withTenant('/api/tenant/branding/logo'), { method: 'DELETE' });
+                state.branding = Object.assign({}, state.branding, { logo_url: '' });
+                renderBrandLogo('');
+                toast(T.brandingSaved);
+            } catch (error) {
+                toast(error.message);
+            }
         }
 
         async function load() {
