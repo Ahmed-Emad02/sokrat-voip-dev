@@ -21,11 +21,10 @@ const t = isRtl ? {
     noCustomers: 'لا يوجد عملاء بعد.',
     noFields: 'لم يتم إعداد حقول العملاء لهذا النشاط بعد.',
     fieldsTitle: 'حقول العملاء',
-    fieldLabelEn: 'الاسم بالإنجليزية',
-    fieldLabelAr: 'الاسم بالعربية',
+    fieldLabel: 'اسم الحقل',
     fieldKey: 'المفتاح',
     fieldType: 'النوع',
-    fieldOptions: 'الخيارات (سطر لكل خيار: value|English|العربية)',
+    fieldOptions: 'الخيارات (سطر لكل خيار: value|Label)',
     fieldRequired: 'مطلوب',
     fieldActive: 'نشط',
     fieldOrder: 'الترتيب',
@@ -64,11 +63,10 @@ const t = isRtl ? {
     noCustomers: 'No customers yet.',
     noFields: 'No customer fields are configured for this business yet.',
     fieldsTitle: 'Customer Fields',
-    fieldLabelEn: 'English label',
-    fieldLabelAr: 'Arabic label',
+    fieldLabel: 'Label',
     fieldKey: 'Key',
     fieldType: 'Type',
-    fieldOptions: 'Options (one per line: value|English|Arabic)',
+    fieldOptions: 'Options (one per line: value|Label)',
     fieldRequired: 'Required',
     fieldActive: 'Active',
     fieldOrder: 'Order',
@@ -224,7 +222,6 @@ const t = isRtl ? {
 
     <script>
         const T = <%- JSON.stringify(t) %>;
-        const RTL = <%- isRtl ? 'true' : 'false' %>;
         const BOOT = {
             isRoot: <%- isRootUser ? 'true' : 'false' %>,
             tenantId: <%- tenantId == null ? 'null' : Number(tenantId) %>,
@@ -338,7 +335,7 @@ const t = isRtl ? {
             state.fields.forEach(field => {
                 const label = document.createElement('label');
                 label.className = 'block text-[11px] font-bold text-[var(--text-secondary)] mb-1';
-                label.textContent = ((RTL && field.label_ar) ? field.label_ar : (field.label_en || field.label_ar || field.key)) + (field.required ? ' *' : '');
+                label.textContent = (field.label_en || field.label_ar || field.key) + (field.required ? ' *' : '');
                 const value = data && data[field.key] != null ? String(data[field.key]) : '';
                 const holder = document.createElement('div');
                 let input;
@@ -355,7 +352,7 @@ const t = isRtl ? {
                     (field.options || []).forEach(option => {
                         const opt = document.createElement('option');
                         opt.value = option.value;
-                        opt.textContent = (RTL && option.label_ar) ? option.label_ar : (option.label_en || option.value);
+                        opt.textContent = option.label_en || option.value;
                         input.appendChild(opt);
                     });
                     input.value = value;
@@ -447,11 +444,10 @@ const t = isRtl ? {
             state.fieldRows.forEach((field, index) => {
                 const row = document.createElement('div');
                 row.className = 'field-row';
-                const options = (field.options || []).map(option => [option.value, option.label_en || option.value, option.label_ar || option.label_en || option.value].join('|')).join('\n');
+                const options = (field.options || []).map(option => [option.value, option.label_en || option.value].join('|')).join('\n');
                 row.innerHTML =
                     '<div class="field-grid">' +
-                    '<div><label class="text-[10px] text-[var(--text-muted)]">' + T.fieldLabelEn + '</label><input class="config-input fr-label-en" value="' + escapeHtml(field.label_en || '') + '" maxlength="100"></div>' +
-                    '<div><label class="text-[10px] text-[var(--text-muted)]">' + T.fieldLabelAr + '</label><input class="config-input fr-label-ar" value="' + escapeHtml(field.label_ar || '') + '" maxlength="100"></div>' +
+                    '<div><label class="text-[10px] text-[var(--text-muted)]">' + T.fieldLabel + '</label><input class="config-input fr-label-en" value="' + escapeHtml(field.label_en || field.label_ar || '') + '" maxlength="100"></div>' +
                     '<div><label class="text-[10px] text-[var(--text-muted)]">' + T.fieldKey + '</label><input class="config-input fr-key" value="' + escapeHtml(field.key || '') + '" maxlength="50" ' + (field.key ? 'readonly' : '') + '></div>' +
                     '<div><label class="text-[10px] text-[var(--text-muted)]">' + T.fieldType + '</label><select class="config-input fr-type">' + TYPES.map(type => '<option value="' + type[0] + '" ' + (selectedType(field.field_type) === type[0] ? 'selected' : '') + '>' + escapeHtml(type[1]) + '</option>').join('') + '</select></div>' +
                     '<div><label class="text-[10px] text-[var(--text-muted)]">' + T.fieldOrder + '</label><input class="config-input fr-order" type="number" value="' + Number(field.sort_order || index) + '"></div>' +
@@ -476,7 +472,8 @@ const t = isRtl ? {
             return String(value || '').split(/\r?\n/).map(line => line.trim()).filter(Boolean).map(line => {
                 const parts = line.split('|').map(part => part.trim());
                 const optionValue = parts[0] || '';
-                return { value: optionValue, label_en: parts[1] || optionValue, label_ar: parts[2] || parts[1] || optionValue };
+                const optionLabel = parts[1] || optionValue;
+                return { value: optionValue, label_en: optionLabel, label_ar: optionLabel };
             }).filter(option => option.value);
         }
         async function saveFields() {
@@ -484,7 +481,7 @@ const t = isRtl ? {
             const fields = rows.map((row, index) => ({
                 key: row.querySelector('.fr-key').value.trim(),
                 label_en: row.querySelector('.fr-label-en').value.trim(),
-                label_ar: row.querySelector('.fr-label-ar').value.trim(),
+                label_ar: '',
                 field_type: row.querySelector('.fr-type').value,
                 sort_order: Number(row.querySelector('.fr-order').value) || index,
                 required: row.querySelector('.fr-required').checked,
