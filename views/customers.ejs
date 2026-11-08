@@ -1,0 +1,531 @@
+<%
+const isRtl = currentLang === 'ar';
+const t = isRtl ? {
+    title: 'عملاء الأنشطة التجارية',
+    subtitle: 'بيانات العملاء وحقول كل نشاط تجاري',
+    customers: 'العملاء',
+    addCustomer: 'إضافة عميل',
+    configureFields: 'إعداد الحقول',
+    name: 'الاسم',
+    phone: 'الهاتف',
+    email: 'البريد الإلكتروني',
+    owner: 'المسؤول',
+    updated: 'آخر تحديث',
+    actions: 'إجراءات',
+    edit: 'تعديل',
+    delete: 'حذف',
+    save: 'حفظ',
+    cancel: 'إلغاء',
+    close: 'إغلاق',
+    search: 'بحث',
+    noCustomers: 'لا يوجد عملاء بعد.',
+    noFields: 'لم يتم إعداد حقول العملاء لهذا النشاط بعد.',
+    fieldsTitle: 'حقول العملاء',
+    fieldLabelEn: 'الاسم بالإنجليزية',
+    fieldLabelAr: 'الاسم بالعربية',
+    fieldKey: 'المفتاح',
+    fieldType: 'النوع',
+    fieldOptions: 'الخيارات (سطر لكل خيار: value|English|العربية)',
+    fieldRequired: 'مطلوب',
+    fieldActive: 'نشط',
+    fieldOrder: 'الترتيب',
+    addField: 'إضافة حقل',
+    remove: 'إزالة',
+    saved: 'تم الحفظ',
+    failed: 'فشلت العملية',
+    typeText: 'نص',
+    typeTextarea: 'نص طويل',
+    typeNumber: 'رقم',
+    typeDate: 'تاريخ',
+    typeSelect: 'قائمة منسدلة',
+    typeCheckbox: 'مربع اختيار',
+    business: 'النشاط التجاري',
+    selectBusiness: 'اختر النشاط التجاري',
+    selectFieldsFirst: 'أضف حقول العملاء أولاً.',
+    confirmDelete: 'حذف هذا العميل؟'
+} : {
+    title: 'Business Customers',
+    subtitle: 'Customer records and custom fields per business',
+    customers: 'Customers',
+    addCustomer: 'Add Customer',
+    configureFields: 'Configure Fields',
+    name: 'Name',
+    phone: 'Phone',
+    email: 'Email',
+    owner: 'Owner',
+    updated: 'Updated',
+    actions: 'Actions',
+    edit: 'Edit',
+    delete: 'Delete',
+    save: 'Save',
+    cancel: 'Cancel',
+    close: 'Close',
+    search: 'Search',
+    noCustomers: 'No customers yet.',
+    noFields: 'No customer fields are configured for this business yet.',
+    fieldsTitle: 'Customer Fields',
+    fieldLabelEn: 'English label',
+    fieldLabelAr: 'Arabic label',
+    fieldKey: 'Key',
+    fieldType: 'Type',
+    fieldOptions: 'Options (one per line: value|English|Arabic)',
+    fieldRequired: 'Required',
+    fieldActive: 'Active',
+    fieldOrder: 'Order',
+    addField: 'Add Field',
+    remove: 'Remove',
+    saved: 'Saved',
+    failed: 'Operation failed',
+    typeText: 'Text',
+    typeTextarea: 'Long text',
+    typeNumber: 'Number',
+    typeDate: 'Date',
+    typeSelect: 'Dropdown',
+    typeCheckbox: 'Checkbox',
+    business: 'Business',
+    selectBusiness: 'Select business',
+    selectFieldsFirst: 'Add customer fields first.',
+    confirmDelete: 'Delete this customer?'
+};
+%>
+<!DOCTYPE html>
+<html lang="<%= currentLang === 'ar' ? 'ar' : 'en' %>" dir="<%= isRtl ? 'rtl' : 'ltr' %>">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sokrat VOIP - <%= t.title %></title>
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600;800&display=swap" rel="stylesheet">
+    <script src="/js/tailwindcss-browser.js"></script>
+    <style>
+        :root { --bg-primary:#000; --bg-secondary:#121212; --bg-card:#18181b; --bg-hover:#27272a; --border-primary:#27272a; --text-primary:#fff; --text-secondary:#a1a1aa; --text-muted:#71717a; --accent-color:#e11d48; }
+        body { background:var(--bg-primary); color:var(--text-primary); font-family:'Cairo','Segoe UI',sans-serif; min-height:100vh; }
+        .panel-surface { background:var(--bg-secondary); border:1px solid var(--border-primary); border-radius:1rem; }
+        .config-input { width:100%; background:var(--bg-primary); border:1px solid var(--border-primary); border-radius:.7rem; padding:.6rem .75rem; color:var(--text-primary); font-size:.8rem; outline:none; }
+        .config-input:focus { border-color:var(--accent-color); }
+        .btn { border-radius:.65rem; padding:.55rem .8rem; font-size:.72rem; font-weight:800; cursor:pointer; border:1px solid var(--border-primary); background:var(--bg-hover); color:var(--text-primary); }
+        .btn-primary { background:var(--accent-color); border-color:var(--accent-color); color:#fff; }
+        .btn:hover { filter:brightness(1.08); }
+        .badge { display:inline-flex; padding:.2rem .5rem; border-radius:999px; font-size:.62rem; font-weight:800; background:var(--bg-hover); color:var(--text-secondary); }
+        .modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.75); display:none; align-items:center; justify-content:center; padding:16px; z-index:1000; }
+        .modal-backdrop.open { display:flex; }
+        .modal { width:min(620px,96vw); max-height:92vh; overflow:auto; background:var(--bg-card); border:1px solid var(--border-primary); border-radius:1.25rem; padding:22px; }
+        .toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:var(--bg-card); border:1px solid var(--border-primary); padding:12px 18px; border-radius:.8rem; font-size:.8rem; z-index:2000; opacity:0; pointer-events:none; transition:.2s; }
+        .toast.show { opacity:1; }
+        .field-row { border:1px solid var(--border-primary); border-radius:.8rem; padding:12px; margin-bottom:10px; background:var(--bg-secondary); }
+        .field-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+        @media (max-width:640px) { .field-grid { grid-template-columns:1fr; } }
+        .table-wrap { overflow-x:auto; }
+        table { width:100%; border-collapse:collapse; }
+        th, td { text-align:start; padding:10px 12px; border-bottom:1px solid var(--border-primary); font-size:.78rem; }
+        th { font-size:.65rem; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted); }
+        .muted { color:var(--text-muted); font-size:.72rem; }
+    </style>
+</head>
+<body class="flex flex-col md:flex-row min-h-screen m-0 p-0">
+    <%- include('sidebar') %>
+    <div class="flex-1 min-w-0 p-6 md:p-8 relative flex flex-col min-h-screen w-full">
+        <div class="w-full space-y-5">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                    <h1 class="text-2xl md:text-3xl font-black tracking-tight"><%= t.title %></h1>
+                    <p class="text-xs text-[var(--text-muted)] mt-1"><%= t.subtitle %></p>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                    <% if (isRootUser) { %>
+                    <select id="tenantSelect" class="config-input max-w-[240px]">
+                        <option value=""><%= t.selectBusiness %></option>
+                        <% (tenants || []).forEach(tenant => { %>
+                        <option value="<%= tenant.id %>" <%= Number(tenant.id) === Number(tenantId) ? 'selected' : '' %>><%= tenant.name %></option>
+                        <% }); %>
+                    </select>
+                    <% } else { %>
+                    <span class="badge"><%= tenantName || t.business %></span>
+                    <% } %>
+                    <button type="button" class="btn" id="fieldsBtn" onclick="openFields()"><%= t.configureFields %></button>
+                    <button type="button" class="btn btn-primary" id="addCustomerBtn" onclick="openCustomer()" disabled><%= t.addCustomer %></button>
+                </div>
+            </div>
+
+            <div class="panel-surface p-3 flex flex-col sm:flex-row sm:items-center gap-2">
+                <input id="searchInput" class="config-input max-w-sm" placeholder="<%= t.search %>">
+                <span class="muted" id="scopeHint"></span>
+            </div>
+
+            <div class="panel-surface table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th><%= t.name %></th>
+                            <th><%= t.phone %></th>
+                            <th><%= t.email %></th>
+                            <% if (isRootUser) { %><th><%= t.owner %></th><% } %>
+                            <th><%= t.updated %></th>
+                            <th><%= t.actions %></th>
+                        </tr>
+                    </thead>
+                    <tbody id="customersBody">
+                        <tr><td colspan="<%= isRootUser ? 6 : 5 %>" class="muted" style="text-align:center;padding:24px;"><%= t.noCustomers %></td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-backdrop" id="customerModal">
+        <div class="modal">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-black" id="customerModalTitle"><%= t.addCustomer %></h2>
+                <button type="button" class="btn" onclick="closeCustomer()">✕</button>
+            </div>
+            <form id="customerForm" class="space-y-3">
+                <input type="hidden" id="customerId">
+                <div class="field-grid">
+                    <div>
+                        <label class="text-[11px] font-bold text-[var(--text-secondary)]" for="customerName"><%= t.name %></label>
+                        <input id="customerName" class="config-input" required maxlength="160">
+                    </div>
+                    <div>
+                        <label class="text-[11px] font-bold text-[var(--text-secondary)]" for="customerPhone"><%= t.phone %></label>
+                        <input id="customerPhone" class="config-input" maxlength="40">
+                    </div>
+                </div>
+                <div>
+                    <label class="text-[11px] font-bold text-[var(--text-secondary)]" for="customerEmail"><%= t.email %></label>
+                    <input id="customerEmail" type="email" class="config-input" maxlength="255">
+                </div>
+                <div id="dynamicFields" class="space-y-3"></div>
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" class="btn" onclick="closeCustomer()"><%= t.cancel %></button>
+                    <button type="submit" class="btn btn-primary" id="saveCustomerBtn"><%= t.save %></button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="modal-backdrop" id="fieldsModal">
+        <div class="modal">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-black"><%= t.fieldsTitle %></h2>
+                <button type="button" class="btn" onclick="closeFields()">✕</button>
+            </div>
+            <div id="fieldRows"></div>
+            <div class="flex justify-between items-center pt-2">
+                <button type="button" class="btn" onclick="addFieldRow()">+ <%= t.addField %></button>
+                <div class="flex gap-2">
+                    <button type="button" class="btn" onclick="closeFields()"><%= t.cancel %></button>
+                    <button type="button" class="btn btn-primary" id="saveFieldsBtn" onclick="saveFields()"><%= t.save %></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        const T = <%- JSON.stringify(t) %>;
+        const BOOT = {
+            isRoot: <%- isRootUser ? 'true' : 'false' %>,
+            tenantId: <%- tenantId == null ? 'null' : Number(tenantId) %>,
+            tenantName: <%- JSON.stringify(tenantName || '') %>
+        };
+        const TYPES = [
+            ['text', T.typeText], ['textarea', T.typeTextarea], ['number', T.typeNumber],
+            ['date', T.typeDate], ['select', T.typeSelect], ['checkbox', T.typeCheckbox]
+        ];
+        const state = { tenantId: BOOT.tenantId, tenantName: BOOT.tenantName, fields: [], customers: [], editingId: null, fieldRows: [] };
+
+        function escapeHtml(value) {
+            return String(value == null ? '' : value).replace(/[&<>"']/g, ch => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[ch]));
+        }
+        function toast(message) {
+            const el = document.getElementById('toast');
+            el.textContent = message;
+            el.classList.add('show');
+            setTimeout(() => el.classList.remove('show'), 2400);
+        }
+        async function api(url, options) {
+            const response = await fetch(url, Object.assign({
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' }
+            }, options || {}));
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok || data.success === false) {
+                throw new Error(data.error || T.failed);
+            }
+            return data;
+        }
+        function withTenant(url) {
+            if (!BOOT.isRoot) return url;
+            if (!state.tenantId) return url;
+            return url + (url.includes('?') ? '&' : '?') + 'tenant_id=' + encodeURIComponent(state.tenantId);
+        }
+        function scopeHint() {
+            const hint = document.getElementById('scopeHint');
+            if (!hint) return;
+            hint.textContent = state.tenantId ? (state.tenantName || '') : T.selectBusiness;
+            document.getElementById('addCustomerBtn').disabled = !state.tenantId;
+        }
+
+        async function load() {
+            scopeHint();
+            if (!state.tenantId) {
+                state.fields = [];
+                state.customers = [];
+                renderCustomers();
+                return;
+            }
+            try {
+                const [fieldsData, customersData] = await Promise.all([
+                    api(withTenant('/api/customers/fields')),
+                    api(withTenant('/api/customers?limit=200'))
+                ]);
+                state.fields = fieldsData.fields || [];
+                state.customers = customersData.customers || [];
+                renderCustomers();
+            } catch (error) {
+                toast(error.message);
+            }
+        }
+
+        function renderCustomers() {
+            const body = document.getElementById('customersBody');
+            if (!state.customers.length) {
+                body.innerHTML = '<tr><td colspan="' + (BOOT.isRoot ? 6 : 5) + '" class="muted" style="text-align:center;padding:24px;">' + T.noCustomers + '</td></tr>';
+                return;
+            }
+            body.innerHTML = state.customers.map(customer => {
+                const owner = BOOT.isRoot ? '<td>' + escapeHtml(customer.owner_username || customer.owner_user_id || '') + '</td>' : '';
+                const updated = customer.updated_at ? escapeHtml(String(customer.updated_at).replace('T', ' ').slice(0, 19)) : '';
+                return '<tr>' +
+                    '<td><strong>' + escapeHtml(customer.name) + '</strong></td>' +
+                    '<td>' + escapeHtml(customer.phone || '—') + '</td>' +
+                    '<td>' + escapeHtml(customer.email || '—') + '</td>' +
+                    owner +
+                    '<td>' + updated + '</td>' +
+                    '<td><div class="flex flex-wrap gap-2">' +
+                        '<button class="btn" onclick="openCustomer(' + customer.id + ')">' + T.edit + '</button>' +
+                        '<button class="btn" onclick="deleteCustomer(' + customer.id + ')">' + T.delete + '</button>' +
+                    '</div></td>' +
+                '</tr>';
+            }).join('');
+        }
+
+        function openCustomer(id) {
+            const customer = id ? state.customers.find(item => Number(item.id) === Number(id)) : null;
+            state.editingId = customer ? customer.id : null;
+            document.getElementById('customerModalTitle').textContent = customer ? T.edit : T.addCustomer;
+            document.getElementById('customerId').value = customer ? customer.id : '';
+            document.getElementById('customerName').value = customer ? customer.name : '';
+            document.getElementById('customerPhone').value = customer ? customer.phone : '';
+            document.getElementById('customerEmail').value = customer ? customer.email : '';
+            renderDynamicFields(customer ? customer.data : {});
+            document.getElementById('customerModal').classList.add('open');
+        }
+        function closeCustomer() { document.getElementById('customerModal').classList.remove('open'); }
+
+        function renderDynamicFields(data) {
+            const wrap = document.getElementById('dynamicFields');
+            wrap.innerHTML = '';
+            if (!state.fields.length) {
+                const p = document.createElement('p');
+                p.className = 'muted';
+                p.textContent = T.noFields;
+                wrap.appendChild(p);
+                return;
+            }
+            state.fields.forEach(field => {
+                const label = document.createElement('label');
+                label.className = 'block text-[11px] font-bold text-[var(--text-secondary)] mb-1';
+                label.textContent = (field.label_en || field.label_ar || field.key) + (field.required ? ' *' : '');
+                const value = data && data[field.key] != null ? String(data[field.key]) : '';
+                const holder = document.createElement('div');
+                let input;
+                if (field.field_type === 'textarea') {
+                    input = document.createElement('textarea');
+                    input.rows = 3;
+                    input.value = value;
+                } else if (field.field_type === 'select') {
+                    input = document.createElement('select');
+                    const blank = document.createElement('option');
+                    blank.value = '';
+                    blank.textContent = '—';
+                    input.appendChild(blank);
+                    (field.options || []).forEach(option => {
+                        const opt = document.createElement('option');
+                        opt.value = option.value;
+                        opt.textContent = option.label_en || option.value;
+                        input.appendChild(opt);
+                    });
+                    input.value = value;
+                } else if (field.field_type === 'checkbox') {
+                    input = document.createElement('input');
+                    input.type = 'checkbox';
+                    input.checked = value === '1' || value === 'true';
+                } else {
+                    input = document.createElement('input');
+                    input.type = field.field_type === 'number' ? 'number' : field.field_type === 'date' ? 'date' : 'text';
+                    input.value = value;
+                }
+                input.className = 'config-input';
+                input.setAttribute('data-field-key', field.key);
+                if (field.field_type !== 'textarea') input.classList.add('h-10');
+                holder.appendChild(label);
+                holder.appendChild(input);
+                wrap.appendChild(holder);
+            });
+        }
+
+        function collectData() {
+            const data = {};
+            document.querySelectorAll('#dynamicFields [data-field-key]').forEach(input => {
+                const key = input.getAttribute('data-field-key');
+                data[key] = input.type === 'checkbox' ? (input.checked ? '1' : '') : input.value;
+            });
+            return data;
+        }
+
+        async function saveCustomer(event) {
+            event.preventDefault();
+            const name = document.getElementById('customerName').value.trim();
+            if (!name) { toast(T.failed); return; }
+            const button = document.getElementById('saveCustomerBtn');
+            button.disabled = true;
+            const payload = {
+                name,
+                phone: document.getElementById('customerPhone').value.trim(),
+                email: document.getElementById('customerEmail').value.trim(),
+                data: collectData()
+            };
+            if (BOOT.isRoot) payload.tenant_id = state.tenantId;
+            try {
+                if (state.editingId) {
+                    await api('/api/customers/' + state.editingId, { method: 'PUT', body: JSON.stringify(payload) });
+                } else {
+                    await api('/api/customers', { method: 'POST', body: JSON.stringify(payload) });
+                }
+                closeCustomer();
+                toast(T.saved);
+                await load();
+            } catch (error) {
+                toast(error.message);
+            } finally {
+                button.disabled = false;
+            }
+        }
+
+        async function deleteCustomer(id) {
+            if (!window.confirm(T.confirmDelete)) return;
+            try {
+                await api(withTenant('/api/customers/' + id), { method: 'DELETE' });
+                toast(T.saved);
+                await load();
+            } catch (error) {
+                toast(error.message);
+            }
+        }
+
+        function selectedType(fieldType) { return TYPES.some(item => item[0] === fieldType) ? fieldType : 'text'; }
+
+        async function openFields() {
+            if (!state.tenantId) { toast(T.selectBusiness); return; }
+            try {
+                const data = await api(withTenant('/api/customers/fields?all=1'));
+                state.fieldRows = data.fields || [];
+                renderFieldRows();
+                document.getElementById('fieldsModal').classList.add('open');
+            } catch (error) {
+                toast(error.message);
+            }
+        }
+        function closeFields() { document.getElementById('fieldsModal').classList.remove('open'); }
+
+        function renderFieldRows() {
+            const wrap = document.getElementById('fieldRows');
+            wrap.innerHTML = '';
+            state.fieldRows.forEach((field, index) => {
+                const row = document.createElement('div');
+                row.className = 'field-row';
+                const options = (field.options || []).map(option => [option.value, option.label_en || option.value, option.label_ar || option.label_en || option.value].join('|')).join('\n');
+                row.innerHTML =
+                    '<div class="field-grid">' +
+                    '<div><label class="text-[10px] text-[var(--text-muted)]">' + T.fieldLabelEn + '</label><input class="config-input fr-label-en" value="' + escapeHtml(field.label_en || '') + '" maxlength="100"></div>' +
+                    '<div><label class="text-[10px] text-[var(--text-muted)]">' + T.fieldLabelAr + '</label><input class="config-input fr-label-ar" value="' + escapeHtml(field.label_ar || '') + '" maxlength="100"></div>' +
+                    '<div><label class="text-[10px] text-[var(--text-muted)]">' + T.fieldKey + '</label><input class="config-input fr-key" value="' + escapeHtml(field.key || '') + '" maxlength="50" ' + (field.key ? 'readonly' : '') + '></div>' +
+                    '<div><label class="text-[10px] text-[var(--text-muted)]">' + T.fieldType + '</label><select class="config-input fr-type">' + TYPES.map(type => '<option value="' + type[0] + '" ' + (selectedType(field.field_type) === type[0] ? 'selected' : '') + '>' + escapeHtml(type[1]) + '</option>').join('') + '</select></div>' +
+                    '<div><label class="text-[10px] text-[var(--text-muted)]">' + T.fieldOrder + '</label><input class="config-input fr-order" type="number" value="' + Number(field.sort_order || index) + '"></div>' +
+                    '<div class="flex items-end gap-3"><label class="text-[11px] flex items-center gap-1"><input class="fr-required" type="checkbox" ' + (field.required ? 'checked' : '') + '>' + T.fieldRequired + '</label>' +
+                    '<label class="text-[11px] flex items-center gap-1"><input class="fr-active" type="checkbox" ' + (field.active !== false ? 'checked' : '') + '>' + T.fieldActive + '</label>' +
+                    '<button type="button" class="btn" onclick="removeFieldRow(' + index + ')">' + T.remove + '</button></div>' +
+                    '</div>' +
+                    '<div class="mt-2"><label class="text-[10px] text-[var(--text-muted)]">' + T.fieldOptions + '</label><textarea class="config-input fr-options" rows="3">' + escapeHtml(options) + '</textarea></div>';
+                wrap.appendChild(row);
+            });
+        }
+
+        function addFieldRow() {
+            state.fieldRows.push({ key: '', label_en: '', label_ar: '', field_type: 'text', options: [], required: false, active: true, sort_order: state.fieldRows.length });
+            renderFieldRows();
+        }
+        function removeFieldRow(index) {
+            state.fieldRows.splice(index, 1);
+            renderFieldRows();
+        }
+        function parseOptionsText(value) {
+            return String(value || '').split(/\r?\n/).map(line => line.trim()).filter(Boolean).map(line => {
+                const parts = line.split('|').map(part => part.trim());
+                const optionValue = parts[0] || '';
+                return { value: optionValue, label_en: parts[1] || optionValue, label_ar: parts[2] || parts[1] || optionValue };
+            }).filter(option => option.value);
+        }
+        async function saveFields() {
+            const rows = Array.from(document.querySelectorAll('#fieldRows .field-row'));
+            const fields = rows.map((row, index) => ({
+                key: row.querySelector('.fr-key').value.trim(),
+                label_en: row.querySelector('.fr-label-en').value.trim(),
+                label_ar: row.querySelector('.fr-label-ar').value.trim(),
+                field_type: row.querySelector('.fr-type').value,
+                sort_order: Number(row.querySelector('.fr-order').value) || index,
+                required: row.querySelector('.fr-required').checked,
+                active: row.querySelector('.fr-active').checked,
+                options: parseOptionsText(row.querySelector('.fr-options').value)
+            }));
+            const button = document.getElementById('saveFieldsBtn');
+            button.disabled = true;
+            try {
+                await api('/api/customers/fields', {
+                    method: 'PUT',
+                    body: JSON.stringify({ tenant_id: BOOT.isRoot ? state.tenantId : undefined, fields })
+                });
+                closeFields();
+                toast(T.saved);
+                await load();
+            } catch (error) {
+                toast(error.message);
+            } finally {
+                button.disabled = false;
+            }
+        }
+
+        document.getElementById('customerForm').addEventListener('submit', saveCustomer);
+        document.getElementById('searchInput').addEventListener('input', event => {
+            const term = event.target.value.toLowerCase();
+            document.querySelectorAll('#customersBody tr').forEach(row => {
+                row.style.display = row.textContent.toLowerCase().includes(term) ? '' : 'none';
+            });
+        });
+        const tenantSelect = document.getElementById('tenantSelect');
+        if (tenantSelect) {
+            tenantSelect.addEventListener('change', () => {
+                state.tenantId = Number(tenantSelect.value) || null;
+                state.tenantName = tenantSelect.options[tenantSelect.selectedIndex] ? tenantSelect.options[tenantSelect.selectedIndex].textContent : '';
+                load();
+            });
+        }
+        document.querySelectorAll('.modal-backdrop').forEach(el => {
+            el.addEventListener('click', event => { if (event.target === el) el.classList.remove('open'); });
+        });
+        load();
+    </script>
+</body>
+</html>
