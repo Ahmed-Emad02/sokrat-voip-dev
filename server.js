@@ -26723,10 +26723,10 @@ app.get('/preview/guest-call', (req, res) => {
             name: isAr ? 'شركة النور للخدمات' : 'Al Nour Services',
             public_id: 'preview',
             branding: {
-                primary_color: '#e11d48',
-                secondary_color: '#7c3aed',
-                background_color: '#050507',
-                text_color: '#f8fafc',
+                primary_color: '#cc090c',
+                secondary_color: '#7b0002',
+                background_color: '#000000',
+                text_color: '#f4f4f5',
                 muted_color: '#a1a1aa',
                 button_text_color: '#ffffff',
                 button_text: isAr ? 'اتصل بنا' : 'Call us'
