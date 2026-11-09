@@ -1707,7 +1707,7 @@ echo "[8/14] Configuring WebRTC / PJSIP infrastructure..."
 # case 'remove_unavailable':
 # UPDATE sip SET data='10' WHERE keyword IN ('maxcontacts','max_contacts')
 # SELECT id, 'direct_media', 'no'
-# SELECT id, 'rtp_timeout', '30'
+# SELECT id, 'rtp_timeout', '360'
 # SELECT id, 'rtp_keepalive', '5'
 WEBRTC_REPAIR_SCRIPT="$INSTALL_DIR/scripts/configure-webrtc-pjsip.sh"
 if [ ! -x "$WEBRTC_REPAIR_SCRIPT" ]; then

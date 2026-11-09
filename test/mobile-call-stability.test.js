@@ -28,10 +28,10 @@ test('WebRTC configuration enforces multi-contact registration stability without
     assert.match(installer, /case 'remove_unavailable':/);
     assert.match(installer, /UPDATE sip SET data='10' WHERE keyword IN \('maxcontacts','max_contacts'\)/);
     assert.match(installer, /SELECT id, 'direct_media', 'no'/);
-    assert.match(server, /rtp_timeout=30/);
+    assert.match(server, /rtp_timeout=360/);
     assert.match(server, /rtp_timeout_hold=60/);
     assert.match(server, /rtp_keepalive=5/);
-    assert.match(installer, /SELECT id, 'rtp_timeout', '30'/);
+    assert.match(installer, /SELECT id, 'rtp_timeout', '360'/);
     assert.match(installer, /SELECT id, 'rtp_keepalive', '5'/);
 });
 
