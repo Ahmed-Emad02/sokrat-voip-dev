@@ -2684,6 +2684,7 @@ app.use((req, res, next) => {
         '/login', '/logout', '/forgot-password', '/reset-password',
         '/api/auth/forgot-password', '/api/auth/reset-password', '/api/network-info',
         '/favicon.ico', '/favicon.png', '/robots.txt', '/embed/crm/live',
+        '/preview/guest-call',
         '/401', '/403', '/404', '/api/telephony/camp-on/dialplan-trigger',
         '/api/federation/v1/ping'
     ];
