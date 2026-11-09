@@ -2172,7 +2172,7 @@ async function syncExtensionCallPickupGroups() {
                     'rtp_symmetric=yes',
                     'disallow=all',
                     'allow=opus,ulaw,alaw',
-                    'rtp_timeout=30',
+                    'rtp_timeout=360',
                     'rtp_timeout_hold=60',
                     'rtp_keepalive=5',
                     `named_call_group=${namedGroup}`,
@@ -2981,7 +2981,7 @@ app.post('/api/extension/v1/call-volume', requireExtensionSignature(pool), async
     res.set('Cache-Control', 'no-store');
     try {
         const extension = String(req.sokratExtension || '').trim();
-        const gainDb = Math.max(-24, Math.min(42, parseFloat(req.body?.micGainDb ?? req.body?.gainDb) || 0));
+        const gainDb = Math.max(-30, Math.min(42, parseFloat(req.body?.micGainDb ?? req.body?.gainDb) || 0));
         const output = await execFileAsync(ASTERISK_BIN, ['-rx', 'core show channels concise']);
         const state = parseCallStateLines(String(output || '').split('\n'), extension);
         if (!state.callerChannel) {
@@ -15612,7 +15612,7 @@ function updatePjsipCustomConfig(extNum, secret, displayName, action = 'create',
         'rtp_symmetric=yes',
         'disallow=all',
         'allow=opus,ulaw,alaw',
-        'rtp_timeout=30',
+        'rtp_timeout=360',
         'rtp_timeout_hold=60',
         'rtp_keepalive=5'
     ];
@@ -16168,7 +16168,7 @@ async function provisionExtension(payload = {}, options = {}) {
             [extNum, 'dtls_private_key', '/etc/asterisk/keys/asterisk.key', 18],
             [extNum, 'dtls_setup', 'actpass', 18],
             [extNum, 'dtls_verify', 'fingerprint', 18],
-            [extNum, 'rtp_timeout', '30', 18],
+            [extNum, 'rtp_timeout', '60', 18],
             [extNum, 'rtp_timeout_hold', '60', 18],
             [extNum, 'rtp_keepalive', '5', 18]
         );
@@ -16371,11 +16371,6 @@ app.put('/api/config/extensions/:extension', async (req, res) => {
         const devDial = isWebRTC ? `PJSIP/${extNum}` : `SIP/${extNum}`;
 
         await pool.query('UPDATE `asterisk`.`devices` SET tech = ?, dial = ? WHERE id = ?', [devTech, devDial, extNum]);
-        // The dialplan reads DEVICE/<ext>/dial at call time. Keep it in sync
-        // with the channel driver chosen above, otherwise switching an
-        // extension to WebRTC leaves it unreachable through the old SIP driver.
-        await execFileAsync(ASTERISK_BIN, ['-rx', `database put DEVICE/${extNum} dial "${devDial}"`]);
-        await execFileAsync(ASTERISK_BIN, ['-rx', `database put DEVICE/${extNum} tech "${devTech}"`]);
         if (displayName) {
             await pool.query('UPDATE `asterisk`.`devices` SET description = ? WHERE id = ?', [displayName, extNum]);
             await pool.query('UPDATE `asterisk`.`users` SET name = ? WHERE extension = ?', [displayName, extNum]);
@@ -16412,7 +16407,7 @@ app.put('/api/config/extensions/:extension', async (req, res) => {
                 ['dtls_private_key', '/etc/asterisk/keys/asterisk.key', 18],
                 ['dtls_setup', 'actpass', 18],
                 ['dtls_verify', 'fingerprint', 18],
-                ['rtp_timeout', '30', 18],
+                ['rtp_timeout', '360', 18],
                 ['rtp_timeout_hold', '60', 18],
                 ['rtp_keepalive', '5', 18]
             );
