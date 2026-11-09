@@ -230,7 +230,7 @@ test('root can create a tenant and receives its public link', async () => {
     });
 });
 
-test('cloud tenants are managed through the combined B&C page for root users only', () => {
+test('cloud tenants are managed through the combined E-HotLine page for root users only', () => {
     const server = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
     assert.match(server, /app\.get\('\/customers'[\s\S]{0,800}initialView/);
     assert.match(server, /app\.get\('\/tenants'[\s\S]{0,160}if \(!isRootSession\(req\)\)/);
@@ -238,7 +238,7 @@ test('cloud tenants are managed through the combined B&C page for root users onl
     assert.match(server, /isRootRequest: \(req\) => isRootSession\(req\)/);
     assert.doesNotMatch(server, /isRootRequest: \(req\) => hasRootAccess\(req\)/);
     const sidebar = fs.readFileSync(path.join(__dirname, '..', 'views', 'sidebar.ejs'), 'utf8');
-    assert.match(sidebar, /href="\/customers[\s\S]{0,160}title="B&C"/);
+    assert.match(sidebar, /href="\/customers[\s\S]{0,160}title="E-HotLine"/);
     assert.doesNotMatch(sidebar, /Cloud Tenants/);
 });
 
