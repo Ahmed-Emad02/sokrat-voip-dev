@@ -208,7 +208,14 @@ def trusted_parent(path, root, executable=False):
 
 
 def atomic(path, text, mode, group=None):
-    path.parent.mkdir(parents=True, exist_ok=True)
+    # Managed binaries live in system directories; keep newly-created parents
+    # non-group-writable even when the installer runs under umask 0002.
+    # mkdir(mode=...) applies its mode only to the leaf with parents=True.
+    old_umask = os.umask(0o022)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True, mode=0o755)
+    finally:
+        os.umask(old_umask)
     fd, temp = tempfile.mkstemp(prefix='.sokrat-wake-', dir=str(path.parent))
     try:
         with os.fdopen(fd, 'w') as stream:
@@ -378,7 +385,10 @@ def main():
         print(json.dumps(result))
         return
     lock_path = root / 'run/sokrat-webrtc-wake.lock'
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    # The lock directory is executable by the installer, not by other users.
+    # Explicit 0700 also avoids a permissive umask (e.g. 0002) creating a
+    # group-writable directory that trusted_parent correctly refuses.
+    lock_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     trusted_parent(lock_path, root, executable=True)
     fd = os.open(str(lock_path), os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600)
     with os.fdopen(fd, 'r+b') as lock:

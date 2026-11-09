@@ -35,6 +35,18 @@ const createCrmRouter = require('./routes/crm-integration');
 const createExtensionContactsRouter = require('./routes/extension-contacts');
 const { requireExtensionSignature } = require('./lib/extension-auth');
 const { parseCallStateLines } = require('./lib/call-state');
+const {
+    findDongle,
+    evaluateRestartHealth,
+    buildImsiFailureEvent,
+    buildDongleRecoveredEvent,
+    updateImsiFailureStreak,
+    buildImsiEscalationEvent,
+    buildRestartFailedEvent,
+    buildRestartHealthyEvent,
+    formatRestartAuditEntry
+} = require('./lib/dongle-health');
+const { dbToAsteriskVolume } = require('./lib/call-volume');
 const { DEFAULT_OUTBOUND_DIAL_PATTERNS, resolveOutboundDialPatterns } = require('./lib/outbound-routes');
 const createExtensionChatRouter = require('./routes/extension-chat');
 const createExtensionVideoRouter = require('./routes/extension-video');
@@ -2970,6 +2982,32 @@ app.use('/api/integrations/crm/v1', createCrmRouter(pool, {
     getAmiClient: () => amiClient,
     notifyCrmLive: () => notifyCrmLiveBroadcaster()
 }));
+
+// Authenticated live microphone gain for the mobile app.
+app.post('/api/extension/v1/call-volume', requireExtensionSignature(pool), async (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    try {
+        const extension = String(req.sokratExtension || '').trim();
+        const gainDb = Math.max(-24, Math.min(42, parseFloat(req.body?.micGainDb ?? req.body?.gainDb) || 0));
+        const output = await execFileAsync(ASTERISK_BIN, ['-rx', 'core show channels concise']);
+        const state = parseCallStateLines(String(output || '').split('\n'), extension);
+        if (!state.callerChannel) {
+            return res.status(404).json({ success: false, error: 'No active channel for extension' });
+        }
+        if (!/^PJSIP\/[0-9]{1,12}-[0-9a-f]+$/i.test(state.callerChannel)) {
+            return res.status(400).json({ success: false, error: 'Unexpected channel name' });
+        }
+        const factor = dbToAsteriskVolume(gainDb);
+        const result = await execFileAsync(ASTERISK_BIN, ['-rx', `dialplan set chanvar ${state.callerChannel} VOLUME(RX) ${factor}`]);
+        if (/no such channel|no such command|response:\s*error/i.test(result)) {
+            return res.status(404).json({ success: false, error: 'Asterisk rejected volume control' });
+        }
+        return res.json({ success: true, channel: state.callerChannel, gainDb, factor });
+    } catch (err) {
+        console.error('[extension-call-volume] failed:', err.message);
+        return res.status(503).json({ success: false, error: 'Volume control unavailable' });
+    }
+});
 
 // Mount the Chrome extension's direct address-book API (no CRM required)
 // Live extension/trunk state for the mobile dongle reconciler.
@@ -11322,6 +11360,132 @@ function getAstDbNumbers(callback) {
     }).catch(() => callback(mappings));
 }
 
+// Dongle restart audit, post-restart health verification, and recovery escalation.
+const DONGLE_RESTART_AUDIT_FILE = process.env.DONGLE_RESTART_AUDIT_FILE || path.join('/var/log/sokrat-voip', 'dongle-restarts.jsonl');
+const DONGLE_RESTART_COOLDOWN_MS = 5 * 60 * 1000;
+const DONGLE_IMSI_ESCALATION_THRESHOLD = 5;
+const DONGLE_IMSI_ESCALATION_WINDOW_MS = 5 * 60 * 1000;
+const dongleRestartHealthTimers = new Map();
+const dongleRestartCooldowns = new Map();
+const imsiFailureStreaks = new Map();
+
+function appendDongleRestartAudit(entry) {
+    const line = formatRestartAuditEntry(entry);
+    try {
+        fs.mkdirSync(path.dirname(DONGLE_RESTART_AUDIT_FILE), { recursive: true });
+        fs.appendFileSync(DONGLE_RESTART_AUDIT_FILE, line + '\n');
+    } catch (error) {
+        console.warn(`DONGLE-RESTART-AUDIT: failed to write ${DONGLE_RESTART_AUDIT_FILE}: ${error.message}`);
+    }
+    console.log(`DONGLE-RESTART-AUDIT ${line}`);
+}
+
+function scheduleDongleHealthCheck(dongleId, context = {}) {
+    const id = String(dongleId || '').trim().toLowerCase();
+    if (!id) return;
+
+    const delayMs = Math.min(30000, Math.max(1000, Number(context.delayMs) || 8000));
+    const existing = dongleRestartHealthTimers.get(id);
+    clearTimeout(existing);
+
+    const timer = setTimeout(() => {
+        dongleRestartHealthTimers.delete(id);
+        execFile(ASTERISK_BIN, ['-rx', 'dongle show devices'], (error, stdout) => {
+            let devices = [];
+            if (!error && stdout) {
+                try {
+                    devices = parseDevicesOutput(stdout, true);
+                } catch (parseError) {
+                    console.warn(`DONGLE-HEALTH: failed to parse dongle state for ${id}: ${parseError.message}`);
+                }
+            }
+
+            const device = findDongle(devices, id);
+            const health = evaluateRestartHealth(device);
+            appendDongleRestartAudit({
+                type: 'restart_health',
+                dongleId: id,
+                source: context.source || 'unknown',
+                reason: context.reason || 'restart',
+                healthy: health.healthy,
+                healthReason: health.reason,
+                state: health.state,
+                imsiPresent: Boolean(device && device.IMSI && device.IMSI !== '-' && device.IMSI !== 'Unknown')
+            });
+
+            if (health.healthy) {
+                dongleRestartCooldowns.delete(id);
+                imsiFailureStreaks.delete(id);
+                io.emit('dongleRestartHealthy', buildRestartHealthyEvent({ dongleId: id, state: health.state }));
+                io.emit('dongleRecovered', buildDongleRecoveredEvent(id, new Date().toISOString()));
+            } else {
+                const retryAfterSec = Math.ceil(DONGLE_RESTART_COOLDOWN_MS / 1000);
+                dongleRestartCooldowns.set(id, Date.now() + DONGLE_RESTART_COOLDOWN_MS);
+                io.emit('dongleRestartFailed', buildRestartFailedEvent({
+                    dongleId: id,
+                    state: health.state,
+                    reason: health.reason,
+                    retryAfterSec
+                }));
+            }
+            io.emit('usbDevicesUpdated');
+        });
+    }, delayMs);
+
+    if (typeof timer.unref === 'function') timer.unref();
+    dongleRestartHealthTimers.set(id, timer);
+}
+
+function restartDongleWithAudit(dongleId, options = {}) {
+    const id = String(dongleId || '').trim().toLowerCase();
+    const reason = options.reason || 'manual';
+    const source = options.source || 'api';
+    const now = Date.now();
+    const cooldownUntil = dongleRestartCooldowns.get(id) || 0;
+
+    if (now < cooldownUntil) {
+        const retryAfterSec = Math.max(1, Math.ceil((cooldownUntil - now) / 1000));
+        appendDongleRestartAudit({ type: 'restart', phase: 'blocked_cooldown', dongleId: id, reason, source, retryAfterSec });
+        return { ok: false, error: 'restart_cooldown', retryAfterSec };
+    }
+
+    appendDongleRestartAudit({ type: 'restart', phase: 'requested', dongleId: id, reason, source });
+
+    execFile(ASTERISK_BIN, ['-rx', `dongle restart now ${id}`], (error, stdout, stderr) => {
+        if (error) {
+            const retryAfterSec = 60;
+            dongleRestartCooldowns.set(id, Date.now() + retryAfterSec * 1000);
+            appendDongleRestartAudit({
+                type: 'restart',
+                phase: 'command_failed',
+                dongleId: id,
+                reason,
+                source,
+                error: (stderr || error.message || '').trim()
+            });
+            io.emit('dongleRestartFailed', buildRestartFailedEvent({
+                dongleId: id,
+                state: 'Unknown',
+                reason: 'restart_command_failed',
+                retryAfterSec
+            }));
+            return;
+        }
+
+        appendDongleRestartAudit({
+            type: 'restart',
+            phase: 'command_ok',
+            dongleId: id,
+            reason,
+            source,
+            output: (stdout || '').trim()
+        });
+        scheduleDongleHealthCheck(id, { source, reason, delayMs: 20000 });
+    });
+
+    return { ok: true, healthCheck: 'scheduled' };
+}
+
 // Start background tail log monitor on the Asterisk verbose log file
 function startUssdLogMonitor() {
     console.log("GSM MONITOR: Starting tail process on /var/log/asterisk/full...");
@@ -11334,6 +11498,86 @@ function startUssdLogMonitor() {
     const dongleLogPattern = /chan_dongle|at_response|app_ussd|dongle[0-9]+/i;
     const imsiErrorPattern = /\[([^\]]+)\]\s+ERROR\[\d+\](?:\s*:\s*)?\s+at_response\.c(?::\d+)?(?::|\s+)?(?:\s*log_cmd_response_error:\s*)?\s*\[([^\]]+)\]\s+Getting IMSI number failed/i;
     const latestImsiFailAlerts = {};
+    const pendingImsiLookups = new Map();
+
+    function handleDongleRecovered(dongleId, logTime) {
+        const id = String(dongleId || '').trim().toLowerCase();
+        if (!id) return;
+        imsiFailureStreaks.delete(id);
+        delete latestImsiFailAlerts[id];
+        pendingImsiLookups.delete(id);
+        console.log(`GSM MONITOR: ${id} initialized and ready; clearing SIM alerts`);
+        appendDongleRestartAudit({ type: 'dongle_recovered', dongleId: id, logTime, source: 'asterisk_log' });
+        io.emit('dongleRecovered', buildDongleRecoveredEvent(id, logTime));
+    }
+
+    function handleImsiFailure(dongleId, logTime) {
+        const id = String(dongleId || '').trim().toLowerCase();
+        if (!id) return;
+        const now = Date.now();
+        const streakResult = updateImsiFailureStreak(
+            imsiFailureStreaks.get(id),
+            now,
+            { threshold: DONGLE_IMSI_ESCALATION_THRESHOLD, windowMs: DONGLE_IMSI_ESCALATION_WINDOW_MS }
+        );
+        imsiFailureStreaks.set(id, streakResult.streak);
+
+        // Once escalated, keep the escalation state until a successful init clears it.
+        if (streakResult.streak.escalatedAt && !streakResult.shouldEscalate) return;
+
+        if (!streakResult.shouldEscalate) {
+            const lastAlert = latestImsiFailAlerts[id];
+            if (lastAlert && (now - lastAlert) <= 30000) return;
+        }
+        if (pendingImsiLookups.has(id) && !streakResult.shouldEscalate) return;
+
+        const lookupToken = Symbol(id);
+        pendingImsiLookups.set(id, lookupToken);
+        if (!streakResult.shouldEscalate) latestImsiFailAlerts[id] = now;
+
+        getDevicesOutputCached((error, stdout) => {
+            if (pendingImsiLookups.get(id) !== lookupToken) return;
+            pendingImsiLookups.delete(id);
+
+            let device = null;
+            if (!error && stdout) {
+                try {
+                    device = findDongle(parseDevicesOutput(stdout, true), id);
+                } catch (parseError) {
+                    console.warn(`GSM MONITOR: failed to parse live state for ${id}: ${parseError.message}`);
+                }
+            }
+
+            if (streakResult.shouldEscalate) {
+                const state = device ? (device.State || 'Unknown') : 'Unknown';
+                const escalation = buildImsiEscalationEvent({
+                    dongleId: id,
+                    count: streakResult.streak.count,
+                    state,
+                    windowMs: DONGLE_IMSI_ESCALATION_WINDOW_MS
+                });
+                console.warn(`GSM MONITOR: escalating ${id} after ${streakResult.streak.count} IMSI failures in ${DONGLE_IMSI_ESCALATION_WINDOW_MS / 60000} minutes`);
+                appendDongleRestartAudit({
+                    type: 'imsi_escalation',
+                    dongleId: id,
+                    count: streakResult.streak.count,
+                    state,
+                    logTime,
+                    windowMs: DONGLE_IMSI_ESCALATION_WINDOW_MS
+                });
+                io.emit('dongleEscalated', escalation);
+                return;
+            }
+
+            const failure = buildImsiFailureEvent({ dongleId: id, logTime, device });
+            if (failure.event === 'dongleSimError') {
+                console.warn(`GSM MONITOR: IMSI read failure on connected ${id} at ${logTime}`);
+            } else {
+                console.log(`GSM MONITOR: ${id} is offline at ${logTime}; suppressing SIM alert`);
+            }
+            io.emit(failure.event, failure.payload);
+        });
+    }
 
     function processLogStatement(statement) {
         if (!statement.trim()) return;
@@ -11374,25 +11618,18 @@ function startUssdLogMonitor() {
             }
         }
 
-        // Parse Getting IMSI number failed error from chan_dongle at_response.c
+        // Parse Getting IMSI number failed error from chan_dongle at_response.c.
+        // The live dongle state is checked before any SIM-facing alert is emitted.
         const imsiMatch = imsiErrorPattern.exec(statement);
         if (imsiMatch) {
-            const logTime = imsiMatch[1].trim();
-            const dongleId = imsiMatch[2].trim();
-            const now = Date.now();
-            const lastAlert = latestImsiFailAlerts[dongleId];
-            // Debounce alerts to avoid spamming the UI (alert at most once every 30 seconds per dongle)
-            if (!lastAlert || (now - lastAlert > 30000)) {
-                latestImsiFailAlerts[dongleId] = now;
-                console.warn(`GSM MONITOR: SIM error on ${dongleId} (Getting IMSI number failed) at ${logTime}`);
-                io.emit('dongleSimError', {
-                    dongleId,
-                    error: 'imsi_failed',
-                    logTime,
-                    messageEn: `SIM card is not connected properly on ${dongleId} (failed to read IMSI).`,
-                    messageAr: `بطاقة SIM غير متصلة بشكل صحيح في ${dongleId} (تعذر قراءة رقم IMSI).`
-                });
-            }
+            handleImsiFailure(imsiMatch[2].trim(), imsiMatch[1].trim());
+        }
+
+        // Clear any stale SIM/escalation alert as soon as the modem initializes.
+        const recoveredMatch = /\[(dongle\d+)\]\s+Dongle initialized and ready/i.exec(statement);
+        if (recoveredMatch) {
+            const logTime = (statement.match(/^\[([^\]]+)\]/) || [])[1] || '';
+            handleDongleRecovered(recoveredMatch[1], logTime);
         }
 
         // Parse USSD response
@@ -11861,16 +12098,22 @@ app.post('/api/gsm-dongles/reload/:dongleId', requireAuth, requireActionPermissi
             return res.status(403).json({ success: false, error: "Forbidden: Access denied to this dongle." });
         }
     }
-    execFile(ASTERISK_BIN, ['-rx', `dongle restart now ${dongleId}`], (error, stdout, stderr) => {
-        if (error) {
-            return res.status(500).json({ success: false, error: stderr || error.message });
-        }
-        setTimeout(() => io.emit('usbDevicesUpdated'), 2000);
-        res.json({
-            success: true,
-            message: `Dongle ${dongleId} restarted in Asterisk successfully`,
-            output: (stdout || '').trim()
+    const restart = restartDongleWithAudit(dongleId, {
+        reason: 'manual reload',
+        source: 'api:/api/gsm-dongles/reload'
+    });
+    if (!restart.ok) {
+        return res.status(429).json({
+            success: false,
+            error: 'Restart is paused after a failed health check. Use a USB replug or wait for the cooldown.',
+            retryAfterSec: restart.retryAfterSec
         });
+    }
+    setTimeout(() => io.emit('usbDevicesUpdated'), 2000);
+    res.json({
+        success: true,
+        message: `Dongle ${dongleId} restart requested; post-restart health check scheduled`,
+        healthCheck: restart.healthCheck
     });
 });
 
@@ -11928,12 +12171,41 @@ app.post('/api/gsm-dongles/reboot-modem/:dongleId', requireAuth, requireActionPe
             return res.status(403).json({ success: false, error: "Forbidden: Access denied to this dongle." });
         }
     }
+    appendDongleRestartAudit({
+        type: 'modem_reboot',
+        phase: 'requested',
+        dongleId,
+        source: 'api:/api/gsm-dongles/reboot-modem'
+    });
     execFile(ASTERISK_BIN, ['-rx', `dongle cmd ${dongleId} AT+CFUN=1,1`], (error, stdout, stderr) => {
         if (error) {
+            appendDongleRestartAudit({
+                type: 'modem_reboot',
+                phase: 'command_failed',
+                dongleId,
+                source: 'api:/api/gsm-dongles/reboot-modem',
+                error: (stderr || error.message || '').trim()
+            });
             return res.status(500).json({ success: false, error: stderr || error.message });
         }
+        appendDongleRestartAudit({
+            type: 'modem_reboot',
+            phase: 'command_ok',
+            dongleId,
+            source: 'api:/api/gsm-dongles/reboot-modem',
+            output: (stdout || '').trim()
+        });
+        scheduleDongleHealthCheck(dongleId, {
+            source: 'api:/api/gsm-dongles/reboot-modem',
+            reason: 'at_cfun_reboot',
+            delayMs: 20000
+        });
         setTimeout(() => io.emit('usbDevicesUpdated'), 3000);
-        res.json({ success: true, message: `Modem reboot command sent to ${dongleId}`, output: (stdout || '').trim() });
+        res.json({
+            success: true,
+            message: `Modem reboot command sent to ${dongleId}; post-reboot health check scheduled`,
+            healthCheck: 'scheduled'
+        });
     });
 });
 
@@ -11953,18 +12225,61 @@ app.post('/api/gsm-dongles/virtual-replug/:dongleId', async (req, res) => {
     }
     const busId = getUsbBusIdForDongle(dongleId);
     if (!busId) {
+        appendDongleRestartAudit({
+            type: 'virtual_replug',
+            phase: 'bus_not_found',
+            dongleId,
+            source: 'api:/api/gsm-dongles/virtual-replug'
+        });
         io.emit('usbDevicesUpdated');
         return res.json({ success: false, error: `USB bus ID not found for ${dongleId}` });
     }
 
+    appendDongleRestartAudit({
+        type: 'virtual_replug',
+        phase: 'requested',
+        dongleId,
+        busId,
+        source: 'api:/api/gsm-dongles/virtual-replug'
+    });
     const { exec } = require('child_process');
     const cmd = `echo "${busId}" > /sys/bus/usb/drivers/usb/unbind && sleep 2 && echo "${busId}" > /sys/bus/usb/drivers/usb/bind`;
     exec(cmd, (error, stdout, stderr) => {
         setTimeout(() => io.emit('usbDevicesUpdated'), 4000);
         if (error) {
+            appendDongleRestartAudit({
+                type: 'virtual_replug',
+                phase: 'command_failed',
+                dongleId,
+                busId,
+                source: 'api:/api/gsm-dongles/virtual-replug',
+                error: (stderr || error.message || '').trim()
+            });
+            io.emit('dongleRestartFailed', buildRestartFailedEvent({
+                dongleId,
+                state: 'Unknown',
+                reason: 'virtual_replug_failed',
+                retryAfterSec: 60
+            }));
             return res.status(500).json({ success: false, error: `Virtual re-plug failed for ${busId}: ${stderr || error.message}` });
         }
-        res.json({ success: true, message: `Virtual USB re-plug executed for ${dongleId} (${busId})` });
+        appendDongleRestartAudit({
+            type: 'virtual_replug',
+            phase: 'command_ok',
+            dongleId,
+            busId,
+            source: 'api:/api/gsm-dongles/virtual-replug'
+        });
+        scheduleDongleHealthCheck(dongleId, {
+            source: 'api:/api/gsm-dongles/virtual-replug',
+            reason: 'virtual_replug',
+            delayMs: 20000
+        });
+        res.json({
+            success: true,
+            message: `Virtual USB re-plug executed for ${dongleId} (${busId}); post-replug health check scheduled`,
+            healthCheck: 'scheduled'
+        });
     });
 });
 
@@ -12109,8 +12424,12 @@ app.post('/api/gsm-dongles/update-ports/:dongleId', requireAuth, async (req, res
 
         const updated = updateDonglePortsInConf(dongleId, audio, data);
 
-        // Restart dongle channel in Asterisk to bind to new ports immediately
-        execFile(ASTERISK_BIN, ['-rx', `dongle restart now ${dongleId}`], () => {});
+        // Restart dongle channel in Asterisk to bind to new ports immediately.
+        // The helper records the attempt and verifies modem health afterward.
+        const restart = restartDongleWithAudit(dongleId, {
+            reason: 'tty port update',
+            source: 'api:/api/gsm-dongles/update-ports'
+        });
 
         setTimeout(() => io.emit('usbDevicesUpdated'), 2500);
 
@@ -12119,7 +12438,10 @@ app.post('/api/gsm-dongles/update-ports/:dongleId', requireAuth, async (req, res
             dongleId,
             audio: updated.audio,
             data: updated.data,
-            message: `Updated TTY ports for [${dongleId}]: audio=${updated.audio}, data=${updated.data}`
+            message: `Updated TTY ports for [${dongleId}]: audio=${updated.audio}, data=${updated.data}`,
+            restart: restart.ok
+                ? { scheduled: true, healthCheck: restart.healthCheck }
+                : { scheduled: false, error: restart.error, retryAfterSec: restart.retryAfterSec }
         });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
@@ -16097,6 +16419,11 @@ app.put('/api/config/extensions/:extension', async (req, res) => {
         const devDial = isWebRTC ? `PJSIP/${extNum}` : `SIP/${extNum}`;
 
         await pool.query('UPDATE `asterisk`.`devices` SET tech = ?, dial = ? WHERE id = ?', [devTech, devDial, extNum]);
+        // The dialplan reads DEVICE/<ext>/dial at call time. Keep it in sync
+        // with the channel driver chosen above, otherwise switching an
+        // extension to WebRTC leaves it unreachable through the old SIP driver.
+        await execFileAsync(ASTERISK_BIN, ['-rx', `database put DEVICE/${extNum} dial "${devDial}"`]);
+        await execFileAsync(ASTERISK_BIN, ['-rx', `database put DEVICE/${extNum} tech "${devTech}"`]);
         if (displayName) {
             await pool.query('UPDATE `asterisk`.`devices` SET description = ? WHERE id = ?', [displayName, extNum]);
             await pool.query('UPDATE `asterisk`.`users` SET name = ? WHERE extension = ?', [displayName, extNum]);

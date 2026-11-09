@@ -241,10 +241,12 @@ ensure_db_column_width() {
 
 # Run idempotent schema migrations
 ensure_db_column "dashboard_users" "group_id" "INT DEFAULT NULL"
+ensure_db_column "dashboard_users" "tenant_id" "INT UNSIGNED DEFAULT NULL"
 ensure_db_column "dashboard_users" "extension" "VARCHAR(512) DEFAULT NULL"
 ensure_db_column_width "dashboard_users" "extension" "VARCHAR(512) DEFAULT NULL" 512
 ensure_db_column "dashboard_users" "reset_token_expires" "DATETIME DEFAULT NULL"
 ensure_db_index "dashboard_users" "idx_dash_users_extension" "KEY \`idx_dash_users_extension\` (\`extension\`)"
+ensure_db_index "dashboard_users" "idx_dash_users_tenant" "KEY \`idx_dash_users_tenant\` (\`tenant_id\`)"
 ensure_db_index "dashboard_users" "idx_unique_email" "UNIQUE KEY \`idx_unique_email\` (\`email\`)"
 ensure_db_column "dashboard_user_extensions" "peer_id" "INT DEFAULT NULL"
 ensure_db_index "dashboard_user_extensions" "idx_peer_id" "KEY \`idx_peer_id\` (\`peer_id\`)"
@@ -460,6 +462,177 @@ mysql "${MYSQL_AUTH[@]}" asterisk -e "
     WHERE engine='local_whisper' OR provider='local';
 " 2>/dev/null || true
 
+# AI call evaluation / quality schema (idempotent)
+mysql "${MYSQL_AUTH[@]}" asterisk -e "
+CREATE TABLE IF NOT EXISTS \`asterisk\`.\`ai_evaluation_settings\` (
+  \`id\` INT PRIMARY KEY DEFAULT 1,
+  \`enabled\` TINYINT(1) DEFAULT 0,
+  \`provider\` VARCHAR(32) DEFAULT 'openai',
+  \`api_key_enc\` TEXT DEFAULT NULL,
+  \`api_url\` VARCHAR(255) DEFAULT 'https://api.openai.com/v1',
+  \`model\` VARCHAR(128) DEFAULT 'gpt-4o-mini',
+  \`temperature\` DECIMAL(2,1) DEFAULT 0.0,
+  \`max_tokens\` INT DEFAULT 4096,
+  \`monthly_budget_usd\` DECIMAL(10,2) DEFAULT 0,
+  \`require_evidence\` TINYINT(1) DEFAULT 1,
+  \`updated_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+INSERT IGNORE INTO \`asterisk\`.\`ai_evaluation_settings\` (\`id\`) VALUES (1);
+CREATE TABLE IF NOT EXISTS \`asterisk\`.\`evaluation_profiles\` (
+  \`id\` INT AUTO_INCREMENT PRIMARY KEY,
+  \`name\` VARCHAR(120) NOT NULL,
+  \`description\` TEXT DEFAULT NULL,
+  \`scope_type\` ENUM('global','campaign','queue','did','agent','team') DEFAULT 'global',
+  \`scope_id\` VARCHAR(64) DEFAULT NULL,
+  \`direction\` ENUM('any','inbound','outbound','internal') DEFAULT 'any',
+  \`language\` VARCHAR(16) DEFAULT 'ar',
+  \`context_text\` MEDIUMTEXT DEFAULT NULL,
+  \`instructions_text\` MEDIUMTEXT DEFAULT NULL,
+  \`rubric_json\` LONGTEXT NOT NULL,
+  \`thresholds_json\` TEXT DEFAULT NULL,
+  \`sampling_percent\` TINYINT DEFAULT 100,
+  \`min_duration_sec\` INT DEFAULT 30,
+  \`temperature\` DECIMAL(2,1) DEFAULT 0.0,
+  \`version\` INT NOT NULL DEFAULT 1,
+  \`active\` TINYINT(1) NOT NULL DEFAULT 1,
+  \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  \`updated_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  KEY \`idx_eval_profile_active\` (\`active\`, \`scope_type\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE IF NOT EXISTS \`asteriskcdrdb\`.\`transcript_segments\` (
+  \`id\` BIGINT AUTO_INCREMENT PRIMARY KEY,
+  \`transcription_type\` ENUM('call','voicemail') NOT NULL,
+  \`transcription_id\` BIGINT NOT NULL,
+  \`seq\` INT NOT NULL DEFAULT 0,
+  \`speaker\` VARCHAR(32) DEFAULT 'unknown',
+  \`start_ms\` INT DEFAULT NULL,
+  \`end_ms\` INT DEFAULT NULL,
+  \`text\` TEXT NOT NULL,
+  \`confidence\` DECIMAL(5,4) DEFAULT NULL,
+  \`language\` VARCHAR(16) DEFAULT NULL,
+  \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  KEY \`idx_segment_target\` (\`transcription_type\`, \`transcription_id\`, \`seq\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+CREATE TABLE IF NOT EXISTS \`asteriskcdrdb\`.\`evaluation_jobs\` (
+  \`id\` BIGINT AUTO_INCREMENT PRIMARY KEY,
+  \`target_type\` ENUM('call','voicemail') NOT NULL DEFAULT 'call',
+  \`target_id\` VARCHAR(128) NOT NULL,
+  \`transcription_id\` BIGINT DEFAULT NULL,
+  \`uniqueid\` VARCHAR(32) DEFAULT NULL,
+  \`profile_id\` INT NOT NULL,
+  \`profile_version\` INT NOT NULL DEFAULT 1,
+  \`profile_snapshot_json\` LONGTEXT DEFAULT NULL,
+  \`status\` ENUM('pending','processing','completed','failed','skipped') NOT NULL DEFAULT 'pending',
+  \`attempt_count\` INT NOT NULL DEFAULT 0,
+  \`error_message\` VARCHAR(500) DEFAULT NULL,
+  \`provider\` VARCHAR(32) DEFAULT NULL,
+  \`model\` VARCHAR(128) DEFAULT NULL,
+  \`cost_usd\` DECIMAL(10,6) DEFAULT 0,
+  \`processing_started_at\` DATETIME DEFAULT NULL,
+  \`completed_at\` DATETIME DEFAULT NULL,
+  \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY \`uniq_eval_target\` (\`profile_id\`, \`target_type\`, \`target_id\`, \`profile_version\`),
+  KEY \`idx_eval_status\` (\`status\`, \`id\`),
+  KEY \`idx_eval_uniqueid\` (\`uniqueid\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+CREATE TABLE IF NOT EXISTS \`asteriskcdrdb\`.\`call_evaluations\` (
+  \`id\` BIGINT AUTO_INCREMENT PRIMARY KEY,
+  \`job_id\` BIGINT NOT NULL,
+  \`target_type\` ENUM('call','voicemail') NOT NULL DEFAULT 'call',
+  \`target_id\` VARCHAR(128) NOT NULL,
+  \`uniqueid\` VARCHAR(32) DEFAULT NULL,
+  \`profile_id\` INT NOT NULL,
+  \`profile_version\` INT NOT NULL DEFAULT 1,
+  \`overall_score\` DECIMAL(5,2) DEFAULT NULL,
+  \`pass\` TINYINT(1) DEFAULT NULL,
+  \`critical_fail\` TINYINT(1) DEFAULT 0,
+  \`summary\` LONGTEXT DEFAULT NULL,
+  \`warnings_json\` LONGTEXT DEFAULT NULL,
+  \`raw_response_json\` LONGTEXT DEFAULT NULL,
+  \`provider\` VARCHAR(32) DEFAULT NULL,
+  \`model\` VARCHAR(128) DEFAULT NULL,
+  \`prompt_hash\` VARCHAR(64) DEFAULT NULL,
+  \`human_score\` DECIMAL(5,2) DEFAULT NULL,
+  \`human_notes\` TEXT DEFAULT NULL,
+  \`reviewer_id\` INT DEFAULT NULL,
+  \`reviewed_at\` DATETIME DEFAULT NULL,
+  \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY \`uniq_eval_job\` (\`job_id\`),
+  KEY \`idx_eval_profile_time\` (\`profile_id\`, \`created_at\`),
+  KEY \`idx_eval_uniqueid\` (\`uniqueid\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+CREATE TABLE IF NOT EXISTS \`asteriskcdrdb\`.\`evaluation_scores\` (
+  \`id\` BIGINT AUTO_INCREMENT PRIMARY KEY,
+  \`evaluation_id\` BIGINT NOT NULL,
+  \`criterion_key\` VARCHAR(64) NOT NULL,
+  \`label\` VARCHAR(120) DEFAULT NULL,
+  \`score\` DECIMAL(6,2) DEFAULT NULL,
+  \`weight\` DECIMAL(6,2) DEFAULT NULL,
+  \`weighted_score\` DECIMAL(7,2) DEFAULT NULL,
+  \`critical\` TINYINT(1) DEFAULT 0,
+  \`evidence_json\` LONGTEXT DEFAULT NULL,
+  \`comment\` TEXT DEFAULT NULL,
+  KEY \`idx_eval_score\` (\`evaluation_id\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+" 2>/dev/null || true
+
+mysql "${MYSQL_AUTH[@]}" asteriskcdrdb -e "ALTER TABLE `evaluation_jobs` ADD `profile_snapshot_json` LONGTEXT DEFAULT NULL" 2>/dev/null || true
+
+mysql "${MYSQL_AUTH[@]}" asterisk -e "
+CREATE TABLE IF NOT EXISTS \`asterisk\`.\`ai_agents\` (
+  \`id\` INT AUTO_INCREMENT PRIMARY KEY,
+  \`name\` VARCHAR(120) NOT NULL,
+  \`description\` TEXT DEFAULT NULL,
+  \`direction\` ENUM('inbound','outbound','both') NOT NULL DEFAULT 'both',
+  \`language\` VARCHAR(16) DEFAULT 'ar',
+  \`voice\` VARCHAR(80) DEFAULT NULL,
+  \`persona_prompt\` MEDIUMTEXT DEFAULT NULL,
+  \`sip_endpoint\` VARCHAR(255) NOT NULL,
+  \`transfer_target\` VARCHAR(128) DEFAULT NULL,
+  \`fallback_target\` VARCHAR(128) DEFAULT NULL,
+  \`max_concurrency\` INT NOT NULL DEFAULT 1,
+  \`recording_disclosure\` TINYINT(1) NOT NULL DEFAULT 1,
+  \`active\` TINYINT(1) NOT NULL DEFAULT 1,
+  \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  \`updated_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE IF NOT EXISTS \`asteriskcdrdb\`.\`ai_sessions\` (
+  \`id\` BIGINT AUTO_INCREMENT PRIMARY KEY,
+  \`uniqueid\` VARCHAR(64) DEFAULT NULL,
+  \`attempt_uuid\` VARCHAR(64) DEFAULT NULL,
+  \`linkedid\` VARCHAR(64) DEFAULT NULL,
+  \`agent_id\` INT NOT NULL,
+  \`direction\` ENUM('inbound','outbound') NOT NULL,
+  \`campaign_id\` INT DEFAULT NULL,
+  \`lead_id\` INT DEFAULT NULL,
+  \`caller\` VARCHAR(80) DEFAULT NULL,
+  \`status\` ENUM('started','answered','completed','failed','transferred') NOT NULL DEFAULT 'started',
+  \`transfer_target\` VARCHAR(128) DEFAULT NULL,
+  \`error_message\` VARCHAR(500) DEFAULT NULL,
+  \`started_at\` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  \`ended_at\` DATETIME DEFAULT NULL,
+  KEY \`idx_ai_session_agent\` (\`agent_id\`, \`started_at\`),
+  KEY \`idx_ai_session_uniqueid\` (\`uniqueid\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+" 2>/dev/null || true
+
+mysql "${MYSQL_AUTH[@]}" asteriskcdrdb -e "ALTER TABLE \`ai_sessions\` ADD \`attempt_uuid\` VARCHAR(64) DEFAULT NULL" 2>/dev/null || true
+mysql "${MYSQL_AUTH[@]}" asterisk -e "ALTER TABLE \`dialer_campaigns\` ADD \`agent_kind\` ENUM('human','ai') NOT NULL DEFAULT 'human'" 2>/dev/null || true
+mysql "${MYSQL_AUTH[@]}" asterisk -e "ALTER TABLE \`dialer_campaigns\` ADD \`ai_agent_id\` INT DEFAULT NULL" 2>/dev/null || true
+mysql "${MYSQL_AUTH[@]}" asterisk -e "ALTER TABLE \`dialer_call_attempts\` ADD \`ai_agent_id\` INT DEFAULT NULL" 2>/dev/null || true
+
+for col in segments_json provider language_detected confidence_avg cost_usd; do
+    case "$col" in
+        segments_json) def="LONGTEXT DEFAULT NULL" ;;
+        provider) def="VARCHAR(32) DEFAULT NULL" ;;
+        language_detected) def="VARCHAR(16) DEFAULT NULL" ;;
+        confidence_avg) def="DECIMAL(5,4) DEFAULT NULL" ;;
+        cost_usd) def="DECIMAL(10,6) DEFAULT 0" ;;
+    esac
+    mysql "${MYSQL_AUTH[@]}" asteriskcdrdb -e "ALTER TABLE \`cdr_transcriptions\` ADD \`$col\` $def" 2>/dev/null || true
+    mysql "${MYSQL_AUTH[@]}" asteriskcdrdb -e "ALTER TABLE \`voicemail_transcriptions\` ADD \`$col\` $def" 2>/dev/null || true
+done
+
 # Seed new webhook settings keys (idempotent INSERT IGNORE)
 mysql "${MYSQL_AUTH[@]}" asterisk -e "
 INSERT IGNORE INTO dashboard_settings (setting_key, setting_value) VALUES
@@ -645,10 +818,14 @@ text = path.read_text()
 # Restore adaptive jitter buffer.
 text = text.replace('; same => n,Set(JITTERBUFFER(adaptive)=default)', 'same => n,Set(JITTERBUFFER(adaptive)=default)')
 text = text.replace('ExecIf($["${D_JB}" != ""]?Set(JITTERBUFFER(${D_JB})=default))', 'ExecIf($["${D_JB}" != "" & "${D_JB}" != "off"]?Set(JITTERBUFFER(${D_JB})=default))')
-# Add ringback to the trunk hook exactly once.
+# Enable carrier early media. Capital R keeps ringback but passes early media;
+# remove any lower-case r that suppresses it.
 marker = 'exten => s,1,NoOp(--- Outbound call via Dongle (CID auto-set by trunk outcid & Extension RNNoise Filter) ---)'
-if marker in text and 'Set(DIAL_TRUNK_OPTIONS=${DIAL_TRUNK_OPTIONS}r)' not in text:
-    text = text.replace(marker, marker + '\nsame => n,Set(DIAL_TRUNK_OPTIONS=${DIAL_TRUNK_OPTIONS}r)', 1)
+early_media = 'same => n,Set(DIAL_TRUNK_OPTIONS=${STRREPLACE(DIAL_TRUNK_OPTIONS,r)}R)'
+legacy_ringback = 'same => n,Set(DIAL_TRUNK_OPTIONS=${DIAL_TRUNK_OPTIONS}r)'
+text = text.replace(legacy_ringback, '')
+if marker in text and early_media not in text:
+    text = text.replace(marker, marker + '\n' + early_media, 1)
 path.write_text(text)
 PY_AUDIO
     done
@@ -780,6 +957,86 @@ same => n,UserEvent(DialerProgressiveHangup,AttemptUUID: ${ATTEMPT_UUID},Campaig
 same => n,Return()
 """
         content = content.rstrip() + "\n\n" + dialer_stub.strip() + "\n"
+
+    # Ensure SIP-hosted AI agent contexts exist if missing.
+    if "[ai-agent-connect]" not in content:
+        ai_stub = """
+[ai-agent]
+exten => _[0-9],1,NoOp(=== SIP AI Agent ${EXTEN} inbound ===)
+same => n,Set(AI_AGENT_ID=${EXTEN})
+same => n,Goto(handler,1)
+exten => _X.,1,NoOp(=== SIP AI Agent ${EXTEN} inbound ===)
+same => n,Set(AI_AGENT_ID=${EXTEN})
+same => n,Goto(handler,1)
+exten => handler,1,NoOp(=== SIP AI Agent ${AI_AGENT_ID} inbound ===)
+same => n,Set(AI_SIP=${DB(AI_AGENT/${AI_AGENT_ID}/sip_endpoint)})
+same => n,GotoIf($["${AI_SIP}"=""]?missing)
+same => n,GotoIf($["${DB(AI_AGENT/${AI_AGENT_ID}/active)}"!="1"]?missing)
+same => n,GotoIf($["${DB(AI_AGENT/${AI_AGENT_ID}/direction)}"="outbound"]?missing)
+same => n,Set(CHANNEL(hangup_handler_push)=ai-agent-hangup,s,1)
+same => n,UserEvent(AiSessionEvent,AgentID:${AI_AGENT_ID},Direction:inbound,Status:started,Uniqueid:${UNIQUEID},Caller:${CALLERID(num)})
+same => n,Dial(${AI_SIP},60)
+same => n,GotoIf($["${DIALSTATUS}"="ANSWER"]?done:fallback)
+same => n(fallback),Set(AI_FALLBACK=${DB(AI_AGENT/${AI_AGENT_ID}/fallback_target)})
+same => n,GotoIf($["${AI_FALLBACK}"=""]?done)
+same => n,Goto(${AI_FALLBACK})
+same => n(done),Hangup()
+same => n(missing),Playback(ss-noservice)
+same => n,Hangup()
+
+[ai-agent-hangup]
+exten => s,1,UserEvent(AiSessionEvent,AgentID:${AI_AGENT_ID},Direction:inbound,Status:ended,Uniqueid:${UNIQUEID},DialStatus:${DIALSTATUS},HangupCause:${HANGUPCAUSE})
+same => n,Return()
+
+; Outbound lead leg. Originate dials this Local channel first; when the lead
+; answers, the Local channel answers and Asterisk starts the Originate context
+; [ai-agent-connect], which dials the provider SIP endpoint. No polling flag.
+[ai-agent-dial]
+exten => s,1,NoOp(=== SIP AI Agent ${AI_AGENT_ID} outbound lead ${LEAD_NUMBER} ===)
+same => n,Set(CHANNEL(hangup_handler_push)=sub-ai-outbound-hangup,s,1)
+same => n,ExecIf($["${AI_CALLER_ID}"!=""]?Set(CALLERID(num)=${AI_CALLER_ID}))
+same => n,Set(__MON_FMT=wav)
+same => n,Set(__MIXMON_DIR=/var/spool/asterisk/monitor/)
+same => n,Set(MIXMON_OPTS=v(1)V(1))
+same => n,Set(NOW=${EPOCH})
+same => n,Set(__DAY=${STRFTIME(${NOW},,%d)})
+same => n,Set(__MONTH=${STRFTIME(${NOW},,%m)})
+same => n,Set(__YEAR=${STRFTIME(${NOW},,%Y)})
+same => n,Set(__TIMESTR=${YEAR}${MONTH}${DAY}-${STRFTIME(${NOW},,%H%M%S)})
+same => n,Set(__CALLFILENAME=ai-out-${AI_AGENT_ID}-${LEAD_ID}-${TIMESTR}-${UNIQUEID})
+same => n,MixMonitor(${MIXMON_DIR}${YEAR}/${MONTH}/${DAY}/${CALLFILENAME}.${MON_FMT},a${MIXMON_OPTS})
+same => n,Set(CDR(recordingfile)=${CALLFILENAME}.${MON_FMT})
+same => n,GotoIf($["${DIAL_TARGET}"!=""]?target:route)
+same => n(target),Dial(${DIAL_TARGET}/${LEAD_NUMBER},60,U(sub-ai-lead-answered^${ATTEMPT_UUID}))
+same => n,Hangup()
+same => n(route),Dial(Local/${LEAD_NUMBER}@outbound-allroutes,60,U(sub-ai-lead-answered^${ATTEMPT_UUID}))
+same => n,Hangup()
+
+; Post-answer context from Originate. It runs only after the lead-facing Local
+; channel has answered, then connects the provider SIP bot to that channel.
+[ai-agent-connect]
+exten => s,1,NoOp(=== SIP AI Agent ${AI_AGENT_ID} bot leg ===)
+same => n,Set(AI_SIP=${DB(AI_AGENT/${AI_AGENT_ID}/sip_endpoint)})
+same => n,GotoIf($["${AI_SIP}"=""]?missing)
+same => n,ExecIf($["${AI_CALLER_ID}"!=""]?Set(CALLERID(num)=${AI_CALLER_ID}))
+same => n,Dial(${AI_SIP},60,U(sub-ai-bot-answered^${ATTEMPT_UUID}))
+same => n,Hangup()
+same => n(missing),UserEvent(AutoDialerEvent,AttemptUUID:${ATTEMPT_UUID},Status:Abandoned,CampaignID:${CAMPAIGN_ID},LeadID:${LEAD_ID},AgentID:${AI_AGENT_ID})
+same => n,Hangup()
+
+[sub-ai-lead-answered]
+exten => s,1,UserEvent(AutoDialerEvent,AttemptUUID:${ARG1},Status:LeadAnswered,CampaignID:${CAMPAIGN_ID},LeadID:${LEAD_ID},AgentID:${AI_AGENT_ID},Channel:${CHANNEL},Uniqueid:${UNIQUEID})
+same => n,Return()
+
+[sub-ai-bot-answered]
+exten => s,1,UserEvent(AutoDialerEvent,AttemptUUID:${ARG1},Status:AgentAnswered,CampaignID:${CAMPAIGN_ID},LeadID:${LEAD_ID},AgentID:${AI_AGENT_ID},Channel:${CHANNEL})
+same => n,Return()
+
+[sub-ai-outbound-hangup]
+exten => s,1,UserEvent(AutoDialerEvent,AttemptUUID:${ATTEMPT_UUID},Status:ProgressiveCompleted,CampaignID:${CAMPAIGN_ID},LeadID:${LEAD_ID},AgentID:${AI_AGENT_ID},DialStatus:${DIALSTATUS},HangupCause:${HANGUPCAUSE},Uniqueid:${UNIQUEID})
+same => n,Return()
+"""
+        content = content.rstrip() + "\n\n" + ai_stub.strip() + "\n"
 
     # Ensure Camp-On (Callback When Free) contexts exist if missing
     if "[ext-campon-bridge]" not in content:
@@ -1253,8 +1510,8 @@ PYEOF
         # Repair managed metadata even when content is unchanged, then test access
         # as Asterisk. Never chmod the root-owned dispatcher to root-only 0750.
         python3 "$INSTALL_DIR/scripts/install-webrtc-wake.py" --apply --no-reload --verify-access || echo "  Warning: mobile incoming wake is NOT verified; review dispatcher/config permissions and compiler output"
-        if ! grep -q 'incoming-call-live' /usr/local/bin/sokrat-webrtc-wake-dispatch.py 2>/dev/null; then
-            echo "  Warning: installed wake dispatcher is missing the live-session gate; review compiler output" >&2
+        if ! grep -q "post(candidate, '/api/gateway/incoming-call'" /usr/local/bin/sokrat-webrtc-wake-dispatch.py 2>/dev/null; then
+            echo "  Warning: installed wake dispatcher is missing the parallel incoming-call push; review compiler output" >&2
         fi
         if [ -f "$INSTALL_DIR/systemd/sokrat-webrtc-wake-apply.path" ]; then
             install -m 0644 "$INSTALL_DIR/systemd/sokrat-webrtc-wake-apply.service" /etc/systemd/system/sokrat-webrtc-wake-apply.service

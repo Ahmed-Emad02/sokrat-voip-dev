@@ -13,7 +13,8 @@ function fixture(t) {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'webrtc-wake-'));
     t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
     const put = (name, text) => {
-        const p = path.join(dir, name); fs.mkdirSync(path.dirname(p), { recursive: true });
+        const p = path.join(dir, name);
+        fs.mkdirSync(path.dirname(p), { recursive: true, mode: 0o700 });
         fs.writeFileSync(p, text, { mode: 0o600 });
     };
     const route = extension => [
@@ -161,9 +162,11 @@ test('installers and upgraders select the gateway-authoritative wake guard', () 
     const source = fs.readFileSync(path.join(root, 'scripts/install-webrtc-wake.py'), 'utf8');
     assert.match(source, /SOKRAT_WS_CONTACT/);
     assert.match(source, /SOKRAT_GROUP_HAS_WS/);
-    assert.match(fs.readFileSync(path.join(root, 'scripts/webrtc-wake-dispatch.py'), 'utf8'), /incoming-call-live/);
+    const dispatcher = fs.readFileSync(path.join(root, 'scripts/webrtc-wake-dispatch.py'), 'utf8');
+    assert.match(dispatcher, /post\(candidate, '\/api\/gateway\/incoming-call'/);
+    assert.doesNotMatch(dispatcher, /incoming-call-live/);
     for (const name of ['install.sh', 'installer-bundle/install-sokrat.sh', 'scripts/safe-upgrade.sh']) {
-        assert.match(fs.readFileSync(path.join(root, name), 'utf8'), /grep -q 'incoming-call-live' \/usr\/local\/bin\/sokrat-webrtc-wake-dispatch\.py/);
+        assert.match(fs.readFileSync(path.join(root, name), 'utf8'), /post\(candidate, '\/api\/gateway\/incoming-call'/);
     }
 });
 
@@ -208,7 +211,7 @@ print('PASS')
     assert.equal(result.status, 0, result.stderr);
 });
 
-test('dispatcher uses pinned authenticated HTTPS, a short deadline, and only waits for delivered mobile push', () => {
+test('dispatcher pushes even with a live contact but only waits for contact-less wakes', () => {
     const script = `import importlib.util,json,ssl,unittest.mock as mock
 spec=importlib.util.spec_from_file_location('wake',${JSON.stringify(path.join(root, 'scripts/webrtc-wake-dispatch.py'))})
 wake=importlib.util.module_from_spec(spec);spec.loader.exec_module(wake)
@@ -234,10 +237,11 @@ with mock.patch.object(ssl,'create_default_context',return_value='pinned-context
  assert json.loads(request.data)['caller']=='+442012345678'
  assert 'token' not in request.full_url
  assert request.full_url.endswith('/api/gateway/incoming-call')
- wake.dispatch(config,args+['1'],opener)
+ result={'status':'dispatched','count':1}
+ assert wake.dispatch(config,args+['1'],opener) is False
  request,options=calls[-1]
- assert request.full_url.endswith('/api/gateway/incoming-call-live')
- wake.dispatch(config,args+['0'],opener)
+ assert request.full_url.endswith('/api/gateway/incoming-call')
+ assert wake.dispatch(config,args+['0'],opener) is True
  request,options=calls[-1]
  assert request.full_url.endswith('/api/gateway/incoming-call')
  assert not wake.dispatch(config,args+['2'],opener)

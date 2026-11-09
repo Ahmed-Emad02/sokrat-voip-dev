@@ -192,8 +192,8 @@ sleep 2
 
 log_step "5. Scenario: SMS Transmission between Dongles"
 SMS_TEXT="Sokrat automated test $(date +%s)"
-log_info "Sending SMS from dongle0 to $D1_DIAL_NUM: '$SMS_TEXT'..."
-SEND_RES=$(asterisk -rx "dongle sms dongle0 $D1_DIAL_NUM \"$SMS_TEXT\"")
+log_info "Sending SMS from dongle1 to $D0_DIAL_NUM: '$SMS_TEXT'..."
+SEND_RES=$(asterisk -rx "dongle sms dongle1 $D0_DIAL_NUM \"$SMS_TEXT\"")
 
 if echo "$SEND_RES" | grep -iq "queued for send"; then
     log_pass "SMS successfully queued for transmission by driver"
@@ -201,11 +201,11 @@ else
     log_fail "Failed to queue SMS: $SEND_RES"
 fi
 
-# Wait up to 15 seconds for SMS to arrive on dongle1
+# Carrier delivery can take longer than the initial 15s window.
 SMS_RECEIVED=0
-for i in {1..15}; do
+for i in {1..60}; do
     sleep 1
-    if grep -q "\[SMS-RECEIVE\] Dongle: dongle1.*$SMS_TEXT" /var/log/asterisk/full 2>/dev/null; then
+    if grep -q "\[SMS-RECEIVE\] Dongle: dongle0.*$SMS_TEXT" /var/log/asterisk/full 2>/dev/null; then
         SMS_RECEIVED=1
         break
     fi
@@ -214,7 +214,7 @@ done
 if [ "$SMS_RECEIVED" -eq 1 ]; then
     log_pass "SMS received and parsed by dongle1 over cellular carrier"
 else
-    log_fail "SMS did not appear in /var/log/asterisk/full within 15s"
+    log_fail "SMS did not appear in /var/log/asterisk/full within 60s"
 fi
 
 sleep 2

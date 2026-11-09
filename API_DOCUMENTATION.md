@@ -3486,7 +3486,7 @@ curl -X GET http://localhost:8080/api/config/routes/outbound -b cookie.txt
 <a id="post-apiconfigroutesoutbound"></a>
 ### `POST` /api/config/routes/outbound
 
-**Description**: Creates a new outbound route matching dial patterns (prefix, prepend, match pattern) and assigning ordered trunk sequences for automatic failover.
+**Description**: Creates a new outbound route matching dial patterns (prefix, prepend, match pattern) and assigning ordered trunk sequences for automatic failover. If `patterns` is omitted or empty, the route is created with two defaults: `X.` for local Egyptian numbers and prefix `+2` / match `X.` / prepend `+2` for E.164 Egyptian international numbers.
 
 - **Authentication**: Session Cookie (`config` or `config-routes` permission)
 - **Headers**: Cookie: connect.sid=<session_cookie>, Content-Type: application/json
@@ -3498,7 +3498,7 @@ curl -X GET http://localhost:8080/api/config/routes/outbound -b cookie.txt
 | :--- | :--- | :--- | :---: | :--- |
 | `name` | `body` | `string` | **Yes** | Route name |
 | `outcid` | `body` | `string` | No | Override caller ID |
-| `patterns` | `body` | `array` | **Yes** | Array of dial pattern objects ({match_pattern, prepend, prefix}) |
+| `patterns` | `body` | `array` | No | Dial pattern objects ({pattern, prefix, prepend, cid}). Omitted/empty → defaults: `X.` (local) and prefix `+2` + `X.` + prepend `+2` (Egypt international) |
 | `trunks` | `body` | `array` | **Yes** | Ordered array of trunk IDs |
 
 #### Example Request
@@ -3506,7 +3506,17 @@ curl -X GET http://localhost:8080/api/config/routes/outbound -b cookie.txt
 ```bash
 curl -X POST http://localhost:8080/api/config/routes/outbound -b cookie.txt \
   -H 'Content-Type: application/json' \
-  -d '{"name":"Egypt_Mobile","patterns":[{"match_pattern":"01XXXXXXXXX"}],"trunks":[1,2]}'
+  -d '{"name":"Egypt_Mobile","trunks":[1,2]}'
+```
+
+Omitting `patterns` applies:
+`[{"prefix":"","pattern":"X.","cid":"","prepend":""},{"prefix":"+2","pattern":"X.","cid":"","prepend":"+2"}]`
+
+To use explicit patterns instead:
+```bash
+curl -X POST http://localhost:8080/api/config/routes/outbound -b cookie.txt \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Egypt_Mobile","patterns":[{"pattern":"01XXXXXXXXX"}],"trunks":[1,2]}'
 ```
 
 #### Example Response

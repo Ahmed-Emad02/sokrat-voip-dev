@@ -10,6 +10,7 @@ const words = {
         desc: "",
         createCampaign: "Create Campaign", campaignName: "Campaign Name",
         mode: "Dialer Mode", progressive: "Progressive (Power 1:1)",
+        agentKind: "Agent Type", humanAgents: "Human Agents", aiAgent: "AI Agent", selectAiAgent: "Select AI Agent",
         outboundRoute: "Outbound Route", originationCallerId: "Origination Caller ID / Ext",
         allowedDongles: "Allowed GSM Dongles", assignedAgents: "Assigned Agents (Distribution)",
         allDongles: "All Dongles / Route Default", allAgents: "All Online Agents",
@@ -46,6 +47,7 @@ const words = {
         desc: "",
         createCampaign: "إنشاء حملة", campaignName: "اسم الحملة",
         mode: "نوع المتصل", progressive: "تصاعدي (Progressive 1:1)",
+        agentKind: "نوع الوكيل", humanAgents: "موظفون بشريون", aiAgent: "وكيل ذكاء اصطناعي", selectAiAgent: "اختر وكيل الذكاء الاصطناعي",
         outboundRoute: "مسار الاتصال الخارجي", originationCallerId: "معرف/تحويلة المتصل",
         allowedDongles: "شرائح GSM المسموح بها", assignedAgents: "الموظفون المعينون (التوزيع)",
         allDongles: "جميع الشرائح / المسار الافتراضي", allAgents: "جميع الموظفين المتصلين",
@@ -285,6 +287,21 @@ const isRtl = activeLang === 'ar';
                                 <select id="campOutboundRoute" class="config-input w-full text-xs">
                                     <option value="">— <%= t.allDongles %> —</option>
                                 </select>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2.5">
+                                <div>
+                                    <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="campAgentKind"><%= t.agentKind %></label>
+                                    <select id="campAgentKind" onchange="toggleCampAiAgent()" class="config-input w-full text-xs">
+                                        <option value="human"><%= t.humanAgents %></option>
+                                        <option value="ai"><%= t.aiAgent %></option>
+                                    </select>
+                                </div>
+                                <div id="campAiAgentGroup" class="hidden">
+                                    <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="campAiAgent"><%= t.aiAgent %></label>
+                                    <select id="campAiAgent" class="config-input w-full text-xs">
+                                        <option value=""><%= t.selectAiAgent %></option>
+                                    </select>
+                                </div>
                             </div>
                             <div class="grid grid-cols-2 gap-2.5">
                                 <div>
@@ -1813,6 +1830,30 @@ const isRtl = activeLang === 'ar';
             } catch (_) {}
         }
 
+        async function loadAiAgents(selected = '') {
+            const select = document.getElementById('campAiAgent');
+            if (!select) return;
+            try {
+                const res = await fetch('/api/ai/agents', { credentials: 'same-origin' });
+                const data = await res.json();
+                const agents = (data.agents || []).filter(a => a.active);
+                select.innerHTML = '<option value="">' + <%- JSON.stringify(t.selectAiAgent) %> + '</option>';
+                agents.forEach(a => {
+                    const opt = document.createElement('option');
+                    opt.value = a.id;
+                    opt.textContent = a.name + ' · ' + a.sip_endpoint;
+                    if (String(selected) === String(a.id)) opt.selected = true;
+                    select.appendChild(opt);
+                });
+            } catch (_) {}
+        }
+
+        function toggleCampAiAgent() {
+            const kind = document.getElementById('campAgentKind')?.value || 'human';
+            const group = document.getElementById('campAiAgentGroup');
+            if (group) group.classList.toggle('hidden', kind !== 'ai');
+        }
+
         function openCreateCampaignModal() {
             document.getElementById('editCampId').value = '';
             document.getElementById('modalCampTitle').textContent = <%- JSON.stringify(t.createCampaign) %>;
@@ -1822,6 +1863,9 @@ const isRtl = activeLang === 'ar';
             document.getElementById('campMaxDials').value = '1';
             document.getElementById('campWrapupSec').value = '15';
             if (document.getElementById('campMaskPhone')) document.getElementById('campMaskPhone').checked = false;
+            if (document.getElementById('campAgentKind')) document.getElementById('campAgentKind').value = 'human';
+            toggleCampAiAgent();
+            loadAiAgents('');
             const fileGroup = document.getElementById('campLeadsFileGroup');
             if (fileGroup) fileGroup.style.display = 'block';
             const fileInput = document.getElementById('campLeadsFile');
@@ -1851,6 +1895,9 @@ const isRtl = activeLang === 'ar';
             document.getElementById('campMaxDials').value = camp.max_concurrent_dials || 1;
             document.getElementById('campWrapupSec').value = camp.wrapup_time_sec || 15;
             if (document.getElementById('campMaskPhone')) document.getElementById('campMaskPhone').checked = Boolean(camp.mask_phone_numbers);
+            if (document.getElementById('campAgentKind')) document.getElementById('campAgentKind').value = camp.agent_kind === 'ai' ? 'ai' : 'human';
+            toggleCampAiAgent();
+            loadAiAgents(camp.ai_agent_id || '');
             const fileGroup = document.getElementById('campLeadsFileGroup');
             if (fileGroup) fileGroup.style.display = 'none';
 
@@ -1884,6 +1931,8 @@ const isRtl = activeLang === 'ar';
                 max_concurrent_dials: parseInt(document.getElementById('campMaxDials').value, 10) || 1,
                 wrapup_time_sec: parseInt(document.getElementById('campWrapupSec').value, 10) || 15,
                 mask_phone_numbers: document.getElementById('campMaskPhone')?.checked ? 1 : 0,
+                agent_kind: document.getElementById('campAgentKind')?.value || 'human',
+                ai_agent_id: document.getElementById('campAiAgent')?.value || null,
                 lead_fields: collectCampaignFields(),
                 followup_fields: collectFollowupConfig()
             };

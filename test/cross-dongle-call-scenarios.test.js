@@ -142,15 +142,15 @@ test('Scenario 4: SMS Transmission & Carrier Delivery', async (t) => {
     const targetNum = devices.dongle1.number.replace(/^\+2/, '').replace(/^\+/, '');
     const marker = `node-test-${Date.now()}`;
 
-    const sendRes = execAsterisk(`dongle sms dongle0 ${targetNum} "${marker}"`);
+    const sendRes = execAsterisk(`dongle sms dongle1 ${targetNum} "${marker}"`);
     assert.match(sendRes, /queued for send/i, 'SMS must be queued for send');
 
-    // Poll full log for reception on dongle1
+    // Carrier delivery can take longer than the initial 20s window.
     let received = false;
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 60; i++) {
         await sleep(1000);
         try {
-            const logTail = execSync(`grep -E "SMS-RECEIVE.*dongle1.*${marker}" /var/log/asterisk/full 2>/dev/null`, { encoding: 'utf8' });
+            const logTail = execSync(`grep -E "SMS-RECEIVE.*dongle0.*${marker}" /var/log/asterisk/full 2>/dev/null`, { encoding: 'utf8' });
             if (logTail.includes(marker)) {
                 received = true;
                 break;

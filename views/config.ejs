@@ -4504,6 +4504,7 @@ function isTabAllowed(tabName) {
                             </div>
                         </div>
                         <p class="text-[10px] text-[var(--text-muted)] px-1"><%= isRtl ? 'ملاحظة: اترك حقل CallerID فارغاً دائماً لتمكين جميع التحويلات من استخدام هذا المسار. تحديده يقصر المسار على رقم محدد فقط.' : 'Note: Leave CallerID blank so all extensions can use this route. Specifying a CID restricts this pattern exclusively to that caller.' %></p>
+                        <p class="text-[10px] text-emerald-400/80 px-1"><%= isRtl ? 'تُعبأ المسارات الجديدة تلقائياً بنمط X. المحلي ونمط +2 الدولي المصري. يمكنك تعديلهما أو حذفهما.' : 'New routes are pre-filled with X. (local) and +2 (Egypt international). Edit or remove as needed.' %></p>
 
                         <div class="flex justify-end pt-1">
                             <button type="button" onclick="addDialPatternToModalList()" class="text-xs bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 border border-amber-500/30 px-3 py-1.5 rounded-lg flex items-center gap-1.5 cursor-pointer font-bold transition">

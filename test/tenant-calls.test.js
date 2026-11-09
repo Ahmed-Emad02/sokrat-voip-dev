@@ -13,6 +13,7 @@ const {
     normalizeExtensions,
     normalizeOrigins,
     sanitizeCallerName,
+    slugifyTenantName,
     renderGuestPjsipBlock,
     renderWebguestDialplan,
     replaceManagedBlock,
@@ -35,6 +36,13 @@ test('cloud tenant schema exists in install_db.sql', () => {
     assert.match(sql, /KEY `idx_sokrat_web_sessions_tenant` \(`tenant_id`, `status`, `started_at`\)/);
 });
 
+test('all deployment paths apply the cloud tenant schema', () => {
+    for (const file of ['install.sh', 'installer-bundle/install-sokrat.sh', 'scripts/safe-upgrade.sh']) {
+        const script = fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
+        assert.match(script, /backend\/install_db\.sql/, `${file} must apply backend/install_db.sql`);
+    }
+});
+
 test('tenant extensions and origins are normalized and deduplicated', () => {
     assert.deepEqual(normalizeExtensions('101, 102;bad 101'), ['101', '102']);
     assert.deepEqual(normalizeExtensions(['103', ' 104 ', '', 'x']), ['103', '104']);
@@ -43,6 +51,8 @@ test('tenant extensions and origins are normalized and deduplicated', () => {
         'http://www.acme.example'
     ]);
     assert.equal(sanitizeCallerName('Acme, Inc. "Sales"'), 'Acme Inc. Sales');
+    assert.equal(slugifyTenantName('Acme Test Ltd.'), 'acme-test-ltd');
+    assert.equal(slugifyTenantName('شركة أكمي'), 'business');
 });
 
 test('guest PJSIP endpoints are isolated from from-internal and can only use the tenant context', () => {
@@ -170,7 +180,7 @@ test('public session API returns short-lived credentials without a login', async
     await withServer(makeFakeService(), () => false, async base => {
         const response = await fetch(`${base}/api/public/call-session`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Forwarded-Proto': 'https' },
+            headers: { 'Content-Type': 'application/json', 'X-Forwarded-Proto': 'https', 'X-Forwarded-Host': 'pbx.example' },
             body: JSON.stringify({ tenant: 'acme', link: 'acme-link' })
         });
         assert.equal(response.status, 200);
@@ -178,8 +188,8 @@ test('public session API returns short-lived credentials without a login', async
         assert.equal(body.success, true);
         assert.equal(body.session.extension, 'wg_1_ab12');
         assert.equal(body.session.target, 'call');
-        assert.match(body.session.wss_url, /^wss:\/\/127\.0\.0\.1:8443\/ws$/);
-        assert.equal(body.session.sip_domain, '127.0.0.1');
+        assert.equal(body.session.wss_url, 'wss://pbx.example/ws');
+        assert.equal(body.session.sip_domain, 'pbx.example');
     });
 });
 
@@ -218,4 +228,36 @@ test('root can create a tenant and receives its public link', async () => {
         assert.equal(body.success, true);
         assert.equal(body.link.public_url, 'https://pbx.example/c/acme-link');
     });
+});
+
+test('cloud tenants are managed through the combined B&C page for root users only', () => {
+    const server = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+    assert.match(server, /app\.get\('\/customers'[\s\S]{0,800}initialView/);
+    assert.match(server, /app\.get\('\/tenants'[\s\S]{0,160}if \(!isRootSession\(req\)\)/);
+    assert.match(server, /view=businesses/);
+    assert.match(server, /isRootRequest: \(req\) => isRootSession\(req\)/);
+    assert.doesNotMatch(server, /isRootRequest: \(req\) => hasRootAccess\(req\)/);
+    const sidebar = fs.readFileSync(path.join(__dirname, '..', 'views', 'sidebar.ejs'), 'utf8');
+    assert.match(sidebar, /href="\/customers[\s\S]{0,160}title="B&C"/);
+    assert.doesNotMatch(sidebar, /Cloud Tenants/);
+});
+
+test('dashboard users can be bound to a cloud tenant and are data-scoped', () => {
+    const sql = fs.readFileSync(path.join(__dirname, '..', 'backend', 'install_db.sql'), 'utf8');
+    assert.match(sql, /`tenant_id` INT UNSIGNED DEFAULT NULL/);
+    assert.match(sql, /ADD `tenant_id` INT UNSIGNED DEFAULT NULL/);
+    for (const file of ['install.sh', 'installer-bundle/install-sokrat.sh', 'scripts/safe-upgrade.sh']) {
+        const script = fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
+        assert.match(script, /ensure_db_column "dashboard_users" "tenant_id" "INT UNSIGNED DEFAULT NULL"/);
+    }
+    const server = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+    assert.match(server, /req\.session\.tenantId = tenantId/);
+    assert.match(server, /tenantAccountcode: getTenantAccountcode\(req\)/);
+    assert.match(server, /filters\.tenantAccountcode \? ' AND c\.accountcode = \?'/);
+    assert.match(server, /AND accountcode = \?/);
+    assert.match(server, /Business accounts cannot export the full server archive/);
+    const usersView = fs.readFileSync(path.join(__dirname, '..', 'views', 'users.ejs'), 'utf8');
+    assert.match(usersView, /id="createTenantId"/);
+    assert.match(usersView, /id="editUserTenantId"/);
+    assert.match(usersView, /data-tenantid=/);
 });

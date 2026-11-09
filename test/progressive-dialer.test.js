@@ -100,7 +100,8 @@ test('3. Server.js API Endpoints for Dongle and Campaign Control', () => {
 
     // Assert POST /api/dialer/campaigns saves allowed_dongles and assigned_agents in progressive mode
     assert.match(serverJsContent, /app\.post\('\/api\/dialer\/campaigns'/);
-    assert.match(serverJsContent, /VALUES\s*\(\?,\s*'progressive',\s*\?,\s*\?,\s*\?,\s*\?,\s*\?,\s*\?\)/);
+    assert.match(serverJsContent, /VALUES\s*\(\?,\s*'progressive',\s*\?,\s*\?,\s*\?,\s*\?,\s*\?,\s*\?,\s*\?,\s*\?\)/);
+    assert.match(serverJsContent, /agent_kind, ai_agent_id/);
 
     // Assert PUT /api/dialer/campaigns/:id exists for editing campaign settings
     assert.match(serverJsContent, /app\.put\('\/api\/dialer\/campaigns\/:id'/);

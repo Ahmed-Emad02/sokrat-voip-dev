@@ -205,6 +205,8 @@
             var message = labels.failed || 'Could not start the call';
             if (/denied media|permission/i.test(String(cause))) {
                 message = labels.micDenied || 'Microphone permission was denied.';
+            } else if (/no answer|expires|408|487|canceled/i.test(String(cause))) {
+                message = labels.noAnswer || 'The business did not answer. Please try again.';
             } else if (/busy|486/i.test(String(cause))) {
                 message = labels.busy || 'All lines are busy right now.';
             } else if (/unavailable|480|404/i.test(String(cause))) {

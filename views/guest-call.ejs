@@ -9,6 +9,7 @@ const t = isRtl ? {
     connected: 'المكالمة متصلة',
     ended: 'انتهت المكالمة',
     failed: 'تعذر بدء المكالمة',
+    noAnswer: 'لم يرد النشاط التجاري. حاول مرة أخرى.',
     tryAgain: 'حاول مرة أخرى',
     tapToCall: 'اضغط للاتصال',
     enableAudio: 'اضغط لسماع المكالمة',
@@ -28,6 +29,7 @@ const t = isRtl ? {
     connected: 'Connected',
     ended: 'Call ended',
     failed: 'Could not start the call',
+    noAnswer: 'The business did not answer. Please try again.',
     tryAgain: 'Try again',
     tapToCall: 'Tap to call',
     enableAudio: 'Tap to hear the call',
@@ -367,7 +369,7 @@ const buttonText = (branding.button_text || t.callNow).toString().slice(0, 40);
              ended: t.ended, failed: t.failed, tryAgain: t.tryAgain, tapToCall: t.tapToCall,
              enableAudio: t.enableAudio,
              hangup: t.hangup, mute: t.mute, unmute: t.unmute,
-             noAgents: t.noAgents, busy: t.busy, micDenied: t.micDenied
+             noAgents: t.noAgents, busy: t.busy, micDenied: t.micDenied, noAnswer: t.noAnswer
          }) %>"
          data-call-label="<%= buttonText %>"></div>
 
