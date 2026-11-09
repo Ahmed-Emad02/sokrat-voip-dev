@@ -54,6 +54,8 @@ const createExtensionAgentStatusRouter = require('./routes/extension-agent-statu
 const createAiEvaluationRouter = require('./routes/ai-evaluation');
 const createTenantCallsRouter = require('./routes/tenant-calls');
 const { TenantCallService, normalizeOrigin } = require('./lib/tenant-calls');
+const createCustomersRouter = require('./routes/customers');
+const { CustomerService } = require('./lib/customers');
 const { isRootSession, isAiCampaignRow, canAccessAiCampaign } = require('./lib/ai/access');
 const agentStatusService = require('./lib/agent-status');
 const { attachChatSocket } = require('./lib/chat/socket');
@@ -2947,6 +2949,11 @@ void tenantCallService.ensureSchema().catch((error) => {
     console.error('[tenant-calls] schema init:', error.message);
 });
 
+const customerService = new CustomerService({ db: asteriskPool });
+void customerService.ensureSchema().catch((error) => {
+    console.error('[customers] schema init:', error.message);
+});
+
 
 let activeCalls = {};
 // Extensions that currently have a live Asterisk channel. Maintained by the
@@ -3043,6 +3050,14 @@ app.use('/api/ai', createAiEvaluationRouter({
 // Public click-to-call sessions and platform tenant management.
 app.use('/api', createTenantCallsRouter(tenantCallService, {
     isRootRequest: (req) => isRootSession(req)
+}));
+
+// Per-tenant customer records and custom fields. Tenant users are scoped to
+// their own tenant and owner_user_id by the router/service.
+app.use('/api', createCustomersRouter({
+    service: customerService,
+    isRootRequest: (req) => isRootSession(req),
+    getTenantId
 }));
 
 // Register /crm-live Socket.io namespace
@@ -5433,29 +5448,62 @@ app.get('/users', async (req, res) => {
     }
 });
 
-// GET /tenants - platform-admin cloud tenant management (interactive root only)
+// GET /customers - combined businesses (cloud tenants) and business customers.
+// Root users get both views in one page; tenant users are owner-scoped by the API.
+app.get('/customers', requireAuth, async (req, res) => {
+    const currentLang = res.locals.currentLang || 'en';
+    const root = isRootSession(req);
+    const initialView = root && String(req.query.view || '') === 'businesses' ? 'businesses' : 'customers';
+    let tenantId = root ? Number(req.query.tenant_id) || null : getTenantId(req);
+    if (!root && !tenantId) {
+        return res.status(403).render('403', { currentLang, isRtl: currentLang === 'ar' });
+    }
+    let tenants = [];
+    let tenantName = res.locals.tenantName || null;
+    let assignedExtensions = [];
+    try {
+        if (root) {
+            const [rows] = await asteriskPool.execute(
+                "SELECT id, name FROM sokrat_tenants WHERE status = 'active' ORDER BY name ASC"
+            );
+            tenants = rows.map(row => ({ id: Number(row.id), name: row.name }));
+            if (!tenantId && tenants.length) tenantId = tenants[0].id;
+            const [assignedRows] = await asteriskPool.execute('SELECT DISTINCT extension FROM sokrat_tenant_agents');
+            assignedExtensions = assignedRows.map(row => String(row.extension));
+        }
+        if (tenantId && !tenantName) {
+            const [rows] = await asteriskPool.execute(
+                "SELECT name FROM sokrat_tenants WHERE id = ? AND status <> 'deleted' LIMIT 1",
+                [tenantId]
+            );
+            tenantName = rows.length ? rows[0].name : null;
+        }
+    } catch (_) {}
+    res.render('customers', {
+        currentPage: '/customers',
+        currentLang,
+        isRtl: currentLang === 'ar',
+        isSuperAdmin: isSuperAdmin(req),
+        isRootUser: root,
+        tenantId,
+        tenantName,
+        tenants,
+        initialView,
+        roster: res.locals.roster || [],
+        assignedExtensions,
+        currentUser: req.session ? req.session.username : '',
+        clientName: process.env.CLIENT_NAME || '',
+        allowedTabs: res.locals.allowedTabs || []
+    });
+});
+
+// Legacy /tenants entry point; the combined businesses view lives on /customers.
 app.get('/tenants', requireAuth, async (req, res) => {
     const currentLang = res.locals.currentLang || 'en';
     if (!isRootSession(req)) {
         return res.status(403).render('403', { currentLang, isRtl: currentLang === 'ar' });
     }
-    let assignedExtensions = [];
-    try {
-        const [assignedRows] = await asteriskPool.execute('SELECT DISTINCT extension FROM sokrat_tenant_agents');
-        assignedExtensions = assignedRows.map(row => String(row.extension));
-    } catch (_) {}
-    res.render('tenants', {
-        currentPage: '/tenants',
-        currentLang,
-        isRtl: currentLang === 'ar',
-        isSuperAdmin: isSuperAdmin(req),
-        isRootUser: isRootSession(req),
-        allowedTabs: res.locals.allowedTabs || [],
-        currentUser: req.session ? req.session.username : '',
-        clientName: process.env.CLIENT_NAME || '',
-        roster: res.locals.roster || [],
-        assignedExtensions
-    });
+    return res.redirect(`/customers?view=businesses&lang=${encodeURIComponent(currentLang)}`);
 });
 
 // POST /users/add - add new user

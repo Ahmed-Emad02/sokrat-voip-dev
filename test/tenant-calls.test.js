@@ -230,13 +230,16 @@ test('root can create a tenant and receives its public link', async () => {
     });
 });
 
-test('cloud tenant dashboard and admin API are wired for the root user only', () => {
+test('cloud tenants are managed through the combined B&C page for root users only', () => {
     const server = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+    assert.match(server, /app\.get\('\/customers'[\s\S]{0,800}initialView/);
     assert.match(server, /app\.get\('\/tenants'[\s\S]{0,160}if \(!isRootSession\(req\)\)/);
+    assert.match(server, /view=businesses/);
     assert.match(server, /isRootRequest: \(req\) => isRootSession\(req\)/);
     assert.doesNotMatch(server, /isRootRequest: \(req\) => hasRootAccess\(req\)/);
     const sidebar = fs.readFileSync(path.join(__dirname, '..', 'views', 'sidebar.ejs'), 'utf8');
-    assert.match(sidebar, /8b\. Cloud Tenants \(root only\)[\s\S]{0,80}if \(isRoot\)/);
+    assert.match(sidebar, /href="\/customers[\s\S]{0,160}title="B&C"/);
+    assert.doesNotMatch(sidebar, /Cloud Tenants/);
 });
 
 test('dashboard users can be bound to a cloud tenant and are data-scoped', () => {

@@ -3435,6 +3435,21 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
             </a>
             <% } %>
 
+            <!-- 4b. Business Customers (root or tenant-bound users) -->
+            <% if (isRoot || (typeof tenantId !== 'undefined' && tenantId)) { %>
+            <a href="/customers?lang=<%= currentLang %>" title="B&C"
+               class="nav-item flex items-center px-4 py-3 rounded-lg transition-all duration-150 text-sm font-semibold relative
+               <%= curPage === '/customers' ? 'bg-[var(--accent-color)] text-white border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
+                <svg class="w-4 h-4 me-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                    <circle cx="9" cy="7" r="4"/>
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                </svg>
+                <span class="sidebar-text">B&amp;C</span>
+            </a>
+            <% } %>
+
             <!-- 6. Voice Mail -->
             <% if (can('voicemails')) { %>
             <a href="/voicemails?lang=<%= currentLang %>" title="<%= sbT.vmLink %>"
@@ -3495,17 +3510,6 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
             </a>
             <% } %>
 
-            <!-- 8b. Cloud Tenants (root only) -->
-            <% if (isRoot) { %>
-            <a href="/tenants?lang=<%= currentLang %>" title="<%= currentLang === 'ar' ? 'المستأجرون السحابيون' : 'Cloud Tenants' %>"
-               class="nav-item flex items-center px-4 py-3 rounded-lg transition-all duration-150 text-sm font-semibold relative
-               <%= curPage === '/tenants' ? 'bg-[var(--accent-color)] text-white border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
-                <svg class="w-4 h-4 me-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-4h6v4"/><path d="M9 9h.01M15 9h.01M9 13h.01M15 13h.01"/>
-                </svg>
-                <span class="sidebar-text"><%= currentLang === 'ar' ? 'المستأجرون السحابيون' : 'Cloud Tenants' %></span>
-            </a>
-            <% } %>
 
             <!-- 9. Back up -->
             <% if (can('storage')) { %>

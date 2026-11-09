@@ -1846,6 +1846,47 @@ if command -v asterisk &>/dev/null && pgrep -x asterisk >/dev/null 2>&1; then
     asterisk -rx "dongle show devices" 2>/dev/null || echo "chan_dongle not yet ready"
 fi
 
+# Business customers + per-tenant custom field definitions
+mysql "${MYSQL_AUTH[@]}" asterisk -e "
+CREATE TABLE IF NOT EXISTS \`sokrat_customer_fields\` (
+  \`id\` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  \`tenant_id\` INT UNSIGNED NOT NULL,
+  \`field_key\` VARCHAR(50) NOT NULL,
+  \`label_en\` VARCHAR(100) NOT NULL,
+  \`label_ar\` VARCHAR(100) DEFAULT NULL,
+  \`field_type\` ENUM('text','textarea','number','date','select','checkbox') NOT NULL DEFAULT 'text',
+  \`options_json\` TEXT DEFAULT NULL,
+  \`required\` TINYINT(1) NOT NULL DEFAULT 0,
+  \`sort_order\` SMALLINT NOT NULL DEFAULT 0,
+  \`active\` TINYINT(1) NOT NULL DEFAULT 1,
+  \`created_by\` INT UNSIGNED DEFAULT NULL,
+  \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (\`id\`),
+  UNIQUE KEY \`uq_sokrat_customer_field\` (\`tenant_id\`, \`field_key\`),
+  KEY \`idx_sokrat_customer_fields\` (\`tenant_id\`, \`active\`, \`sort_order\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE IF NOT EXISTS \`sokrat_customers\` (
+  \`id\` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  \`tenant_id\` INT UNSIGNED NOT NULL,
+  \`owner_user_id\` INT UNSIGNED NOT NULL,
+  \`name\` VARCHAR(160) NOT NULL,
+  \`phone\` VARCHAR(40) DEFAULT NULL,
+  \`email\` VARCHAR(255) DEFAULT NULL,
+  \`data_json\` JSON DEFAULT NULL,
+  \`source\` VARCHAR(40) NOT NULL DEFAULT 'manual',
+  \`last_session_id\` CHAR(32) DEFAULT NULL,
+  \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  \`deleted_at\` DATETIME DEFAULT NULL,
+  PRIMARY KEY (\`id\`),
+  KEY \`idx_sokrat_customers_scope\` (\`tenant_id\`, \`owner_user_id\`, \`updated_at\`),
+  KEY \`idx_sokrat_customers_phone\` (\`tenant_id\`, \`phone\`),
+  KEY \`idx_sokrat_customers_email\` (\`tenant_id\`, \`email\`),
+  KEY \`idx_sokrat_customers_session\` (\`last_session_id\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+" 2>/dev/null || true
+
 echo "--- Sokrat VoIP Service Status ---"
 systemctl is-active sokrat-voip.service 2>/dev/null && echo "sokrat-voip: active (running)" || echo "sokrat-voip: inactive"
 

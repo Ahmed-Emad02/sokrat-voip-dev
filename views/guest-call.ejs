@@ -44,8 +44,15 @@ const t = isRtl ? {
     seconds: 's'
 };
 const branding = tenant && tenant.branding && typeof tenant.branding === 'object' ? tenant.branding : {};
-const brandColor = /^#[0-9a-fA-F]{3,8}$/.test(String(branding.primary_color || '')) ? branding.primary_color : '#e11d48';
-const logoUrl = typeof branding.logo_url === 'string' && /^https?:\/\//i.test(branding.logo_url) ? branding.logo_url : '';
+const hexColor = (value, fallback) => /^#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})?(?:[0-9a-fA-F]{2})?$/.test(String(value || '')) ? String(value) : fallback;
+const brandColor = hexColor(branding.primary_color, '#e11d48');
+const brand2Color = hexColor(branding.secondary_color, '#7c3aed');
+const bgColor = hexColor(branding.background_color, '#050507');
+const textColor = hexColor(branding.text_color, '#f8fafc');
+const mutedColor = hexColor(branding.muted_color, '#a1a1aa');
+const onBrandColor = hexColor(branding.button_text_color, '#ffffff');
+const rawLogo = typeof branding.logo_url === 'string' ? branding.logo_url : '';
+const logoUrl = /^https?:\/\//i.test(rawLogo) || /^\/uploads\/tenant-logos\/[A-Za-z0-9._-]+\.png$/i.test(rawLogo) ? rawLogo : '';
 const consentText = (tenant && tenant.consent_text) || t.consent;
 const buttonText = (branding.button_text || t.callNow).toString().slice(0, 40);
 %>
@@ -54,20 +61,22 @@ const buttonText = (branding.button_text || t.callNow).toString().slice(0, 40);
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="theme-color" content="#050507">
+    <meta name="theme-color" content="<%= bgColor %>">
     <meta name="robots" content="noindex,nofollow">
     <title><%= tenant.name %> — <%= isRtl ? 'اتصل بنا' : 'Call us' %></title>
     <link rel="icon" type="image/png" href="/favicon.png">
     <style>
         :root {
             --brand: <%= brandColor %>;
+            --brand-2: <%= brand2Color %>;
             --brand-soft: color-mix(in srgb, var(--brand) 22%, transparent);
-            --bg: #050507;
-            --panel: rgba(18, 18, 23, .86);
-            --panel-strong: #121218;
-            --border: rgba(255, 255, 255, .10);
-            --text: #f8fafc;
-            --muted: #a1a1aa;
+            --bg: <%= bgColor %>;
+            --panel: color-mix(in srgb, var(--bg) 86%, #fff 14%);
+            --panel-strong: color-mix(in srgb, var(--bg) 92%, #fff 8%);
+            --border: color-mix(in srgb, var(--text) 12%, transparent);
+            --text: <%= textColor %>;
+            --muted: <%= mutedColor %>;
+            --on-brand: <%= onBrandColor %>;
             --ok: #34d399;
             --danger: #ef4444;
         }
@@ -92,7 +101,7 @@ const buttonText = (branding.button_text || t.callNow).toString().slice(0, 40);
         .orbs { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 0; }
         .orb { position: absolute; border-radius: 50%; filter: blur(60px); opacity: .35; animation: sokrFloat 12s ease-in-out infinite; }
         .orb-a { width: 260px; height: 260px; background: var(--brand); top: -90px; left: -70px; }
-        .orb-b { width: 220px; height: 220px; background: #7c3aed; bottom: -80px; right: -60px; animation-delay: -5s; }
+        .orb-b { width: 220px; height: 220px; background: var(--brand-2); bottom: -80px; right: -60px; animation-delay: -5s; }
         .card {
             position: relative;
             z-index: 1;
@@ -112,7 +121,7 @@ const buttonText = (branding.button_text || t.callNow).toString().slice(0, 40);
             position: absolute;
             inset: 0 0 auto;
             height: 2px;
-            background: linear-gradient(90deg, transparent, var(--brand), #a855f7, var(--brand), transparent);
+            background: linear-gradient(90deg, transparent, var(--brand), var(--brand-2), var(--brand), transparent);
             opacity: .9;
             animation: sokrLaser 3.2s ease-in-out infinite;
         }
@@ -138,7 +147,7 @@ const buttonText = (branding.button_text || t.callNow).toString().slice(0, 40);
         .avatar {
             width: 78px; height: 78px; border-radius: 50%;
             display: grid; place-items: center;
-            background: linear-gradient(135deg, var(--brand), #7c3aed);
+            background: linear-gradient(135deg, var(--brand), var(--brand-2));
             font-size: 30px; font-weight: 900;
             box-shadow: 0 12px 34px var(--brand-soft);
             position: relative; z-index: 2;
@@ -192,7 +201,7 @@ const buttonText = (branding.button_text || t.callNow).toString().slice(0, 40);
         .card[data-state="connected"] .wave { opacity: 1; }
         .wave span {
             display: block; width: 4px; height: 9px; border-radius: 99px;
-            background: linear-gradient(180deg, var(--brand), #a855f7);
+            background: linear-gradient(180deg, var(--brand), var(--brand-2));
             transform-origin: center;
             animation: sokrWave 1.05s ease-in-out infinite;
         }
@@ -215,8 +224,8 @@ const buttonText = (branding.button_text || t.callNow).toString().slice(0, 40);
             border: 0;
             border-radius: 18px;
             padding: 16px 20px;
-            background: linear-gradient(135deg, var(--brand), #be123c);
-            color: #fff;
+            background: linear-gradient(135deg, var(--brand), color-mix(in srgb, var(--brand) 70%, #000));
+            color: var(--on-brand);
             font-family: inherit;
             font-size: 16px;
             font-weight: 900;
@@ -228,7 +237,7 @@ const buttonText = (branding.button_text || t.callNow).toString().slice(0, 40);
         .call-btn:hover { filter: brightness(1.08); }
         .call-btn:active { transform: scale(.985); }
         .call-btn:disabled { opacity: .55; cursor: not-allowed; }
-        .call-btn.end { background: #27272a; border: 1px solid var(--border); box-shadow: none; }
+        .call-btn.end { background: var(--panel-strong); border: 1px solid var(--border); box-shadow: none; }
         .controls { display: none; justify-content: center; align-items: center; gap: 44px; margin: 8px 0 4px; }
         .card[data-state="connected"] .controls { display: flex; }
         .control-group { display: flex; flex-direction: column; align-items: center; gap: 7px; }
@@ -247,7 +256,7 @@ const buttonText = (branding.button_text || t.callNow).toString().slice(0, 40);
         .control.end { background: linear-gradient(135deg, #ef4444, #b91c1c); border-color: transparent; box-shadow: 0 12px 30px rgba(239, 68, 68, .28); }
         .control-label { font-size: 10px; font-weight: 800; color: var(--muted); letter-spacing: .02em; }
         .consent { color: var(--muted); font-size: 10.5px; line-height: 1.65; margin: 18px 0 0; }
-        .powered { color: #52525b; font-size: 9px; margin-top: 14px; letter-spacing: .12em; text-transform: uppercase; }
+        .powered { color: var(--muted); font-size: 9px; margin-top: 14px; letter-spacing: .12em; text-transform: uppercase; }
         .powered b { color: var(--brand); font-weight: 900; }
         .hidden { display: none !important; }
         @keyframes sokrPulse {
