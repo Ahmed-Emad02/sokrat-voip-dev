@@ -12,11 +12,15 @@ test('installers keep recording gain neutral and preserve jitter/ringback', () =
         assert.match(text, /MIXMON_OPTS=.*v\(1\)V\(1\)/, `${name} must default to neutral recording gain`);
         assert.match(text, /^same => n,Set\(JITTERBUFFER\(adaptive\)=default\)$/m, `${name} must enable adaptive jitter buffer`);
         assert.match(text, /Set\(DIAL_TRUNK_OPTIONS=\$\{STRREPLACE\(DIAL_TRUNK_OPTIONS,r\)\}R\)/, `${name} must allow carrier early media`);
+        assert.doesNotMatch(text, /^same => n,Set\(DIAL_TRUNK_OPTIONS=\$\{DIAL_TRUNK_OPTIONS\}r\)$/m, `${name} must not force ringback with lower-case r`);
         assert.match(text, /CALLER_DENOISE=off/, `${name} must default RNNoise off`);
         assert.match(text, /CALLER_AGC=off/, `${name} must default AGC off`);
         assert.match(text, /database put AMPUSER \{ext\}\/ai_denoise off/, `${name} must default new extensions to RNNoise off`);
         assert.match(text, /database put AMPUSER \{ext\}\/vad_gate 0/, `${name} must default new extensions to VAD gate off`);
     }
+    const safeUpgrade = fs.readFileSync(path.join(root, 'scripts/safe-upgrade.sh'), 'utf8');
+    assert.match(safeUpgrade, /Set\(DIAL_TRUNK_OPTIONS=\$\{STRREPLACE\(DIAL_TRUNK_OPTIONS,r\)\}R\)/, 'safe-upgrade must allow carrier early media');
+    assert.doesNotMatch(safeUpgrade, /^same => n,Set\(DIAL_TRUNK_OPTIONS=\$\{DIAL_TRUNK_OPTIONS\}r\)$/m, 'safe-upgrade must not force ringback with lower-case r');
 });
 
 test('safe upgrade restores adaptive jitter buffer instead of disabling it', () => {

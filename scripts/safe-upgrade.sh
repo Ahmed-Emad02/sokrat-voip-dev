@@ -818,10 +818,14 @@ text = path.read_text()
 # Restore adaptive jitter buffer.
 text = text.replace('; same => n,Set(JITTERBUFFER(adaptive)=default)', 'same => n,Set(JITTERBUFFER(adaptive)=default)')
 text = text.replace('ExecIf($["${D_JB}" != ""]?Set(JITTERBUFFER(${D_JB})=default))', 'ExecIf($["${D_JB}" != "" & "${D_JB}" != "off"]?Set(JITTERBUFFER(${D_JB})=default))')
-# Add ringback to the trunk hook exactly once.
+# Enable carrier early media. Capital R keeps ringback but passes early media;
+# remove any lower-case r that suppresses it.
 marker = 'exten => s,1,NoOp(--- Outbound call via Dongle (CID auto-set by trunk outcid & Extension RNNoise Filter) ---)'
-if marker in text and 'Set(DIAL_TRUNK_OPTIONS=${DIAL_TRUNK_OPTIONS}r)' not in text:
-    text = text.replace(marker, marker + '\nsame => n,Set(DIAL_TRUNK_OPTIONS=${DIAL_TRUNK_OPTIONS}r)', 1)
+early_media = 'same => n,Set(DIAL_TRUNK_OPTIONS=${STRREPLACE(DIAL_TRUNK_OPTIONS,r)}R)'
+legacy_ringback = 'same => n,Set(DIAL_TRUNK_OPTIONS=${DIAL_TRUNK_OPTIONS}r)'
+text = text.replace(legacy_ringback, '')
+if marker in text and early_media not in text:
+    text = text.replace(marker, marker + '\n' + early_media, 1)
 path.write_text(text)
 PY_AUDIO
     done

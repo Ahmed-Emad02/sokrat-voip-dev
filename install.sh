@@ -2057,7 +2057,7 @@ append_context '[macro-dialout-trunk-predial-hook]' '[macro-dialout-trunk-predia
 
 [macro-dialout-trunk-predial-hook]
 exten => s,1,NoOp(--- Outbound call via Dongle (CID auto-set by trunk outcid & Extension RNNoise Filter) ---)
-same => n,Set(DIAL_TRUNK_OPTIONS=${DIAL_TRUNK_OPTIONS}r)
+same => n,Set(DIAL_TRUNK_OPTIONS=${STRREPLACE(DIAL_TRUNK_OPTIONS,r)}R)
 same => n,Set(CALLER_DENOISE=${DB(AMPUSER/${REALCALLERIDNUM}/ai_denoise)})
 same => n,ExecIf($["${CALLER_DENOISE}" = ""]?Set(CALLER_DENOISE=${DB(AMPUSER/${CALLERID(num)}/ai_denoise)}))
 same => n,ExecIf($["${CALLER_DENOISE}" = ""]?Set(CALLER_DENOISE=off))
@@ -2086,6 +2086,24 @@ same => n,ExecIf($["${DONGLE_TARGET}"=""]?Set(DONGLE_TARGET=${RAW_TARGET}))
 same => n,Set(CHANNEL(hangup_handler_push)=cdr-cause-capture,s,1)
 same => n,MacroExit()
 MACRO
+
+# Ensure every managed dialplan copy allows carrier early media.
+for early_conf in /etc/asterisk/extensions_custom.conf /etc/asterisk/extensions_override_issabel.conf; do
+    [ -f "$early_conf" ] || continue
+    python3 - "$early_conf" <<'PY_EARLY_MEDIA'
+import sys
+from pathlib import Path
+path = Path(sys.argv[1])
+text = path.read_text()
+early_media = 'same => n,Set(DIAL_TRUNK_OPTIONS=${STRREPLACE(DIAL_TRUNK_OPTIONS,r)}R)'
+legacy_ringback = 'same => n,Set(DIAL_TRUNK_OPTIONS=${DIAL_TRUNK_OPTIONS}r)'
+marker = 'exten => s,1,NoOp(--- Outbound call via Dongle (CID auto-set by trunk outcid & Extension RNNoise Filter) ---)'
+text = text.replace(legacy_ringback, '')
+if marker in text and early_media not in text:
+    text = text.replace(marker, marker + '\n' + early_media, 1)
+path.write_text(text)
+PY_EARLY_MEDIA
+done
 
 # Append safe dongle-hangup-cleanup stub (transfer-safe, restart disabled)
 append_context '[dongle-hangup-cleanup]' '[dongle-hangup-cleanup]' << 'CLEANUP_CTX'
