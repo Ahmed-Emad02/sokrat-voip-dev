@@ -58,7 +58,7 @@ const consentText = (tenant && tenant.consent_text) || t.consent;
 const buttonText = (branding.button_text || t.callNow).toString().slice(0, 40);
 %>
 <!DOCTYPE html>
-<html lang="<%= lang %>" dir="<%= isRtl ? 'rtl' : 'ltr' %>">
+<html lang="<%= lang %>" dir="<%= isRtl ? 'rtl' : 'ltr' %>" class="<%= previewMode ? 'preview-page-root' : '' %>">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -260,18 +260,47 @@ const buttonText = (branding.button_text || t.callNow).toString().slice(0, 40);
         .powered { color: var(--muted); font-size: 9px; margin-top: 14px; letter-spacing: .12em; text-transform: uppercase; }
         .powered b { color: var(--brand); font-weight: 900; }
         .hidden { display: none !important; }
-        body.preview-page {
-            overflow: auto;
+        html.preview-page-root {
+            height: auto;
+            min-height: 100%;
+            overflow-y: auto;
+            background: var(--bg);
+        }
+        html.preview-page-root body.preview-page {
+            height: auto;
+            min-height: 100dvh;
+            overflow-y: auto;
             align-items: flex-start;
             justify-content: flex-start;
             flex-direction: column;
         }
-        body.preview-page .card { margin: 24px auto 0; flex: 0 0 auto; }
-        .preview-fields {
-            width: min(760px, calc(100% - 36px));
-            margin: 18px auto 44px;
-            border: 1px solid var(--border);
+        body.preview-page .card {
+            margin: 16px auto 0;
+            max-width: 360px;
+            padding: 18px 18px 14px;
             border-radius: 22px;
+            flex: 0 0 auto;
+        }
+        body.preview-page .brand { margin-bottom: 8px; font-size: 9px; }
+        body.preview-page .avatar-wrap { width: 66px; height: 66px; margin-bottom: 6px; }
+        body.preview-page .avatar { width: 56px; height: 56px; font-size: 21px; }
+        body.preview-page h1 { font-size: 19px; margin: 4px 0 2px; }
+        body.preview-page .subtitle { font-size: 10px; }
+        body.preview-page .status-row { margin-top: 8px; padding: 7px 10px; font-size: 10px; }
+        body.preview-page .wave { height: 20px; margin-top: 5px; }
+        body.preview-page .timer { font-size: 30px; margin: 4px 0 5px; }
+        body.preview-page .call-btn { min-height: 46px; padding: 10px 14px; border-radius: 14px; font-size: 13px; }
+        body.preview-page .controls { gap: 28px; margin: 4px 0 2px; }
+        body.preview-page .control { width: 48px; height: 48px; }
+        body.preview-page .control svg { width: 19px; height: 19px; }
+        body.preview-page .control-label { font-size: 8px; }
+        body.preview-page .consent { font-size: 9px; line-height: 1.45; margin-top: 10px; }
+        body.preview-page .powered { font-size: 7.5px; margin-top: 7px; }
+        .preview-fields {
+            width: min(680px, calc(100% - 28px));
+            margin: 12px auto 28px;
+            border: 1px solid var(--border);
+            border-radius: 18px;
             background: linear-gradient(180deg, rgba(28, 28, 36, .92), rgba(11, 11, 15, .94));
             box-shadow: 0 24px 80px rgba(0, 0, 0, .45);
             color: var(--text);
@@ -280,8 +309,8 @@ const buttonText = (branding.button_text || t.callNow).toString().slice(0, 40);
         .preview-fields summary {
             cursor: pointer;
             list-style: none;
-            padding: 16px 20px;
-            font-size: 13px;
+            padding: 11px 15px;
+            font-size: 12px;
             font-weight: 800;
             display: flex;
             align-items: center;
@@ -298,23 +327,23 @@ const buttonText = (branding.button_text || t.callNow).toString().slice(0, 40);
         }
         .preview-fields[open] summary::after { transform: rotate(180deg); }
         .preview-fields[open] summary { border-bottom: 1px solid var(--border); }
-        .preview-fields-body { padding: 18px 20px 22px; }
+        .preview-fields-body { padding: 13px 15px 15px; }
         .preview-kicker {
             color: var(--brand);
-            font-size: 9px;
+            font-size: 8px;
             font-weight: 900;
             letter-spacing: .16em;
             text-transform: uppercase;
-            margin-bottom: 6px;
+            margin-bottom: 4px;
         }
-        .preview-fields h2 { margin: 0 0 4px; font-size: 17px; font-weight: 900; }
-        .preview-fields p { margin: 0 0 16px; color: var(--muted); font-size: 11px; line-height: 1.6; }
-        .preview-field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-        .preview-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+        .preview-fields h2 { margin: 0 0 2px; font-size: 15px; font-weight: 900; }
+        .preview-fields p { margin: 0 0 10px; color: var(--muted); font-size: 10px; line-height: 1.6; }
+        .preview-field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .preview-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
         .preview-field.full { grid-column: 1 / -1; }
         .preview-field-label {
             color: var(--muted);
-            font-size: 10px;
+            font-size: 9px;
             font-weight: 800;
             display: flex;
             gap: 6px;
@@ -323,37 +352,43 @@ const buttonText = (branding.button_text || t.callNow).toString().slice(0, 40);
         .preview-field-label small { color: var(--brand); font-size: 8px; font-weight: 800; }
         .preview-input {
             width: 100%;
-            min-height: 40px;
-            padding: 9px 11px;
+            min-height: 34px;
+            padding: 7px 9px;
             border: 1px solid var(--border);
-            border-radius: 10px;
+            border-radius: 8px;
             background: color-mix(in srgb, var(--bg) 88%, #fff 12%);
             color: var(--text);
             font: inherit;
-            font-size: 12px;
+            font-size: 11px;
             outline: none;
             color-scheme: dark;
         }
         .preview-input:focus { border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-soft); }
-        textarea.preview-input { min-height: 76px; resize: vertical; }
+        textarea.preview-input { min-height: 54px; resize: vertical; }
         .preview-check {
             display: flex;
             align-items: center;
-            gap: 9px;
-            min-height: 40px;
-            padding: 9px 11px;
+            gap: 8px;
+            min-height: 34px;
+            padding: 7px 9px;
             border: 1px solid var(--border);
-            border-radius: 10px;
+            border-radius: 8px;
             background: color-mix(in srgb, var(--bg) 88%, #fff 12%);
             color: var(--text);
-            font-size: 12px;
+            font-size: 11px;
         }
-        .preview-check input { width: 15px; height: 15px; accent-color: var(--brand); }
-        .preview-help { color: var(--muted); font-size: 9px; }
+        .preview-check input { width: 13px; height: 13px; accent-color: var(--brand); }
+        .preview-help { color: var(--muted); font-size: 8px; }
         @media (max-width: 560px) {
-            body.preview-page { padding: 0; }
-            body.preview-page .card { margin: 0 auto; }
-            .preview-fields { width: calc(100% - 24px); margin: 12px auto 24px; border-radius: 16px; }
+            body.preview-page .card {
+                max-width: none;
+                min-height: 100dvh;
+                border: 0;
+                border-radius: 0;
+                margin: 0 auto;
+                padding: calc(24px + env(safe-area-inset-top)) 18px calc(18px + env(safe-area-inset-bottom));
+            }
+            .preview-fields { width: calc(100% - 20px); margin: 10px auto 20px; border-radius: 14px; }
             .preview-field-grid { grid-template-columns: 1fr; }
             .preview-field.full { grid-column: auto; }
         }
