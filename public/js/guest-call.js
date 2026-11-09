@@ -24,6 +24,19 @@
     var muteBtn = document.getElementById('guestMuteBtn');
     var muteLabel = document.getElementById('guestMuteLabel');
     var endBtn = document.getElementById('guestEndBtn');
+    var audioSettingsBtn = document.getElementById('guestAudioSettingsBtn');
+    var audioModal = document.getElementById('guestAudioModal');
+    var audioCloseBtn = document.getElementById('guestAudioCloseBtn');
+    var audioInputSelect = document.getElementById('guestAudioInput');
+    var audioOutputSelect = document.getElementById('guestAudioOutput');
+    var audioSupportEl = document.getElementById('guestAudioSupport');
+    var selectedAudioInput = '';
+    var selectedAudioOutput = '';
+    try {
+        selectedAudioInput = localStorage.getItem('sokrat.audio.input') || '';
+        selectedAudioOutput = localStorage.getItem('sokrat.audio.output') || '';
+    } catch (_) {}
+    var audioPermissionAsked = false;
 
     var ua = null;
     var session = null;
@@ -50,6 +63,14 @@
         if (!statusEl) return;
         statusEl.textContent = text;
         statusEl.classList.toggle('error', Boolean(isError));
+    }
+
+    function updateMuteUi() {
+        if (muteLabel) muteLabel.textContent = muted ? (labels.unmute || 'Unmute') : (labels.mute || 'Mute');
+        if (muteBtn) {
+            muteBtn.classList.toggle('is-muted', muted);
+            muteBtn.setAttribute('aria-pressed', muted ? 'true' : 'false');
+        }
     }
 
     function setBusy(busy) {
@@ -86,6 +107,8 @@
     }
 
     function resetUi() {
+        muted = false;
+        updateMuteUi();
         if (callBtn) {
             callBtn.textContent = labels.tapToCall || labels.tryAgain || callLabel;
             callBtn.classList.remove('end');
@@ -139,6 +162,11 @@
         resetUi();
     }
 
+    function applyAudioOutput() {
+        if (!audioEl || typeof audioEl.setSinkId !== 'function') return;
+        audioEl.setSinkId(selectedAudioOutput || '').catch(function () {});
+    }
+
     function attachRemoteAudio(rtc) {
         rtc.on('peerconnection', function (data) {
             var pc = data && data.peerconnection;
@@ -148,6 +176,7 @@
                     ? event.streams[0]
                     : new MediaStream([event.track]);
                 audioEl.srcObject = stream;
+                applyAudioOutput();
                 audioEl.play().then(function () {
                     if (audioBtn) audioBtn.classList.add('hidden');
                 }).catch(function () {
@@ -159,8 +188,11 @@
 
     function placeCall() {
         if (!ua || !ua.isConnected() || !session) return;
+        var audioConstraint = selectedAudioInput
+            ? { deviceId: { exact: selectedAudioInput } }
+            : true;
         var options = {
-            mediaConstraints: { audio: true, video: false },
+            mediaConstraints: { audio: audioConstraint, video: false },
             rtcOfferConstraints: { offerToReceiveAudio: true, offerToReceiveVideo: false },
             pcConfig: {
                 iceServers: Array.isArray(session.ice_servers) ? session.ice_servers : [],
@@ -261,6 +293,8 @@
         }
         finished = false;
         reported = false;
+        muted = false;
+        updateMuteUi();
         setCallState('connecting');
         if (callBtn) callBtn.classList.add('hidden');
         if (audioBtn) audioBtn.classList.add('hidden');
@@ -299,7 +333,7 @@
         finished = false;
         reported = false;
         muted = false;
-        if (muteLabel) muteLabel.textContent = labels.mute || 'Mute';
+        updateMuteUi();
         if (actionsEl) actionsEl.classList.add('hidden');
         if (audioBtn) audioBtn.classList.add('hidden');
         if (callBtn) callBtn.classList.add('hidden');
@@ -319,6 +353,100 @@
         }, 2400));
     }
 
+    function rememberAudioSettings() {
+        selectedAudioInput = audioInputSelect ? audioInputSelect.value : '';
+        selectedAudioOutput = audioOutputSelect ? audioOutputSelect.value : '';
+        try {
+            localStorage.setItem('sokrat.audio.input', selectedAudioInput);
+            localStorage.setItem('sokrat.audio.output', selectedAudioOutput);
+        } catch (_) {}
+        applyAudioOutput();
+    }
+
+    function fillAudioSelect(select, devices, selectedId, kind) {
+        if (!select) return;
+        select.innerHTML = '';
+        var defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.textContent = labels.defaultDevice || (lang === 'ar' ? 'الافتراضي' : 'Default');
+        select.appendChild(defaultOption);
+        devices.forEach(function (device, index) {
+            var option = document.createElement('option');
+            option.value = device.deviceId;
+            var prefix = kind === 'input'
+                ? (lang === 'ar' ? 'ميكروفون' : 'Microphone')
+                : (lang === 'ar' ? 'مكبر الصوت' : 'Speaker');
+            option.textContent = device.label || (prefix + ' ' + (index + 1));
+            select.appendChild(option);
+        });
+        select.value = devices.some(function (device) { return device.deviceId === selectedId; }) ? selectedId : '';
+    }
+
+    async function refreshAudioDevices() {
+        if (!audioInputSelect || !audioOutputSelect) return;
+        if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+            audioInputSelect.disabled = true;
+            audioOutputSelect.disabled = true;
+            if (audioSupportEl) audioSupportEl.textContent = labels.audioUnsupported || 'Audio device selection is not supported in this browser.';
+            return;
+        }
+        try {
+            if (!preview && !audioPermissionAsked) {
+                try {
+                    var stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    stream.getTracks().forEach(function (track) { track.stop(); });
+                } catch (_) {}
+                audioPermissionAsked = true;
+            }
+            var devices = await navigator.mediaDevices.enumerateDevices();
+            var inputs = devices.filter(function (device) { return device.kind === 'audioinput'; });
+            var outputs = devices.filter(function (device) { return device.kind === 'audiooutput'; });
+            if (preview) {
+                if (!inputs.length) inputs = [{ deviceId: 'preview-mic', label: lang === 'ar' ? 'ميكروفون افتراضي' : 'Default microphone' }];
+                if (!outputs.length) outputs = [{ deviceId: 'preview-speaker', label: lang === 'ar' ? 'مكبر صوت افتراضي' : 'Default speaker' }];
+            }
+            fillAudioSelect(audioInputSelect, inputs, selectedAudioInput, 'input');
+            fillAudioSelect(audioOutputSelect, outputs, selectedAudioOutput, 'output');
+            selectedAudioInput = audioInputSelect.value || '';
+            selectedAudioOutput = audioOutputSelect.value || '';
+            var supportsSink = typeof HTMLMediaElement !== 'undefined' && 'setSinkId' in HTMLMediaElement.prototype;
+            audioOutputSelect.disabled = !supportsSink;
+            if (audioSupportEl) {
+                audioSupportEl.textContent = supportsSink
+                    ? ''
+                    : (labels.audioUnsupported || 'Speaker selection is not supported in this browser.');
+            }
+        } catch (error) {
+            if (audioSupportEl) audioSupportEl.textContent = error.message || labels.audioUnsupported || 'Audio devices could not be loaded.';
+        }
+    }
+
+    function openAudioSettings() {
+        if (!audioModal) return;
+        audioModal.classList.add('open');
+        audioModal.setAttribute('aria-hidden', 'false');
+        refreshAudioDevices();
+    }
+
+    function closeAudioSettings() {
+        if (!audioModal) return;
+        audioModal.classList.remove('open');
+        audioModal.setAttribute('aria-hidden', 'true');
+    }
+
+    if (audioSettingsBtn) audioSettingsBtn.addEventListener('click', openAudioSettings);
+    if (audioCloseBtn) audioCloseBtn.addEventListener('click', closeAudioSettings);
+    if (audioModal) {
+        audioModal.addEventListener('click', function (event) {
+            if (event.target === audioModal) closeAudioSettings();
+        });
+    }
+    if (audioInputSelect) audioInputSelect.addEventListener('change', rememberAudioSettings);
+    if (audioOutputSelect) audioOutputSelect.addEventListener('change', rememberAudioSettings);
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') closeAudioSettings();
+    });
+
     if (callBtn) {
         callBtn.addEventListener('click', function () {
             beginCall();
@@ -337,7 +465,7 @@
         muteBtn.addEventListener('click', function () {
             if (preview) {
                 muted = !muted;
-                if (muteLabel) muteLabel.textContent = muted ? (labels.unmute || 'Unmute') : (labels.mute || 'Mute');
+                updateMuteUi();
                 return;
             }
             if (!rtcSession) return;
@@ -345,12 +473,11 @@
                 if (muted) {
                     rtcSession.unmute();
                     muted = false;
-                    if (muteLabel) muteLabel.textContent = labels.mute || 'Mute';
                 } else {
                     rtcSession.mute();
                     muted = true;
-                    if (muteLabel) muteLabel.textContent = labels.unmute || 'Unmute';
                 }
+                updateMuteUi();
             } catch (_) {}
         });
     }
@@ -362,6 +489,9 @@
             }).catch(function () {});
         });
     }
+
+    updateMuteUi();
+    applyAudioOutput();
 
     if (preview) {
         if (autoStart) setTimeout(beginPreview, 30);

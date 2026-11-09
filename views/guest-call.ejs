@@ -22,6 +22,12 @@ const t = isRtl ? {
     noAgents: 'لا يوجد ممثلون متاحون الآن. حاول لاحقاً.',
     busy: 'كل الخطوط مشغولة الآن. حاول بعد قليل.',
     micDenied: 'تم رفض إذن الميكروفون. اسمح بالميكروفون ثم أعد المحاولة.',
+    audioSettings: 'إعدادات الصوت',
+    microphone: 'الميكروفون',
+    speaker: 'مكبر الصوت',
+    defaultDevice: 'الافتراضي',
+    audioUnsupported: 'اختيار مكبر الصوت غير مدعوم في هذا المتصفح.',
+    close: 'إغلاق',
     seconds: 'ث'
 } : {
     callNow: 'Call now',
@@ -42,6 +48,12 @@ const t = isRtl ? {
     noAgents: 'No agents are available right now. Please try again later.',
     busy: 'All lines are busy right now. Please try again shortly.',
     micDenied: 'Microphone permission was denied. Allow the microphone and try again.',
+    audioSettings: 'Audio settings',
+    microphone: 'Microphone',
+    speaker: 'Speaker',
+    defaultDevice: 'Default',
+    audioUnsupported: 'Speaker selection is not supported in this browser.',
+    close: 'Close',
     seconds: 's'
 };
 const branding = tenant && tenant.branding && typeof tenant.branding === 'object' ? tenant.branding : {};
@@ -565,6 +577,104 @@ const buttonText = (branding.button_text || t.callNow).toString().slice(0, 40);
             box-shadow: 0 10px 22px rgba(204, 9, 12, .24);
         }
         .control-label { font-size: 9px; letter-spacing: .04em; }
+        .control.is-muted {
+            background: var(--brand);
+            border-color: var(--brand);
+            color: #fff;
+            box-shadow: 0 8px 20px var(--brand-soft);
+        }
+        .audio-settings-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            margin-top: 12px;
+            padding: 7px 10px;
+            border: 1px solid #27272a;
+            border-radius: 8px;
+            background: transparent;
+            color: var(--muted);
+            font-family: 'JetBrains Mono', 'Cairo', monospace;
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: .04em;
+            cursor: pointer;
+        }
+        .audio-settings-btn:hover { color: var(--text); border-color: #3f3f46; }
+        .audio-settings-btn svg { width: 13px; height: 13px; }
+        .audio-modal-backdrop {
+            position: fixed;
+            inset: 0;
+            z-index: 100;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            background: rgba(0, 0, 0, .72);
+            backdrop-filter: blur(4px);
+        }
+        .audio-modal-backdrop.open { display: flex; }
+        .audio-modal {
+            width: min(340px, 100%);
+            padding: 16px;
+            border: 1px solid #27272a;
+            border-radius: 14px;
+            background: #121217;
+            box-shadow: 0 24px 70px rgba(0, 0, 0, .7);
+            color: var(--text);
+            text-align: start;
+        }
+        .audio-modal-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+        .audio-modal-head h2 {
+            margin: 0;
+            font-size: 14px;
+            font-weight: 900;
+            letter-spacing: .02em;
+        }
+        .audio-close {
+            width: 28px;
+            height: 28px;
+            border: 1px solid #27272a;
+            border-radius: 7px;
+            background: #0b0b0e;
+            color: var(--muted);
+            cursor: pointer;
+            font-size: 13px;
+            line-height: 1;
+        }
+        .audio-close:hover { color: var(--text); border-color: #3f3f46; }
+        .audio-field {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            margin-top: 10px;
+            color: var(--muted);
+            font-size: 9px;
+            font-weight: 800;
+            letter-spacing: .05em;
+            text-transform: uppercase;
+        }
+        .audio-field select {
+            width: 100%;
+            padding: 9px;
+            border: 1px solid #27272a;
+            border-radius: 8px;
+            background: #000;
+            color: var(--text);
+            font-family: 'JetBrains Mono', 'Cairo', monospace;
+            font-size: 11px;
+            outline: none;
+            color-scheme: dark;
+        }
+        .audio-field select:focus { border-color: var(--brand); box-shadow: 0 0 0 2px var(--brand-soft); }
+        .audio-field select:disabled { opacity: .55; }
+        .audio-help { margin: 12px 0 0; color: var(--muted); font-size: 9px; line-height: 1.5; }
         .consent {
             border-top: 1px solid #27272a;
             padding-top: 11px;
@@ -658,7 +768,7 @@ const buttonText = (branding.button_text || t.callNow).toString().slice(0, 40);
 
         <div class="controls hidden" id="guestInCallActions">
             <div class="control-group">
-                <button id="guestMuteBtn" type="button" class="control" aria-label="<%= t.mute %>">
+                <button id="guestMuteBtn" type="button" class="control" aria-label="<%= t.mute %>" aria-pressed="false">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
                 </button>
                 <span id="guestMuteLabel" class="control-label"><%= t.mute %></span>
@@ -671,9 +781,32 @@ const buttonText = (branding.button_text || t.callNow).toString().slice(0, 40);
             </div>
         </div>
 
+        <button id="guestAudioSettingsBtn" type="button" class="audio-settings-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>
+            <span><%= t.audioSettings %></span>
+        </button>
+
         <p class="consent"><%= consentText %></p>
         <p class="powered"><%= t.poweredBy %></p>
     </main>
+
+    <div class="audio-modal-backdrop" id="guestAudioModal" aria-hidden="true">
+        <div class="audio-modal" role="dialog" aria-modal="true" aria-labelledby="guestAudioModalTitle">
+            <div class="audio-modal-head">
+                <h2 id="guestAudioModalTitle"><%= t.audioSettings %></h2>
+                <button type="button" class="audio-close" id="guestAudioCloseBtn" aria-label="<%= t.close %>">✕</button>
+            </div>
+            <label class="audio-field">
+                <span><%= t.microphone %></span>
+                <select id="guestAudioInput"><option value=""><%= t.defaultDevice %></option></select>
+            </label>
+            <label class="audio-field">
+                <span><%= t.speaker %></span>
+                <select id="guestAudioOutput"><option value=""><%= t.defaultDevice %></option></select>
+            </label>
+            <p class="audio-help" id="guestAudioSupport"></p>
+        </div>
+    </div>
 
     <% if (previewMode) { %>
     <details class="preview-fields" open>
@@ -745,7 +878,9 @@ const buttonText = (branding.button_text || t.callNow).toString().slice(0, 40);
              ended: t.ended, failed: t.failed, tryAgain: t.tryAgain, tapToCall: t.tapToCall,
              enableAudio: t.enableAudio,
              hangup: t.hangup, mute: t.mute, unmute: t.unmute,
-             noAgents: t.noAgents, busy: t.busy, micDenied: t.micDenied, noAnswer: t.noAnswer
+             noAgents: t.noAgents, busy: t.busy, micDenied: t.micDenied, noAnswer: t.noAnswer,
+             audioSettings: t.audioSettings, microphone: t.microphone, speaker: t.speaker,
+             defaultDevice: t.defaultDevice, audioUnsupported: t.audioUnsupported
          }) %>"
          data-call-label="<%= buttonText %>"></div>
 
