@@ -3,7 +3,8 @@
     'use strict';
 
     var configEl = document.getElementById('sokratGuestConfig');
-    if (!configEl || typeof JsSIP === 'undefined') return;
+    var preview = Boolean(configEl && configEl.dataset.preview === '1');
+    if (!configEl || (!preview && typeof JsSIP === 'undefined')) return;
 
     var tenant = configEl.dataset.tenant || '';
     var link = configEl.dataset.link || '';
@@ -33,6 +34,7 @@
     var reported = false;
     var muted = false;
     var registrationTimer = null;
+    var previewTimers = [];
 
     var audioEl = document.createElement('audio');
     audioEl.autoplay = true;
@@ -117,6 +119,7 @@
     function finish(status, message, isError) {
         if (finished) return;
         finished = true;
+        clearPreviewTimers();
         setCallState(status === 'ended' ? 'ended' : 'failed');
         var duration = startedAt ? (Date.now() - startedAt) / 1000 : 0;
         stopTimer();
@@ -252,6 +255,10 @@
 
     function beginCall() {
         if (ua || rtcSession) return;
+        if (preview) {
+            beginPreview();
+            return;
+        }
         finished = false;
         reported = false;
         setCallState('connecting');
@@ -282,6 +289,36 @@
         });
     }
 
+    function clearPreviewTimers() {
+        while (previewTimers.length) clearTimeout(previewTimers.pop());
+    }
+
+    function beginPreview() {
+        clearPreviewTimers();
+        stopTimer();
+        finished = false;
+        reported = false;
+        muted = false;
+        if (muteLabel) muteLabel.textContent = labels.mute || 'Mute';
+        if (actionsEl) actionsEl.classList.add('hidden');
+        if (audioBtn) audioBtn.classList.add('hidden');
+        if (callBtn) callBtn.classList.add('hidden');
+        setCallState('connecting');
+        setStatus(labels.connecting || 'Connecting...');
+        previewTimers.push(setTimeout(function () {
+            if (finished) return;
+            setCallState('ringing');
+            setStatus(labels.ringing || 'Ringing...');
+        }, 900));
+        previewTimers.push(setTimeout(function () {
+            if (finished) return;
+            setCallState('connected');
+            setStatus(labels.connected || 'Connected');
+            startTimer();
+            if (actionsEl) actionsEl.classList.remove('hidden');
+        }, 2400));
+    }
+
     if (callBtn) {
         callBtn.addEventListener('click', function () {
             beginCall();
@@ -298,6 +335,11 @@
 
     if (muteBtn) {
         muteBtn.addEventListener('click', function () {
+            if (preview) {
+                muted = !muted;
+                if (muteLabel) muteLabel.textContent = muted ? (labels.unmute || 'Unmute') : (labels.mute || 'Mute');
+                return;
+            }
             if (!rtcSession) return;
             try {
                 if (muted) {
@@ -321,7 +363,13 @@
         });
     }
 
-    if (autoStart) {
+    if (preview) {
+        if (autoStart) setTimeout(beginPreview, 30);
+        else if (callBtn) {
+            callBtn.classList.remove('hidden');
+            callBtn.textContent = callLabel;
+        }
+    } else if (autoStart) {
         // Direct links and embed clicks start immediately. If the browser
         // requires a gesture for the microphone or audio playback, finish()
         // reveals a single tap-to-call fallback button.

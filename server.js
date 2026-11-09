@@ -26710,6 +26710,41 @@ app.get('/c/:slug', async (req, res) => {
     }
 });
 
+// --- PUBLIC GUEST CALL PAGE PREVIEW (no real call session) ---
+app.get('/preview/guest-call', (req, res) => {
+    const lang = req.query.lang === 'en' ? 'en' : 'ar';
+    const isAr = lang === 'ar';
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    return res.render('guest-call', {
+        tenant: {
+            name: isAr ? 'شركة النور للخدمات' : 'Al Nour Services',
+            public_id: 'preview',
+            branding: {
+                primary_color: '#e11d48',
+                secondary_color: '#7c3aed',
+                background_color: '#050507',
+                text_color: '#f8fafc',
+                muted_color: '#a1a1aa',
+                button_text_color: '#ffffff',
+                button_text: isAr ? 'اتصل بنا' : 'Call us'
+            },
+            consent_text: isAr
+                ? 'بالضغط على اتصال، سيتم توصيلك بفريق شركة النور. قد يتم تسجيل المكالمة.'
+                : 'By tapping Call, you will be connected to the Al Nour team. This call may be recorded.'
+        },
+        link: {
+            slug: 'preview',
+            label: isAr ? 'الموقع الإلكتروني' : 'Website'
+        },
+        currentLang: lang,
+        isEmbedded: false,
+        autoStart: false,
+        preview: true
+    });
+});
+
 // --- EMBEDDED CRM LIVE PANEL VIEW ---
 app.get('/embed/crm/live', async (req, res) => {
     const { ticket } = req.query;

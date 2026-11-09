@@ -2,6 +2,7 @@
 const lang = currentLang === 'ar' ? 'ar' : 'en';
 const isRtl = lang === 'ar';
 const autoStartEnabled = typeof autoStart === 'undefined' ? true : Boolean(autoStart);
+const previewMode = typeof preview !== 'undefined' && Boolean(preview);
 const t = isRtl ? {
     callNow: 'اتصل الآن',
     connecting: 'جارٍ الاتصال...',
@@ -364,6 +365,7 @@ const buttonText = (branding.button_text || t.callNow).toString().slice(0, 40);
          data-lang="<%= lang %>"
          data-embedded="<%= isEmbedded ? '1' : '0' %>"
          data-autostart="<%= autoStartEnabled ? '1' : '0' %>"
+         data-preview="<%= previewMode ? '1' : '0' %>"
          data-labels="<%= JSON.stringify({
              connecting: t.connecting, ringing: t.ringing, connected: t.connected,
              ended: t.ended, failed: t.failed, tryAgain: t.tryAgain, tapToCall: t.tapToCall,
