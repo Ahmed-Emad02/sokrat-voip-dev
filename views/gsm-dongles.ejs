@@ -368,6 +368,12 @@ const isRtl = currentLang === 'ar';
 const isCentralRole = (typeof federationCentral !== 'undefined' && Boolean(federationCentral));
 const fedNodeCount = (isCentralRole && typeof fedDongleNodes !== 'undefined' && Array.isArray(fedDongleNodes)) ? fedDongleNodes.length : 0;
 const deviceLabel = d => ((isCentralRole && fedNodeCount > 1) ? ((d.nodeName || ('Site ' + d.nodeSite)) + ' · ') : '') + (d.ID || '');
+const deviceSimLabel = d => {
+    const rawState = String((d && (d.State || d.state || d.status || d['Link State'])) || 'Not Connected');
+    if (/(?:not\s*connec|not_conn|disconnected|offline|not\s*init|not\s*respond)/i.test(rawState)) return '—';
+    const number = String((d && d.Number) || '').trim();
+    return (!number || number === 'Unknown' || number === '-' || number === 'None') ? '—' : number;
+};
 const deviceKey = d => String(d.fedKey || ((d.nodeSite ? d.nodeSite + ':' : '') + (d.ID || '')));
 const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(devices[0]) : '';
 %>
@@ -1747,10 +1753,10 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                                     <% } %>
                                     <% if (devices && devices.length > 0) { %>
                                         <% devices.forEach(d => { %>
-                                            <option value="<%= deviceKey(d) %>" <%= deviceKey(d) === initialSelectedDongleId ? 'selected' : '' %>><%= deviceLabel(d) %> (<%= d.Number || 'No SIM' %>)</option>
+                                            <option value="<%= deviceKey(d) %>" <%= deviceKey(d) === initialSelectedDongleId ? 'selected' : '' %>><%= deviceLabel(d) %> (<%= deviceSimLabel(d) %>)</option>
                                         <% }) %>
                                     <% } else { %>
-                                        <option value="dongle0">dongle0 (No SIM)</option>
+                                        <option value="dongle0">dongle0 (—)</option>
                                     <% } %>
                                 </select>
                             </div>
@@ -1859,7 +1865,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                                         <option value="" disabled <%= initialSelectedDongleId ? '' : 'selected' %> hidden><%= t.selectPlaceholder %></option>
                                         <% if (devices && devices.length > 0) { %>
                                             <% devices.forEach(d => { %>
-                                                <option value="<%= deviceKey(d) %>" <%= deviceKey(d) === initialSelectedDongleId ? 'selected' : '' %>><%= deviceLabel(d) %> (<%= d.Number || 'Unknown SIM' %>)</option>
+                                                <option value="<%= deviceKey(d) %>" <%= deviceKey(d) === initialSelectedDongleId ? 'selected' : '' %>><%= deviceLabel(d) %> (<%= deviceSimLabel(d) %>)</option>
                                             <% }) %>
                                         <% } %>
                                     </select>
@@ -2163,7 +2169,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                             <button onclick="copyToClipboard(document.getElementById('info-number').textContent, this)" class="text-[var(--text-muted)] hover:text-[var(--text-primary)] p-1 rounded transition cursor-pointer shrink-0" title="<%= isRtl ? 'نسخ' : 'Copy' %>">
                                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
                             </button>
-                            <button onclick="editSimNumber(document.getElementById('info-id').textContent, document.getElementById('info-imsi').textContent, document.getElementById('info-number').textContent === 'Unknown' || document.getElementById('info-number').textContent === '-' ? '' : document.getElementById('info-number').textContent)" class="text-[var(--text-muted)] hover:text-[var(--text-primary)] p-1 rounded transition cursor-pointer shrink-0" title="<%= isRtl ? 'تعديل' : 'Edit' %>">
+                            <button onclick="editSimNumber(document.getElementById('info-id').textContent, document.getElementById('info-imsi').textContent, document.getElementById('info-number').textContent === 'Unknown' || document.getElementById('info-number').textContent === '-' || document.getElementById('info-number').textContent === '—' ? '' : document.getElementById('info-number').textContent)" class="text-[var(--text-muted)] hover:text-[var(--text-primary)] p-1 rounded transition cursor-pointer shrink-0" title="<%= isRtl ? 'تعديل' : 'Edit' %>">
                                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 113 3L12 15l-4 1 1-4z"/></svg>
                             </button>
                         </div>
@@ -3255,6 +3261,20 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
             let lastUssdTime = 0;
             let devicesRefreshInFlight = false;
             let isSyncingSelect = false;
+            function isDongleUnavailableState(dev) {
+                const rawState = String((dev && (dev.State || dev.state || dev.status || dev['Link State'])) || 'Not Connected');
+                return /(?:not\s*connec|not_conn|disconnected|offline|not\s*init|not\s*respond)/i.test(rawState);
+            }
+            function displayDongleNumber(dev) {
+                if (isDongleUnavailableState(dev)) return '—';
+                const number = String((dev && dev.Number) || '').trim();
+                return (!number || number === 'Unknown' || number === '-' || number === 'None') ? '—' : number;
+            }
+            function displayDongleImsi(dev) {
+                if (isDongleUnavailableState(dev)) return '—';
+                const imsi = String((dev && dev.IMSI) || '').trim();
+                return (!imsi || imsi === 'Unknown' || imsi === '-' || imsi === 'None') ? '—' : imsi;
+            }
             function getDongleStateView(dev) {
                 const rawState = String((dev && (dev.State || dev.state || dev.status || dev['Link State'])) || 'Not Connected');
                 const normalized = rawState.toLowerCase();
@@ -3454,24 +3474,24 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                     const key = devKey(dev);
                     const id = key;
                     const rawId = String(dev.ID || '');
-                    const phoneNumber = String(dev.Number || 'Unknown');
-                    const imsi = String(dev.IMSI || '-');
+                    const state = states[index];
+                    const phoneNumber = displayDongleNumber(dev);
+                    const imsi = displayDongleImsi(dev);
                     const imei = String(dev.IMEI || '-');
                     const provider = String(dev['Provider Name'] || 'NONE');
                     const model = String(dev.Model || '-');
                     const firmware = String(dev.Firmware || '-');
                     const mode = [dev.Mode, dev.Submode].filter(Boolean).join(' / ') || '-';
-                    const state = states[index];
                     const signal = getDongleSignalView(dev);
-                    const hasValidHardware = imei && imei !== '-' && imei !== 'Unknown' && imsi && imsi !== '-' && imsi !== 'Unknown';
+                    const hasValidHardware = imei && imei !== '-' && imei !== 'Unknown' && imsi && imsi !== '—' && imsi !== 'Unknown';
                     const card = document.createElement('article');
 
                     card.id = 'row-' + id;
                     card.dataset.dongleId = id;
                     card.dataset.rawId = rawId;
                     card.dataset.nodeSite = nodeSite;
-                    card.dataset.number = phoneNumber === 'Unknown' ? '' : phoneNumber;
-                    card.dataset.imsi = imsi;
+                    card.dataset.number = phoneNumber === '—' ? '' : phoneNumber;
+                    card.dataset.imsi = imsi === '—' ? '' : imsi;
                     card.dataset.imei = imei;
                     card.dataset.audio = String(dev.audio || '');
                     card.dataset.data = String(dev.data || '');
@@ -3496,7 +3516,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                             <div class="flex items-center gap-1.5 min-w-0">
                                 <span class="text-[10px] font-extrabold text-[var(--text-muted)] uppercase tracking-wider">${isRtl ? 'الرقم:' : 'SIM:'}</span>
                                 <span id="display-num-${escapeHtml(id)}" class="font-mono text-xs text-[var(--text-primary)] font-bold truncate">${escapeHtml(phoneNumber)}</span>
-                                ${phoneNumber !== 'Unknown' ? `<button type="button" data-dongle-action="copy-number" class="p-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer shrink-0" title="${isRtl ? 'نسخ الرقم' : 'Copy number'}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button>` : ''}
+                                ${phoneNumber !== '—' ? `<button type="button" data-dongle-action="copy-number" class="p-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer shrink-0" title="${isRtl ? 'نسخ الرقم' : 'Copy number'}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button>` : ''}
                             </div>
 
                             <!-- Col 3: Hardware IMEI -->
@@ -3564,7 +3584,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                                         <span class="dongle-metric-label">${isRtl ? 'رقم الشريحة' : 'DID / SIM'}</span>
                                         <div class="flex items-center gap-1 min-w-0">
                                             <span id="display-num-${escapeHtml(id)}" class="dongle-metric-value font-mono flex-1 text-xs sm:text-sm truncate">${escapeHtml(phoneNumber)}</span>
-                                            ${phoneNumber !== 'Unknown' ? `<button type="button" data-dongle-action="copy-number" class="p-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer shrink-0" title="${isRtl ? 'نسخ الرقم' : 'Copy number'}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button>` : ''}
+                                            ${phoneNumber !== '—' ? `<button type="button" data-dongle-action="copy-number" class="p-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer shrink-0" title="${isRtl ? 'نسخ الرقم' : 'Copy number'}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button>` : ''}
                                             <button type="button" data-dongle-action="edit-number" class="p-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer shrink-0" title="${isRtl ? 'تعديل الرقم' : 'Edit number'}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 113 3L12 15l-4 1 1-4z"/></svg></button>
                                         </div>
                                     </div>
@@ -3687,7 +3707,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                                         <span class="dongle-metric-label">${isRtl ? 'رقم الشريحة' : 'DID / SIM'}</span>
                                         <div class="flex items-center gap-1 min-w-0">
                                             <span id="display-num-${escapeHtml(id)}" class="dongle-metric-value font-mono flex-1 truncate">${escapeHtml(phoneNumber)}</span>
-                                            ${phoneNumber !== 'Unknown' ? `<button type="button" data-dongle-action="copy-number" class="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer shrink-0" title="${isRtl ? 'نسخ الرقم' : 'Copy number'}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button>` : ''}
+                                            ${phoneNumber !== '—' ? `<button type="button" data-dongle-action="copy-number" class="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer shrink-0" title="${isRtl ? 'نسخ الرقم' : 'Copy number'}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button>` : ''}
                                             <button type="button" data-dongle-action="edit-number" class="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer shrink-0" title="${isRtl ? 'تعديل الرقم' : 'Edit number'}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 113 3L12 15l-4 1 1-4z"/></svg></button>
                                         </div>
                                     </div>
@@ -3846,10 +3866,10 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                     // Fill metadata cards
                     const nodePrefix = (FED_NODES.length > 1) ? `${dev.nodeName || ('Site ' + dev.nodeSite)} · ` : '';
                     elId.textContent = `${nodePrefix}${rawId}`;
-                    elNum.textContent = dev.Number || 'Unknown';
+                    elNum.textContent = displayDongleNumber(dev);
                     elProv.textContent = dev['Provider Name'] || 'NONE';
                     elImei.textContent = dev.IMEI || '-';
-                    elImsi.textContent = dev.IMSI || '-';
+                    elImsi.textContent = displayDongleImsi(dev);
                     elGroup.textContent = dev.Group || '0';
                     elModel.textContent = dev.Model || '-';
                     elFirm.textContent = dev.Firmware || '-';
@@ -3984,7 +4004,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                             ? `${device.nodeName || fedNodeName(device.nodeSite)} · `
                             : '';
                         opt.value = optionKey;
-                        opt.textContent = `${nodePrefix}${device.ID || 'dongle0'} (${device.Number && device.Number !== 'Unknown' ? device.Number : 'No SIM'})`;
+                        opt.textContent = `${nodePrefix}${device.ID || 'dongle0'} (${displayDongleNumber(device)})`;
                         if (optionKey === currentVal) {
                             opt.selected = true;
                         }
@@ -3993,7 +4013,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                 } else {
                     const opt = document.createElement('option');
                     opt.value = 'dongle0';
-                    opt.textContent = 'dongle0 (No SIM)';
+                    opt.textContent = 'dongle0 (—)';
                     opt.selected = true;
                     el.appendChild(opt);
                 }
@@ -4202,7 +4222,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                     devs.forEach(d => {
                         const opt = document.createElement('option');
                         const dongleId = d.ID || d.id || d.dongle_name || 'dongle0';
-                        const simNum = d.Number || d.simNumber || d.phone_number || '';
+                        const simNum = displayDongleNumber(d);
                         const provider = d.ProviderName || d.provider || '';
                         const optionKey = devKey(d);
                         const nodePrefix = FED_NODES.length > 1 ? `${d.nodeName || fedNodeName(d.nodeSite)} · ` : '';
@@ -5954,9 +5974,9 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
             window.editSimNumber = function(dongleId, imsi, currentVal) {
                 const ctx = deviceContext(dongleId);
                 const rawId = ctx.rawId;
-                if ((!currentVal || currentVal === 'Unknown' || currentVal === '-') && dongleId) {
+                if ((!currentVal || currentVal === 'Unknown' || currentVal === '-' || currentVal === '—') && dongleId) {
                     const el = document.getElementById('display-num-' + ctx.key);
-                    if (el && el.textContent && !el.textContent.includes('Unknown') && !el.textContent.includes('-')) {
+                    if (el && el.textContent && !el.textContent.includes('Unknown') && !el.textContent.includes('-') && !el.textContent.includes('—')) {
                         currentVal = el.textContent.trim();
                     }
                 }
@@ -6270,26 +6290,83 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                     refreshDevicesList(true);
                 });
 
-                // Real-time SIM failure prominent top-center notification (IMSI read error)
+                // Real-time SIM/IMSI failure notification. The server only emits this
+                // after confirming the dongle is connected; offline dongles are separate.
                 socket.on('dongleSimError', (data) => {
                     if (!data || data.error !== 'imsi_failed') return;
                     const dongleName = data.dongleId || 'dongle';
-                    const alertTitle = isRtl ? `تنبيه عتاد الشريحة [${dongleName}]` : `Hardware SIM Alert [${dongleName}]`;
+                    const alertTitle = isRtl ? `تنبيه قراءة IMSI [${dongleName}]` : `IMSI Read Alert [${dongleName}]`;
                     const alertMsg = isRtl
-                        ? `بطاقة SIM غير متصلة بشكل صحيح (تعذر قراءة رقم IMSI). يرجى التأكد من تركيب الشريحة في الجهاز وإعادة التوصيل.`
-                        : `SIM card is not connected properly (failed to read IMSI). Please make sure the SIM card is properly inserted in the dongle.`;
-                    showTopCenterAlert(alertTitle, alertMsg);
+                        ? (data.messageAr || `فشلت قراءة IMSI على ${dongleName} بينما الدونجل متصل. قد يكون المودم قيد إعادة التهيئة؛ افحص بطاقة SIM فقط إذا استمرت المشكلة.`)
+                        : (data.messageEn || `IMSI read failed on ${dongleName} while the dongle is connected. The modem may be reinitializing; inspect the SIM only if this persists.`);
+                    showTopCenterAlert(alertTitle, alertMsg, { dongleId: dongleName, kind: 'imsi', timeoutMs: 12000 });
+                });
+
+                socket.on('dongleOffline', (data) => {
+                    if (!data || !data.dongleId) return;
+                    // The card already shows Not Connected. Clear any stale SIM alert
+                    // instead of claiming that a disconnected dongle has a SIM problem.
+                    removeDongleAlerts(data.dongleId, 'imsi');
+                });
+
+                socket.on('dongleRecovered', (data) => {
+                    if (!data || !data.dongleId) return;
+                    removeDongleAlerts(data.dongleId);
+                    refreshDevicesList(true);
+                });
+
+                socket.on('dongleRestartHealthy', (data) => {
+                    if (!data || !data.dongleId) return;
+                    removeDongleAlerts(data.dongleId, 'restart');
+                    refreshDevicesList(true);
+                });
+
+                socket.on('dongleRestartFailed', (data) => {
+                    if (!data || !data.dongleId) return;
+                    const dongleName = data.dongleId;
+                    const alertTitle = isRtl ? `فشل استعادة الدونجل [${dongleName}]` : `Dongle Restart Failed [${dongleName}]`;
+                    const alertMsg = isRtl
+                        ? (data.messageAr || `لم تؤدِ إعادة تشغيل ${dongleName} إلى استعادة المودم. أوقف المحاولات التلقائية وانتقل إلى إعادة توصيل USB.`)
+                        : (data.messageEn || `Restart of ${dongleName} did not recover the modem. Automatic retries are paused; escalate to a USB replug.`);
+                    showTopCenterAlert(alertTitle, alertMsg, { dongleId: dongleName, kind: 'restart', timeoutMs: 30000 });
+                });
+
+                socket.on('dongleEscalated', (data) => {
+                    if (!data || !data.dongleId) return;
+                    const dongleName = data.dongleId;
+                    const alertTitle = isRtl ? `تصعيد استعادة الدونجل [${dongleName}]` : `Dongle Recovery Escalation [${dongleName}]`;
+                    const alertMsg = isRtl
+                        ? (data.messageAr || `فشل تهيئة IMSI في ${dongleName} بشكل متكرر. أوقف المحاولات التلقائية وأعد توصيل USB أو افحص المودم يدوياً.`)
+                        : (data.messageEn || `Dongle ${dongleName} failed IMSI initialization repeatedly. Automatic retries are paused; perform a USB replug or manual modem check.`);
+                    showTopCenterAlert(alertTitle, alertMsg, { dongleId: dongleName, kind: 'escalation', timeoutMs: 0 });
                 });
             }
 
-            function showTopCenterAlert(title, message) {
+            function removeDongleAlerts(dongleId, kind = '') {
+                const topContainer = document.getElementById('top-alert-container');
+                if (!topContainer) return;
+                topContainer.querySelectorAll('[data-alert-dongle]').forEach(alertEl => {
+                    if (alertEl.dataset.alertDongle === dongleId && (!kind || alertEl.dataset.alertKind === kind)) {
+                        alertEl.remove();
+                    }
+                });
+            }
+
+            function showTopCenterAlert(title, message, options = {}) {
                 const topContainer = document.getElementById('top-alert-container');
                 if (!topContainer) {
                     showToast(title, message, 'warning');
                     return;
                 }
+                const dongleId = options.dongleId || '';
+                const kind = options.kind || 'generic';
+                const timeoutMs = Number.isFinite(Number(options.timeoutMs)) ? Number(options.timeoutMs) : 12000;
+                if (dongleId) removeDongleAlerts(dongleId);
+
                 const alertEl = document.createElement('div');
                 alertEl.className = 'pointer-events-auto w-full rounded-2xl p-4 sm:p-5 flex items-start gap-4 transform -translate-y-8 opacity-0 transition-all duration-300 font-mono';
+                alertEl.dataset.alertDongle = dongleId;
+                alertEl.dataset.alertKind = kind;
                 alertEl.style.cssText = 'background-color: #121215 !important; border: 2px solid #ef4444 !important; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.85), 0 0 25px rgba(239, 68, 68, 0.35) !important; font-family: \'JetBrains Mono\', monospace !important;';
                 alertEl.innerHTML = `
                     <div class="p-2.5 rounded-xl shrink-0 mt-0.5" style="background-color: rgba(239, 68, 68, 0.2) !important; color: #f87171 !important; border: 1px solid rgba(239, 68, 68, 0.4) !important;">
@@ -6313,10 +6390,12 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                 requestAnimationFrame(() => {
                     alertEl.classList.remove('-translate-y-8', 'opacity-0');
                 });
-                setTimeout(() => {
-                    alertEl.classList.add('-translate-y-8', 'opacity-0');
-                    setTimeout(() => { alertEl.remove(); }, 300);
-                }, 12000);
+                if (timeoutMs > 0) {
+                    setTimeout(() => {
+                        alertEl.classList.add('-translate-y-8', 'opacity-0');
+                        setTimeout(() => { alertEl.remove(); }, 300);
+                    }, timeoutMs);
+                }
             }
 
             // Refresh Device List AJAX helper
@@ -6371,7 +6450,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                                     ? `${device.nodeName || fedNodeName(device.nodeSite)} · `
                                     : '';
                                 option.value = optionKey;
-                                option.textContent = `${nodePrefix}${device.ID || ''} (${device.Number || fallbackNumber})`;
+                                option.textContent = `${nodePrefix}${device.ID || ''} (${displayDongleNumber(device)})`;
                                 option.selected = optionKey === selectedVal;
                                 el.appendChild(option);
                             });
