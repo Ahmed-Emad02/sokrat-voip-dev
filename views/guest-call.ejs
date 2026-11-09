@@ -260,6 +260,103 @@ const buttonText = (branding.button_text || t.callNow).toString().slice(0, 40);
         .powered { color: var(--muted); font-size: 9px; margin-top: 14px; letter-spacing: .12em; text-transform: uppercase; }
         .powered b { color: var(--brand); font-weight: 900; }
         .hidden { display: none !important; }
+        body.preview-page {
+            overflow: auto;
+            align-items: flex-start;
+            justify-content: flex-start;
+            flex-direction: column;
+        }
+        body.preview-page .card { margin: 24px auto 0; flex: 0 0 auto; }
+        .preview-fields {
+            width: min(760px, calc(100% - 36px));
+            margin: 18px auto 44px;
+            border: 1px solid var(--border);
+            border-radius: 22px;
+            background: linear-gradient(180deg, rgba(28, 28, 36, .92), rgba(11, 11, 15, .94));
+            box-shadow: 0 24px 80px rgba(0, 0, 0, .45);
+            color: var(--text);
+            overflow: hidden;
+        }
+        .preview-fields summary {
+            cursor: pointer;
+            list-style: none;
+            padding: 16px 20px;
+            font-size: 13px;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+        .preview-fields summary::-webkit-details-marker { display: none; }
+        .preview-fields summary::after {
+            content: '⌄';
+            color: var(--brand);
+            font-size: 18px;
+            line-height: 1;
+            transition: transform .18s ease;
+        }
+        .preview-fields[open] summary::after { transform: rotate(180deg); }
+        .preview-fields[open] summary { border-bottom: 1px solid var(--border); }
+        .preview-fields-body { padding: 18px 20px 22px; }
+        .preview-kicker {
+            color: var(--brand);
+            font-size: 9px;
+            font-weight: 900;
+            letter-spacing: .16em;
+            text-transform: uppercase;
+            margin-bottom: 6px;
+        }
+        .preview-fields h2 { margin: 0 0 4px; font-size: 17px; font-weight: 900; }
+        .preview-fields p { margin: 0 0 16px; color: var(--muted); font-size: 11px; line-height: 1.6; }
+        .preview-field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .preview-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+        .preview-field.full { grid-column: 1 / -1; }
+        .preview-field-label {
+            color: var(--muted);
+            font-size: 10px;
+            font-weight: 800;
+            display: flex;
+            gap: 6px;
+            align-items: baseline;
+        }
+        .preview-field-label small { color: var(--brand); font-size: 8px; font-weight: 800; }
+        .preview-input {
+            width: 100%;
+            min-height: 40px;
+            padding: 9px 11px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: color-mix(in srgb, var(--bg) 88%, #fff 12%);
+            color: var(--text);
+            font: inherit;
+            font-size: 12px;
+            outline: none;
+            color-scheme: dark;
+        }
+        .preview-input:focus { border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-soft); }
+        textarea.preview-input { min-height: 76px; resize: vertical; }
+        .preview-check {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            min-height: 40px;
+            padding: 9px 11px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: color-mix(in srgb, var(--bg) 88%, #fff 12%);
+            color: var(--text);
+            font-size: 12px;
+        }
+        .preview-check input { width: 15px; height: 15px; accent-color: var(--brand); }
+        .preview-help { color: var(--muted); font-size: 9px; }
+        @media (max-width: 560px) {
+            body.preview-page { padding: 0; }
+            body.preview-page .card { margin: 0 auto; }
+            .preview-fields { width: calc(100% - 24px); margin: 12px auto 24px; border-radius: 16px; }
+            .preview-field-grid { grid-template-columns: 1fr; }
+            .preview-field.full { grid-column: auto; }
+        }
         @keyframes sokrPulse {
             0% { transform: scale(.86); opacity: .65; }
             100% { transform: scale(1.45); opacity: 0; }
@@ -317,7 +414,7 @@ const buttonText = (branding.button_text || t.callNow).toString().slice(0, 40);
         }
     </style>
 </head>
-<body>
+<body class="<%= previewMode ? 'preview-page' : '' %>">
     <div class="orbs" aria-hidden="true"><div class="orb orb-a"></div><div class="orb orb-b"></div></div>
     <main class="card" id="callCard" data-state="<%= autoStartEnabled ? 'connecting' : 'idle' %>">
         <div class="brand"><i></i><span><b>SOKRAT</b> VOICE</span></div>
@@ -358,6 +455,64 @@ const buttonText = (branding.button_text || t.callNow).toString().slice(0, 40);
         <p class="consent"><%= consentText %></p>
         <p class="powered"><b>SOKRAT</b> · <%= t.poweredBy %></p>
     </main>
+
+    <% if (previewMode) { %>
+    <details class="preview-fields" open>
+        <summary>
+            <span><%= isRtl ? 'عرض كل أنواع الحقول' : 'Show all field types' %></span>
+        </summary>
+        <div class="preview-fields-body">
+            <div class="preview-kicker">UI preview · mock data</div>
+            <h2><%= isRtl ? 'كل أنواع الحقول المتاحة' : 'All available field types' %></h2>
+            <p><%= isRtl ? 'دي معاينة للشكل فقط — مفيش بيانات بتتبعت.' : 'Visual preview only — no data is submitted.' %></p>
+            <div class="preview-field-grid">
+                <div class="preview-field">
+                    <label class="preview-field-label"><%= isRtl ? 'نص' : 'Text' %> <small>text</small></label>
+                    <input class="preview-input" type="text" value="<%= isRtl ? 'أحمد محمد' : 'Ahmed Mohamed' %>">
+                </div>
+                <div class="preview-field">
+                    <label class="preview-field-label"><%= isRtl ? 'بريد إلكتروني' : 'Email' %> <small>email</small></label>
+                    <input class="preview-input" type="email" value="ahmed@example.com">
+                </div>
+                <div class="preview-field">
+                    <label class="preview-field-label"><%= isRtl ? 'هاتف' : 'Phone' %> <small>tel</small></label>
+                    <input class="preview-input" type="tel" value="+20 100 123 4567">
+                </div>
+                <div class="preview-field">
+                    <label class="preview-field-label"><%= isRtl ? 'رقم' : 'Number' %> <small>number</small></label>
+                    <input class="preview-input" type="number" value="2" min="0">
+                </div>
+                <div class="preview-field">
+                    <label class="preview-field-label"><%= isRtl ? 'تاريخ' : 'Date' %> <small>date</small></label>
+                    <input class="preview-input" type="date" value="2026-11-09">
+                </div>
+                <div class="preview-field">
+                    <label class="preview-field-label"><%= isRtl ? 'قائمة منسدلة' : 'Dropdown' %> <small>select</small></label>
+                    <select class="preview-input">
+                        <option><%= isRtl ? 'القاهرة' : 'Cairo' %></option>
+                        <option><%= isRtl ? 'الجيزة' : 'Giza' %></option>
+                        <option><%= isRtl ? 'الإسكندرية' : 'Alexandria' %></option>
+                    </select>
+                </div>
+                <div class="preview-field full">
+                    <label class="preview-field-label"><%= isRtl ? 'نص طويل' : 'Long text' %> <small>textarea</small></label>
+                    <textarea class="preview-input" placeholder="<%= isRtl ? 'اكتب ملاحظاتك هنا...' : 'Write your notes here...' %>"></textarea>
+                </div>
+                <div class="preview-field">
+                    <label class="preview-field-label"><%= isRtl ? 'مربع اختيار' : 'Checkbox' %> <small>checkbox</small></label>
+                    <label class="preview-check">
+                        <input type="checkbox" checked>
+                        <span><%= isRtl ? 'أوافق على تسجيل المكالمة' : 'I agree to call recording' %></span>
+                    </label>
+                </div>
+                <div class="preview-field">
+                    <label class="preview-field-label"><%= isRtl ? 'صورة الشعار' : 'Logo image' %> <small>file / PNG</small></label>
+                    <input class="preview-input" type="file" accept="image/png">
+                </div>
+            </div>
+        </div>
+    </details>
+    <% } %>
 
     <div id="sokratGuestConfig"
          data-tenant="<%= tenant.public_id %>"
