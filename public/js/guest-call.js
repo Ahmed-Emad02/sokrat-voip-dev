@@ -3,8 +3,9 @@
     'use strict';
 
     var configEl = document.getElementById('sokratGuestConfig');
-    var preview = Boolean(configEl && configEl.dataset.preview === '1');
-    if (!configEl || (!preview && typeof JsSIP === 'undefined')) return;
+    if (!configEl) return;
+    var preview = configEl.dataset.preview === '1';
+    if (!preview && typeof JsSIP === 'undefined') return;
 
     var tenant = configEl.dataset.tenant || '';
     var link = configEl.dataset.link || '';
@@ -17,8 +18,13 @@
 
     var cardEl = document.getElementById('callCard');
     var statusEl = document.getElementById('guestStatus');
+    var stateTitleEl = document.getElementById('guestStateTitle');
+    var stateTextEl = document.getElementById('guestStateText');
     var timerEl = document.getElementById('guestTimer');
+    var summaryEl = document.getElementById('guestCallSummary');
     var callBtn = document.getElementById('guestCallBtn');
+    var cancelBtn = document.getElementById('guestCancelBtn');
+    var retryBtn = document.getElementById('guestRetryBtn');
     var audioBtn = document.getElementById('guestAudioBtn');
     var actionsEl = document.getElementById('guestInCallActions');
     var muteBtn = document.getElementById('guestMuteBtn');
@@ -30,6 +36,8 @@
     var audioInputSelect = document.getElementById('guestAudioInput');
     var audioOutputSelect = document.getElementById('guestAudioOutput');
     var audioSupportEl = document.getElementById('guestAudioSupport');
+    var labMount = document.getElementById('guestLabMount');
+    var labTemplate = document.getElementById('guestLabTemplate');
     var selectedAudioInput = '';
     var selectedAudioOutput = '';
     try {
@@ -48,6 +56,7 @@
     var muted = false;
     var registrationTimer = null;
     var previewTimers = [];
+    var abortController = null;
 
     var audioEl = document.createElement('audio');
     audioEl.autoplay = true;
@@ -55,14 +64,32 @@
     audioEl.style.display = 'none';
     document.body.appendChild(audioEl);
 
-    function setCallState(state) {
-        if (cardEl) cardEl.dataset.state = state;
-    }
-
     function setStatus(text, isError) {
         if (!statusEl) return;
-        statusEl.textContent = text;
+        statusEl.textContent = text || '';
         statusEl.classList.toggle('error', Boolean(isError));
+    }
+
+    function setState(state, options) {
+        options = options || {};
+        cardEl.dataset.state = state;
+        var titles = {
+            idle: labels.callPrompt || 'Call the team',
+            connecting: labels.connecting || 'Connecting...',
+            ringing: labels.ringing || 'Ringing...',
+            connected: labels.connected || 'Connected',
+            ended: labels.ended || 'Call ended',
+            failed: labels.failed || 'Could not start the call',
+            no_answer: labels.failed || 'Could not start the call',
+            busy: labels.failed || 'Could not start the call',
+            mic_denied: labels.failed || 'Could not start the call'
+        };
+        if (stateTitleEl) stateTitleEl.textContent = options.title !== undefined ? options.title : (titles[state] || '');
+        if (stateTextEl) {
+            stateTextEl.textContent = options.text !== undefined ? options.text : '';
+            stateTextEl.classList.toggle('error', Boolean(options.error));
+        }
+        if (options.status !== undefined) setStatus(options.status, options.error);
     }
 
     function updateMuteUi() {
@@ -73,27 +100,14 @@
         }
     }
 
-    function setBusy(busy) {
-        if (callBtn) {
-            callBtn.disabled = Boolean(busy);
-            callBtn.classList.toggle('end', false);
-        }
-    }
-
-    function showTimer(show) {
-        if (timerEl) timerEl.classList.toggle('hidden', !show);
-    }
-
     function formatDuration(sec) {
         var total = Math.max(0, Math.floor(sec));
-        var mm = Math.floor(total / 60);
-        var ss = total % 60;
-        return String(mm).padStart(2, '0') + ':' + String(ss).padStart(2, '0');
+        return String(Math.floor(total / 60)).padStart(2, '0') + ':' + String(total % 60).padStart(2, '0');
     }
 
     function startTimer() {
         startedAt = Date.now();
-        showTimer(true);
+        if (timerEl) timerEl.textContent = '00:00';
         if (timer) clearInterval(timer);
         timer = setInterval(function () {
             if (!startedAt) return;
@@ -106,17 +120,8 @@
         timer = null;
     }
 
-    function resetUi() {
-        muted = false;
-        updateMuteUi();
-        if (callBtn) {
-            callBtn.textContent = labels.tapToCall || labels.tryAgain || callLabel;
-            callBtn.classList.remove('end');
-            callBtn.classList.remove('hidden');
-            callBtn.disabled = false;
-        }
-        if (actionsEl) actionsEl.classList.add('hidden');
-        if (audioBtn) audioBtn.classList.add('hidden');
+    function clearPreviewTimers() {
+        while (previewTimers.length) clearTimeout(previewTimers.pop());
     }
 
     function endSessionReport(status, duration) {
@@ -139,16 +144,13 @@
         }
     }
 
-    function finish(status, message, isError) {
+    function finish(state, message, isError) {
         if (finished) return;
         finished = true;
         clearPreviewTimers();
-        setCallState(status === 'ended' ? 'ended' : 'failed');
         var duration = startedAt ? (Date.now() - startedAt) / 1000 : 0;
         stopTimer();
-        showTimer(false);
-        if (session) endSessionReport(status === 'failed' ? 'failed' : 'ended', duration);
-        if (message) setStatus(message, isError);
+        if (session) endSessionReport(state === 'ended' ? 'ended' : 'failed', duration);
         if (rtcSession) {
             try { rtcSession.terminate(); } catch (_) {}
             rtcSession = null;
@@ -159,7 +161,65 @@
         }
         if (registrationTimer) clearTimeout(registrationTimer);
         registrationTimer = null;
-        resetUi();
+        if (abortController) {
+            try { abortController.abort(); } catch (_) {}
+            abortController = null;
+        }
+        muted = false;
+        updateMuteUi();
+        if (audioBtn) audioBtn.classList.add('hidden');
+        if (state === 'ended') {
+            setState('ended', {
+                status: labels.ended || 'Call ended',
+                title: labels.ended || 'Call ended',
+                text: labels.callAgainHint || ''
+            });
+            if (summaryEl) summaryEl.textContent = (labels.duration || 'Call duration') + ' · ' + formatDuration(duration);
+        } else if (state === 'idle') {
+            setState('idle', {
+                status: message || labels.cancelled || '',
+                title: labels.callPrompt || 'Call the team',
+                text: labels.tapToCall || ''
+            });
+        } else {
+            setState(state, {
+                status: message || labels.failed || 'Call failed',
+                title: labels.failed || 'Call failed',
+                text: message || '',
+                error: Boolean(isError)
+            });
+        }
+    }
+
+    function cancelCall() {
+        if (finished) return;
+        clearPreviewTimers();
+        var duration = startedAt ? (Date.now() - startedAt) / 1000 : 0;
+        stopTimer();
+        if (abortController) {
+            try { abortController.abort(); } catch (_) {}
+            abortController = null;
+        }
+        if (session) endSessionReport('ended', duration);
+        if (rtcSession) {
+            try { rtcSession.terminate(); } catch (_) {}
+            rtcSession = null;
+        }
+        if (ua) {
+            try { ua.stop(); } catch (_) {}
+            ua = null;
+        }
+        if (registrationTimer) clearTimeout(registrationTimer);
+        registrationTimer = null;
+        finished = true;
+        muted = false;
+        updateMuteUi();
+        if (audioBtn) audioBtn.classList.add('hidden');
+        setState('idle', {
+            status: labels.cancelled || 'Call cancelled',
+            title: labels.callPrompt || 'Call the team',
+            text: labels.tapToCall || ''
+        });
     }
 
     function applyAudioOutput() {
@@ -186,68 +246,43 @@
         });
     }
 
-    function placeCall() {
-        if (!ua || !ua.isConnected() || !session) return;
-        var audioConstraint = selectedAudioInput
-            ? { deviceId: { exact: selectedAudioInput } }
-            : true;
-        var options = {
-            mediaConstraints: { audio: audioConstraint, video: false },
-            rtcOfferConstraints: { offerToReceiveAudio: true, offerToReceiveVideo: false },
-            pcConfig: {
-                iceServers: Array.isArray(session.ice_servers) ? session.ice_servers : [],
-                bundlePolicy: 'max-bundle',
-                rtcpMuxPolicy: 'require'
-            },
-            sessionTimersExpires: 120,
-            extraHeaders: [
-                'X-Sokrat-Guest: ' + String(session.caller_id || ''),
-                'X-Sokrat-Session: ' + String(session.id || '')
-            ]
-        };
-        try {
-            rtcSession = ua.call('sip:' + session.target + '@' + session.sip_domain, options);
-        } catch (error) {
-            finish('failed', labels.failed || 'Could not start the call', true);
-            return;
-        }
-
-        attachRemoteAudio(rtcSession);
-
-        rtcSession.on('progress', function () {
-            setCallState('ringing');
-            setStatus(labels.ringing || 'Ringing...');
+    function beginCall() {
+        if (ua || rtcSession) return;
+        if (preview) { beginPreview(); return; }
+        finished = false;
+        reported = false;
+        muted = false;
+        updateMuteUi();
+        if (summaryEl) summaryEl.textContent = '';
+        if (audioBtn) audioBtn.classList.add('hidden');
+        setState('connecting', {
+            status: labels.connecting || 'Connecting...',
+            title: labels.connecting || 'Connecting...',
+            text: labels.preparing || ''
         });
-
-        rtcSession.on('confirmed', function () {
-            setCallState('connected');
-            setStatus(labels.connected || 'Connected');
-            startTimer();
-            if (callBtn) callBtn.classList.add('hidden');
-            if (actionsEl) actionsEl.classList.remove('hidden');
-        });
-
-        rtcSession.on('ended', function () {
-            if (finished) return;
-            var duration = startedAt ? (Date.now() - startedAt) / 1000 : 0;
-            endSessionReport('ended', duration);
-            finish('ended', labels.ended || 'Call ended', false);
-        });
-
-        rtcSession.on('failed', function (event) {
-            if (finished) return;
-            var cause = (event && event.cause) || 'failed';
-            var message = labels.failed || 'Could not start the call';
-            if (/denied media|permission/i.test(String(cause))) {
-                message = labels.micDenied || 'Microphone permission was denied.';
-            } else if (/no answer|expires|408|487|canceled/i.test(String(cause))) {
-                message = labels.noAnswer || 'The business did not answer. Please try again.';
-            } else if (/busy|486/i.test(String(cause))) {
-                message = labels.busy || 'All lines are busy right now.';
-            } else if (/unavailable|480|404/i.test(String(cause))) {
-                message = labels.noAgents || 'No agents are available right now.';
-            }
-            finish('failed', message, true);
+        abortController = new AbortController();
+        fetch('/api/public/call-session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tenant: tenant, link: link, source: 'web' }),
+            signal: abortController.signal
+        }).then(function (response) {
+            return response.json().catch(function () { return {}; }).then(function (data) {
+                if (!response.ok || !data.success || !data.session) {
+                    var code = data.code || '';
+                    var message = labels.failed || 'Could not start the call';
+                    if (code === 'POOL_EXHAUSTED' || code === 'CONCURRENCY_LIMIT') message = labels.busy || 'All lines are busy right now.';
+                    else if (code === 'TENANT_INACTIVE' || code === 'TENANT_NO_AGENTS' || code === 'LINK_INACTIVE' || code === 'LINK_EXPIRED') message = labels.noAgents || 'This business is not taking calls right now.';
+                    else if (data.error) message = data.error;
+                    throw new Error(message);
+                }
+                session = data.session;
+                abortController = null;
+                startRegistration(session);
+            });
+        }).catch(function (error) {
+            if (error && error.name === 'AbortError') return;
+            finish('failed', error.message || labels.failed || 'Could not start the call', true);
         });
     }
 
@@ -285,72 +320,140 @@
         }, 12000);
     }
 
-    function beginCall() {
-        if (ua || rtcSession) return;
-        if (preview) {
-            beginPreview();
+    function placeCall() {
+        if (!ua || !ua.isConnected() || !session) return;
+        var audioConstraint = selectedAudioInput ? { deviceId: { exact: selectedAudioInput } } : true;
+        var options = {
+            mediaConstraints: { audio: audioConstraint, video: false },
+            rtcOfferConstraints: { offerToReceiveAudio: true, offerToReceiveVideo: false },
+            pcConfig: {
+                iceServers: Array.isArray(session.ice_servers) ? session.ice_servers : [],
+                bundlePolicy: 'max-bundle',
+                rtcpMuxPolicy: 'require'
+            },
+            sessionTimersExpires: 120,
+            extraHeaders: [
+                'X-Sokrat-Guest: ' + String(session.caller_id || ''),
+                'X-Sokrat-Session: ' + String(session.id || '')
+            ]
+        };
+        try {
+            rtcSession = ua.call('sip:' + session.target + '@' + session.sip_domain, options);
+        } catch (error) {
+            finish('failed', labels.failed || 'Could not start the call', true);
             return;
         }
-        finished = false;
-        reported = false;
-        muted = false;
-        updateMuteUi();
-        setCallState('connecting');
-        if (callBtn) callBtn.classList.add('hidden');
-        if (audioBtn) audioBtn.classList.add('hidden');
-        setBusy(true);
-        setStatus(labels.connecting || 'Connecting...');
 
-        fetch('/api/public/call-session', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ tenant: tenant, link: link, source: 'web' })
-        }).then(function (response) {
-            return response.json().catch(function () { return {}; }).then(function (data) {
-                if (!response.ok || !data.success || !data.session) {
-                    var code = data.code || '';
-                    var message = labels.failed || 'Could not start the call';
-                    if (code === 'POOL_EXHAUSTED' || code === 'CONCURRENCY_LIMIT') message = labels.busy || 'All lines are busy right now.';
-                    else if (code === 'TENANT_INACTIVE' || code === 'TENANT_NO_AGENTS' || code === 'LINK_INACTIVE' || code === 'LINK_EXPIRED') message = labels.noAgents || 'This business is not taking calls right now.';
-                    else if (data.error) message = data.error;
-                    throw new Error(message);
-                }
-                session = data.session;
-                startRegistration(session);
+        attachRemoteAudio(rtcSession);
+
+        rtcSession.on('progress', function () {
+            setState('ringing', {
+                status: labels.ringing || 'Ringing...',
+                title: labels.ringing || 'Ringing...',
+                text: labels.preparing || ''
             });
-        }).catch(function (error) {
-            finish('failed', error.message || labels.failed || 'Could not start the call', true);
+        });
+
+        rtcSession.on('confirmed', function () {
+            setState('connected', {
+                status: labels.connected || 'Connected',
+                title: labels.connected || 'Connected',
+                text: ''
+            });
+            startTimer();
+        });
+
+        rtcSession.on('ended', function () {
+            if (finished) return;
+            finish('ended', labels.ended || 'Call ended', false);
+        });
+
+        rtcSession.on('failed', function (event) {
+            if (finished) return;
+            var cause = String((event && event.cause) || '');
+            if (/denied media|permission/i.test(cause)) {
+                finish('mic_denied', labels.micDenied || 'Microphone permission was denied.', true);
+            } else if (/no answer|expires|408|487|canceled/i.test(cause)) {
+                finish('no_answer', labels.noAnswer || 'The business did not answer.', true);
+            } else if (/busy|486/i.test(cause)) {
+                finish('busy', labels.busy || 'All lines are busy right now.', true);
+            } else if (/unavailable|480|404/i.test(cause)) {
+                finish('failed', labels.noAgents || 'No agents are available right now.', true);
+            } else {
+                finish('failed', labels.failed || 'Could not start the call', true);
+            }
         });
     }
 
-    function clearPreviewTimers() {
-        while (previewTimers.length) clearTimeout(previewTimers.pop());
-    }
-
     function beginPreview() {
+        if (finished && cardEl.dataset.state !== 'idle') {
+            // allow retry from any terminal state
+        }
         clearPreviewTimers();
         stopTimer();
         finished = false;
         reported = false;
         muted = false;
         updateMuteUi();
-        if (actionsEl) actionsEl.classList.add('hidden');
+        if (summaryEl) summaryEl.textContent = '';
         if (audioBtn) audioBtn.classList.add('hidden');
-        if (callBtn) callBtn.classList.add('hidden');
-        setCallState('connecting');
-        setStatus(labels.connecting || 'Connecting...');
+        setState('connecting', {
+            status: labels.connecting || 'Connecting...',
+            title: labels.connecting || 'Connecting...',
+            text: labels.preparing || ''
+        });
         previewTimers.push(setTimeout(function () {
             if (finished) return;
-            setCallState('ringing');
-            setStatus(labels.ringing || 'Ringing...');
+            setState('ringing', {
+                status: labels.ringing || 'Ringing...',
+                title: labels.ringing || 'Ringing...',
+                text: labels.preparing || ''
+            });
         }, 900));
         previewTimers.push(setTimeout(function () {
             if (finished) return;
-            setCallState('connected');
-            setStatus(labels.connected || 'Connected');
+            setState('connected', {
+                status: labels.connected || 'Connected',
+                title: labels.connected || 'Connected',
+                text: ''
+            });
             startTimer();
-            if (actionsEl) actionsEl.classList.remove('hidden');
         }, 2400));
+    }
+
+    function applyPreviewState(state) {
+        if (!preview || !state) return;
+        if (state === 'connected') {
+            finished = false;
+            setState('connected', { status: labels.connected || 'Connected', title: labels.connected || 'Connected', text: '' });
+            startTimer();
+            return;
+        }
+        if (state === 'ringing' || state === 'connecting') {
+            finished = false;
+            setState(state, {
+                status: state === 'ringing' ? (labels.ringing || 'Ringing...') : (labels.connecting || 'Connecting...'),
+                title: state === 'ringing' ? (labels.ringing || 'Ringing...') : (labels.connecting || 'Connecting...'),
+                text: labels.preparing || ''
+            });
+            return;
+        }
+        if (state === 'ended') {
+            finished = true;
+            setState('ended', { status: labels.ended || 'Call ended', title: labels.ended || 'Call ended', text: labels.callAgainHint || '' });
+            if (summaryEl) summaryEl.textContent = (labels.duration || 'Call duration') + ' · 01:24';
+            return;
+        }
+        if (state === 'failed' || state === 'no_answer' || state === 'busy' || state === 'mic_denied') {
+            finished = true;
+            var messages = {
+                failed: labels.failed || 'Could not start the call',
+                no_answer: labels.noAnswer || 'The business did not answer.',
+                busy: labels.busy || 'All lines are busy right now.',
+                mic_denied: labels.micDenied || 'Microphone permission was denied.'
+            };
+            setState(state, { status: messages[state], title: labels.failed || 'Call failed', text: messages[state], error: true });
+        }
     }
 
     function rememberAudioSettings() {
@@ -411,11 +514,7 @@
             selectedAudioOutput = audioOutputSelect.value || '';
             var supportsSink = typeof HTMLMediaElement !== 'undefined' && 'setSinkId' in HTMLMediaElement.prototype;
             audioOutputSelect.disabled = !supportsSink;
-            if (audioSupportEl) {
-                audioSupportEl.textContent = supportsSink
-                    ? ''
-                    : (labels.audioUnsupported || 'Speaker selection is not supported in this browser.');
-            }
+            if (audioSupportEl) audioSupportEl.textContent = supportsSink ? '' : (labels.audioUnsupported || 'Speaker selection is not supported in this browser.');
         } catch (error) {
             if (audioSupportEl) audioSupportEl.textContent = error.message || labels.audioUnsupported || 'Audio devices could not be loaded.';
         }
@@ -434,80 +533,37 @@
         audioModal.setAttribute('aria-hidden', 'true');
     }
 
+    function mountLab() {
+        if (!preview || !labMount || !labTemplate) return;
+        var params = new URLSearchParams(window.location.search);
+        if (params.get('lab') !== '1') return;
+        labMount.appendChild(labTemplate.content.cloneNode(true));
+    }
+
+    if (callBtn) callBtn.addEventListener('click', beginCall);
+    if (retryBtn) retryBtn.addEventListener('click', beginCall);
+    if (cancelBtn) cancelBtn.addEventListener('click', cancelCall);
+    if (endBtn) endBtn.addEventListener('click', function () { finish('ended', labels.ended || 'Call ended', false); });
+    if (audioBtn) audioBtn.addEventListener('click', function () {
+        audioEl.play().then(function () { audioBtn.classList.add('hidden'); }).catch(function () {});
+    });
+    if (muteBtn) muteBtn.addEventListener('click', function () {
+        if (preview) { muted = !muted; updateMuteUi(); return; }
+        if (!rtcSession) return;
+        try {
+            if (muted) { rtcSession.unmute(); muted = false; }
+            else { rtcSession.mute(); muted = true; }
+            updateMuteUi();
+        } catch (_) {}
+    });
     if (audioSettingsBtn) audioSettingsBtn.addEventListener('click', openAudioSettings);
     if (audioCloseBtn) audioCloseBtn.addEventListener('click', closeAudioSettings);
     if (audioModal) {
-        audioModal.addEventListener('click', function (event) {
-            if (event.target === audioModal) closeAudioSettings();
-        });
+        audioModal.addEventListener('click', function (event) { if (event.target === audioModal) closeAudioSettings(); });
     }
     if (audioInputSelect) audioInputSelect.addEventListener('change', rememberAudioSettings);
     if (audioOutputSelect) audioOutputSelect.addEventListener('change', rememberAudioSettings);
-    document.addEventListener('keydown', function (event) {
-        if (event.key === 'Escape') closeAudioSettings();
-    });
-
-    if (callBtn) {
-        callBtn.addEventListener('click', function () {
-            beginCall();
-        });
-    }
-
-    if (endBtn) {
-        endBtn.addEventListener('click', function () {
-            var duration = startedAt ? (Date.now() - startedAt) / 1000 : 0;
-            endSessionReport('ended', duration);
-            finish('ended', labels.ended || 'Call ended', false);
-        });
-    }
-
-    if (muteBtn) {
-        muteBtn.addEventListener('click', function () {
-            if (preview) {
-                muted = !muted;
-                updateMuteUi();
-                return;
-            }
-            if (!rtcSession) return;
-            try {
-                if (muted) {
-                    rtcSession.unmute();
-                    muted = false;
-                } else {
-                    rtcSession.mute();
-                    muted = true;
-                }
-                updateMuteUi();
-            } catch (_) {}
-        });
-    }
-
-    if (audioBtn) {
-        audioBtn.addEventListener('click', function () {
-            audioEl.play().then(function () {
-                audioBtn.classList.add('hidden');
-            }).catch(function () {});
-        });
-    }
-
-    updateMuteUi();
-    applyAudioOutput();
-
-    if (preview) {
-        if (autoStart) setTimeout(beginPreview, 30);
-        else if (callBtn) {
-            callBtn.classList.remove('hidden');
-            callBtn.textContent = callLabel;
-        }
-    } else if (autoStart) {
-        // Direct links and embed clicks start immediately. If the browser
-        // requires a gesture for the microphone or audio playback, finish()
-        // reveals a single tap-to-call fallback button.
-        setTimeout(beginCall, 30);
-    } else if (callBtn) {
-        callBtn.classList.remove('hidden');
-        callBtn.textContent = callLabel;
-    }
+    document.addEventListener('keydown', function (event) { if (event.key === 'Escape') closeAudioSettings(); });
 
     window.addEventListener('pagehide', function () {
         if (session && !finished) {
@@ -515,4 +571,19 @@
             endSessionReport('ended', duration);
         }
     });
+
+    updateMuteUi();
+    applyAudioOutput();
+    mountLab();
+
+    if (preview) {
+        var params = new URLSearchParams(window.location.search);
+        applyPreviewState(params.get('state'));
+        if (!params.get('state') && autoStart) setTimeout(beginPreview, 30);
+        else if (!params.get('state')) setState('idle', { status: labels.ready || 'Ready when you are', title: labels.callPrompt || 'Call the team', text: labels.tapToCall || '' });
+    } else if (autoStart) {
+        setTimeout(beginCall, 30);
+    } else {
+        setState('idle', { status: labels.ready || 'Ready when you are', title: labels.callPrompt || 'Call the team', text: labels.tapToCall || '' });
+    }
 })();
