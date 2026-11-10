@@ -3380,7 +3380,7 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
             <a href="/?lang=<%= currentLang %>" title="<%= sbT.dashLink %>"
                class="nav-item flex items-center px-4 py-3 rounded-lg transition-all duration-150 text-sm font-semibold relative
                <%= curPage === '/' ? 'bg-[var(--accent-color)] text-white border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
-                <svg class="w-4 h-4 me-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                <span class="shrink-0" aria-hidden="true" style="display:inline-block;width:18px;height:18px;margin-inline-end:10px;background-color:currentColor;-webkit-mask:url('/grid.png') center/contain no-repeat;mask:url('/grid.png') center/contain no-repeat;"></span>
                 <span class="sidebar-text"><%= sbT.dashLink %></span>
             </a>
             <% } %>
