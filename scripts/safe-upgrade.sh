@@ -58,6 +58,19 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
+# Federation's automated SSH bootstrap requires sshpass. Existing nodes that
+# were installed before this dependency was added must receive it on upgrade.
+if ! command -v sshpass >/dev/null 2>&1; then
+    if command -v dnf >/dev/null 2>&1; then
+        dnf install -y sshpass openssh-clients >/dev/null 2>&1 || true
+    elif command -v yum >/dev/null 2>&1; then
+        yum install -y sshpass openssh-clients >/dev/null 2>&1 || true
+    fi
+fi
+if ! command -v sshpass >/dev/null 2>&1; then
+    echo "  Warning: sshpass is unavailable; federation SSH bootstrap will need it installed manually."
+fi
+
 # This script updates the very repository it lives in. Bash reads a script
 # incrementally, so without a re-exec the second half of the run would execute
 # the OLD file (new migrations/patches silently skipped). Remember our identity

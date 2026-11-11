@@ -106,6 +106,25 @@ if ! command -v git &>/dev/null; then
 fi
 # Packages already provided by installer-bundle (sox, sqlite, picotts, net-tools, nano)
 
+# Federation SSH bootstrap uses sshpass. Prefer an RPM from the offline bundle,
+# then fall back to the configured repositories. A missing helper is non-fatal;
+# only the automated federation bootstrap feature depends on it.
+if ! command -v sshpass >/dev/null 2>&1; then
+    for rpm_dir in "$SCRIPT_DIR/all-rpms" "$INSTALL_DIR/installer-bundle/all-rpms"; do
+        if ls "$rpm_dir"/sshpass*.rpm >/dev/null 2>&1; then
+            echo "  Installing sshpass from offline bundle..."
+            rpm -Uvh --replacepkgs --nodeps --oldpackage "$rpm_dir"/sshpass*.rpm 2>/dev/null || true
+            break
+        fi
+    done
+fi
+if ! command -v sshpass >/dev/null 2>&1; then
+    yum install -y sshpass openssh-clients 2>/dev/null || dnf install -y sshpass openssh-clients 2>/dev/null || true
+fi
+if ! command -v sshpass >/dev/null 2>&1; then
+    echo "  Warning: sshpass is unavailable; federation SSH bootstrap will need it installed manually."
+fi
+
 # Announcements in Issabel use picotts.agi, which requires both sox and pico2wave.
 PICO_AGI_SOURCE=/var/www/html/admin/modules/announcement/agi-bin/picotts.agi
 PICO_AGI_TARGET=/var/lib/asterisk/agi-bin/picotts.agi

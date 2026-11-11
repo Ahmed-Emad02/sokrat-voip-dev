@@ -252,6 +252,8 @@ echo "[1/14] Installing system packages..."
 # Install EPEL first so sox (which lives in EPEL) resolves
 yum install -y epel-release
 yum install -y nano net-tools sox sqlite picotts
+# Federation SSH bootstrap uses sshpass; keep it installed on fresh nodes.
+yum install -y sshpass openssh-clients 2>/dev/null || echo "  Warning: sshpass/openssh-clients unavailable; federation SSH bootstrap will need them installed manually."
 
 
 # Announcements in Issabel use picotts.agi, which requires both sox and pico2wave.
