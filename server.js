@@ -18659,6 +18659,16 @@ function trunkProtocolTable(tech) {
     return null;
 }
 
+function ensureEarlyMediaDialOptions(value) {
+    let options = String(value || '').trim();
+    // Dial option 'r' forces Asterisk-generated local ringback and suppresses
+    // early media. Remove it and always allow early media with 'R'.
+    options = options.replace(/r/g, '');
+    if (!options) options = 'TR';
+    if (!/R/.test(options)) options += 'R';
+    return options;
+}
+
 function normalizeTrunkPayload(body) {
     const requestedTech = String(body.tech || 'custom').trim().toLowerCase();
     const tech = requestedTech === 'iax' ? 'iax2' : requestedTech;
@@ -18712,7 +18722,7 @@ function normalizeTrunkPayload(body) {
         maxchans: String(body.maxchans || '').trim(),
         dialoutprefix: String(body.dialoutprefix || '').trim(),
         disabled: String(body.disabled || '').trim() === 'on' ? 'on' : 'off',
-        dialopts: String(body.dialopts || '').trim(),
+        dialopts: ensureEarlyMediaDialOptions(body.dialopts),
         continue: String(body.continue || '').trim() === 'on' ? 'on' : 'off',
         failscript: String(body.failscript || '').trim(),
         peerdetails,

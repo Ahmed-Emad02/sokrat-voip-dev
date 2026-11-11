@@ -3482,6 +3482,21 @@ systemctl daemon-reload
 systemctl enable --now sokrat-stt.service 2>/dev/null || true
 echo "  Sokrat Cloud STT worker enabled and started"
 
+# Provision Sokrat recording loudness normalizer (post-call, non-live path).
+echo "  Provisioning Sokrat recording loudness normalizer..."
+install -d -o asterisk -g asterisk -m 0750 /var/lib/sokrat-recording-normalizer
+if [ -f "$INSTALL_DIR/scripts/systemd/sokrat-recording-normalize.service" ] && \
+   [ -f "$INSTALL_DIR/scripts/systemd/sokrat-recording-normalize.timer" ]; then
+    chmod 0755 "$INSTALL_DIR/scripts/normalize-call-recordings.js" 2>/dev/null || true
+    install -m 0644 "$INSTALL_DIR/scripts/systemd/sokrat-recording-normalize.service" /etc/systemd/system/sokrat-recording-normalize.service
+    install -m 0644 "$INSTALL_DIR/scripts/systemd/sokrat-recording-normalize.timer" /etc/systemd/system/sokrat-recording-normalize.timer
+    systemctl daemon-reload
+    systemctl enable --now sokrat-recording-normalize.timer 2>/dev/null || true
+    echo "  Sokrat recording normalizer enabled and started"
+else
+    echo "  Warning: recording normalizer units missing; skipped"
+fi
+
 # Provision Sokrat System Watchdog & Alert Daemon
 echo "  Provisioning Sokrat System Watchdog & Alert Daemon..."
 cat > /etc/systemd/system/sokrat-watchdog.service << 'UNIT'
@@ -3559,6 +3574,15 @@ if [ -f /etc/php.ini ]; then
     echo "  PHP timezone set to Africa/Cairo in /etc/php.ini"
 fi
 echo "  Current timezone: $(timedatectl 2>/dev/null | grep 'Time zone' || echo 'N/A')"
+
+# Ensure every existing trunk prefers carrier early media. New trunks receive
+# the same default from server.js. This only affects future outbound calls.
+if command -v asterisk >/dev/null 2>&1; then
+    for trunk_id in $(mysql -u root -p"$MYSQL_ROOT_PWD" asterisk -Nse "SELECT trunkid FROM trunks" 2>/dev/null || true); do
+        asterisk -rx "database put TRUNK ${trunk_id}/dialopts TR" >/dev/null 2>&1 || true
+    done
+fi
+
 # ──────────────────────────────────────────────
 # Step 14 — Verify
 # ──────────────────────────────────────────────

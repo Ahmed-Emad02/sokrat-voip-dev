@@ -1805,6 +1805,26 @@ systemctl restart sokrat-voip.service 2>/dev/null || true
 systemctl restart sokrat-watchdog.service 2>/dev/null || true
 systemctl restart sokrat-stt.service 2>/dev/null || true
 
+# Provision/refresh the recording-only loudness normalizer.
+if [ -f "$INSTALL_DIR/scripts/systemd/sokrat-recording-normalize.service" ] && \
+   [ -f "$INSTALL_DIR/scripts/systemd/sokrat-recording-normalize.timer" ]; then
+    install -d -o asterisk -g asterisk -m 0750 /var/lib/sokrat-recording-normalizer
+    chmod 0755 "$INSTALL_DIR/scripts/normalize-call-recordings.js" 2>/dev/null || true
+    install -m 0644 "$INSTALL_DIR/scripts/systemd/sokrat-recording-normalize.service" /etc/systemd/system/sokrat-recording-normalize.service
+    install -m 0644 "$INSTALL_DIR/scripts/systemd/sokrat-recording-normalize.timer" /etc/systemd/system/sokrat-recording-normalize.timer
+    systemctl daemon-reload
+    systemctl enable --now sokrat-recording-normalize.timer 2>/dev/null || true
+    echo "  Recording loudness normalizer refreshed"
+fi
+
+# Ensure existing trunks prefer carrier early media; new trunks get this from
+# the application defaults. This only changes future outbound calls.
+if command -v asterisk >/dev/null 2>&1; then
+    for trunk_id in $(mysql "${MYSQL_AUTH[@]}" asterisk -Nse "SELECT trunkid FROM trunks" 2>/dev/null || true); do
+        asterisk -rx "database put TRUNK ${trunk_id}/dialopts TR" >/dev/null 2>&1 || true
+    done
+fi
+
 # Provision/Restart Sokrat Laya GSM Maintenance Agent Daemon
 if [ -f "$INSTALL_DIR/laya/engine.py" ]; then
     chmod +x "$INSTALL_DIR/laya/cli.py" 2>/dev/null || true

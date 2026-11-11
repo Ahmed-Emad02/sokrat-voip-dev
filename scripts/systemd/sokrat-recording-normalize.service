@@ -1,0 +1,13 @@
+[Unit]
+Description=Sokrat recording loudness normalizer
+After=network.target
+
+[Service]
+Type=oneshot
+User=asterisk
+Group=asterisk
+Nice=19
+IOSchedulingClass=idle
+CPUQuota=25%
+MemoryMax=256M
+ExecStart=/usr/bin/node /opt/sokrat-voip/scripts/normalize-call-recordings.js
