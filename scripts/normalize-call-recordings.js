@@ -90,6 +90,13 @@ function activeCallCount() {
     return match ? Number(match[1]) : null;
 }
 
+function normalizationEnabled() {
+    const result = spawnSync(ASTERISK_BIN, ['-rx', 'database get AUDIO_GLOBALS recording_normalize'], { encoding: 'utf8', timeout: 5000 });
+    if (result.error || result.status !== 0) return true;
+    const match = `${result.stdout || ''}${result.stderr || ''}`.match(/Value:\s*(\S+)/i);
+    return !match || match[1] !== '0';
+}
+
 function normalizeFile(file, stat) {
     const temp = `${file}.norm-${process.pid}.wav`;
     const result = spawnSync(FFMPEG, [
@@ -147,6 +154,11 @@ function main() {
             const state = readState();
             processOne(file, state, true);
             writeState(state);
+            return;
+        }
+
+        if (!normalizationEnabled()) {
+            log('recording normalization is disabled; skipping');
             return;
         }
 

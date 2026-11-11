@@ -1010,7 +1010,7 @@ same => n,Set(CHANNEL(hangup_handler_push)=sub-ai-outbound-hangup,s,1)
 same => n,ExecIf($["${AI_CALLER_ID}"!=""]?Set(CALLERID(num)=${AI_CALLER_ID}))
 same => n,Set(__MON_FMT=wav)
 same => n,Set(__MIXMON_DIR=/var/spool/asterisk/monitor/)
-same => n,Set(MIXMON_OPTS=v(1)V(1))
+same => n,Set(MIXMON_OPTS=${IF($["${DB(AUDIO_GLOBALS/recording_mix_opts)}" != ""]?${DB(AUDIO_GLOBALS/recording_mix_opts)}:v(1)V(1))})
 same => n,Set(NOW=${EPOCH})
 same => n,Set(__DAY=${STRFTIME(${NOW},,%d)})
 same => n,Set(__MONTH=${STRFTIME(${NOW},,%m)})
@@ -1211,7 +1211,7 @@ exten => s,1,Set(REC_POLICY_MODE_SAVE=${REC_POLICY_MODE})
 exten => s,n,GotoIf($["${BLINDTRANSFER}" = ""]?check)
 exten => s,n,ResetCDR()
 exten => s,n,GotoIf($["${REC_STATUS}" != "RECORDING"]?check)
-exten => s,n,Set(MIXMON_OPTS=${IF($["${MIXMON_OPTS}"=""]?v(1)V(1):${MIXMON_OPTS})})
+exten => s,n,Set(MIXMON_OPTS=${IF($["${MIXMON_OPTS}"=""]?${IF($["${DB(AUDIO_GLOBALS/recording_mix_opts)}" != ""]?${DB(AUDIO_GLOBALS/recording_mix_opts)}:v(1)V(1))}:${MIXMON_OPTS})})
 exten => s,n,MixMonitor(${MIXMON_DIR}${YEAR}/${MONTH}/${DAY}/${CALLFILENAME}.${MIXMON_FORMAT},a${MIXMON_OPTS},${MIXMON_POST})
 exten => s,n(check),Set(__MON_FMT=${IF($["${MIXMON_FORMAT}"="wav49"]?WAV:${MIXMON_FORMAT})})
 exten => s,n,GotoIf($["${REC_STATUS}"!="RECORDING"]?next)
@@ -1270,7 +1270,7 @@ exten => conf,n,Return()
 exten => page,1,GosubIf($["${REC_POLICY_MODE}"="always"]?recconf,1(${EXTEN},${ARG2},${FROMEXTEN}))
 exten => page,n,Return()
 
-exten => record,1,Set(MIXMON_OPTS=${IF($["${MIXMON_OPTS}"=""]?v(1)V(1):${MIXMON_OPTS})})
+exten => record,1,Set(MIXMON_OPTS=${IF($["${MIXMON_OPTS}"=""]?${IF($["${DB(AUDIO_GLOBALS/recording_mix_opts)}" != ""]?${DB(AUDIO_GLOBALS/recording_mix_opts)}:v(1)V(1))}:${MIXMON_OPTS})})
 exten => record,n,MixMonitor(${MIXMON_DIR}${YEAR}/${MONTH}/${DAY}/${CALLFILENAME}.${MIXMON_FORMAT},${MIXMON_OPTS},${MIXMON_POST})
 exten => record,n,Set(__REC_STATUS=RECORDING)
 exten => record,n,Set(CDR(recordingfile)=${CALLFILENAME}.${MON_FMT})
@@ -1281,7 +1281,7 @@ exten => record,n,Return()
 ; while the monitored channel is bridged - on a queue the monitored leg is
 ; often never bridged, which produced 44-byte (header-only) recordings.
 exten => recq,1,Set(MONITOR_FILENAME=${MIXMON_DIR}${YEAR}/${MONTH}/${DAY}/${CALLFILENAME})
-exten => recq,n,Set(MIXMON_OPTS=${IF($["${MIXMON_OPTS}"=""]?v(1)V(1):${MIXMON_OPTS})})
+exten => recq,n,Set(MIXMON_OPTS=${IF($["${MIXMON_OPTS}"=""]?${IF($["${DB(AUDIO_GLOBALS/recording_mix_opts)}" != ""]?${DB(AUDIO_GLOBALS/recording_mix_opts)}:v(1)V(1))}:${MIXMON_OPTS})})
 exten => recq,n,MixMonitor(${MONITOR_FILENAME}.${MIXMON_FORMAT},${MIXMON_OPTS},${MIXMON_POST})
 exten => recq,n,Set(__REC_STATUS=RECORDING)
 exten => recq,n,Set(CDR(recordingfile)=${CALLFILENAME}.${MON_FMT})
@@ -1433,7 +1433,7 @@ same => n(done),Hangup()
             '\nsame => n,Set(__CALLFILENAME=in-${DONGLENAME}-${FROMEXTEN}-${TIMESTR}-${UNIQUEID})'
             '\nsame => n,Set(__MON_FMT=wav)'
             '\nsame => n,Set(__MIXMON_DIR=/var/spool/asterisk/monitor/)'
-            '\nsame => n,Set(MIXMON_OPTS=v(1)V(1))'
+            '\nsame => n,Set(MIXMON_OPTS=${IF($["${DB(AUDIO_GLOBALS/recording_mix_opts_dongle)}" != ""]?${DB(AUDIO_GLOBALS/recording_mix_opts_dongle)}:v(1)V(1))})'
             '\nsame => n,MixMonitor(${MIXMON_DIR}${YEAR}/${MONTH}/${DAY}/${CALLFILENAME}.${MON_FMT},a${MIXMON_OPTS})'
             '\nsame => n,Set(__REC_STATUS=RECORDING)'
             '\nsame => n,Set(__REC_POLICY_MODE=always)'

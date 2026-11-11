@@ -10299,6 +10299,9 @@
             const cRnnoiseEl = document.getElementById('cellularRnnoiseSelect');
             const cAgcEl = document.getElementById('cellularAgcSelect');
             const cJbEl = document.getElementById('cellularJbSelect');
+            const recAgentEl = document.getElementById('recordingAgentGain');
+            const recCustomerEl = document.getElementById('recordingCustomerGain');
+            const recNormalizeEl = document.getElementById('recordingNormalize');
             try {
                 const res = await fetch('/api/config/audio-globals');
                 const data = await res.json();
@@ -10317,6 +10320,9 @@
                     if (cRnnoiseEl && g.cellular_rnnoise) cRnnoiseEl.value = String(g.cellular_rnnoise);
                     if (cAgcEl && g.cellular_agc) cAgcEl.value = String(g.cellular_agc);
                     if (cJbEl && g.cellular_jitterbuffer) cJbEl.value = String(g.cellular_jitterbuffer);
+                    if (recAgentEl) recAgentEl.value = String(g.recording_agent_gain_db || '0');
+                    if (recCustomerEl) recCustomerEl.value = String(g.recording_customer_gain_db || '0');
+                    if (recNormalizeEl) recNormalizeEl.checked = String(g.recording_normalize || '1') !== '0';
                 }
             } catch (_) {}
         }
@@ -10330,6 +10336,9 @@
             const cRnnoiseEl = document.getElementById('cellularRnnoiseSelect');
             const cAgcEl = document.getElementById('cellularAgcSelect');
             const cJbEl = document.getElementById('cellularJbSelect');
+            const recAgentEl = document.getElementById('recordingAgentGain');
+            const recCustomerEl = document.getElementById('recordingCustomerGain');
+            const recNormalizeEl = document.getElementById('recordingNormalize');
             
             const vThresh = (threshEl && threshEl.value) ? threshEl.value : '0.20';
             const vHang = (hangEl && hangEl.value) ? hangEl.value : '250';
@@ -10345,6 +10354,9 @@
                 if (cRnnoiseEl) payload.cellular_rnnoise = cRnnoiseEl.value;
                 if (cAgcEl) payload.cellular_agc = cAgcEl.value;
                 if (cJbEl) payload.cellular_jitterbuffer = cJbEl.value;
+                if (recAgentEl) payload.recording_agent_gain_db = Number(recAgentEl.value || 0);
+                if (recCustomerEl) payload.recording_customer_gain_db = Number(recCustomerEl.value || 0);
+                if (recNormalizeEl) payload.recording_normalize = recNormalizeEl.checked;
                 
                 const res = await fetch('/api/config/audio-globals', {
                     method: 'PUT',
@@ -10362,6 +10374,16 @@
             }
         }
         window.saveAudioGlobals = saveAudioGlobals;
+
+        function resetRecordingAudioMix() {
+            const agent = document.getElementById('recordingAgentGain');
+            const customer = document.getElementById('recordingCustomerGain');
+            const normalize = document.getElementById('recordingNormalize');
+            if (agent) agent.value = '0';
+            if (customer) customer.value = '0';
+            if (normalize) normalize.checked = true;
+        }
+        window.resetRecordingAudioMix = resetRecordingAudioMix;
 
         let cachedDspDongles = [];
         let cachedDspExtensions = [];

@@ -21376,6 +21376,9 @@ app.get('/api/config/audio-globals', async (req, res) => {
         let cellular_rnnoise = 'on';
         let cellular_agc = '8000';
         let cellular_jitterbuffer = 'off';
+        let recording_agent_gain_db = '0';
+        let recording_customer_gain_db = '0';
+        let recording_normalize = '1';
         try {
             const { stdout } = await execPromise(`${ASTERISK_BIN} -rx "database show AUDIO_GLOBALS"`);
             const thresh = (stdout || '').match(/\/AUDIO_GLOBALS\/vad_threshold\s*:\s*([\d\.]+)/);
@@ -21385,6 +21388,9 @@ app.get('/api/config/audio-globals', async (req, res) => {
             const rnnoiseMatch = (stdout || '').match(/\/AUDIO_GLOBALS\/cellular_rnnoise\s*:\s*([\w\-]+)/);
             const agcMatch = (stdout || '').match(/\/AUDIO_GLOBALS\/cellular_agc\s*:\s*([\w\-]+)/);
             const jbMatch = (stdout || '').match(/\/AUDIO_GLOBALS\/cellular_jb\s*:\s*([\w\-]+)/);
+            const recAgentMatch = (stdout || '').match(/\/AUDIO_GLOBALS\/recording_agent_gain_db\s*:\s*([\-\d\.]+)/);
+            const recCustomerMatch = (stdout || '').match(/\/AUDIO_GLOBALS\/recording_customer_gain_db\s*:\s*([\-\d\.]+)/);
+            const recNormalizeMatch = (stdout || '').match(/\/AUDIO_GLOBALS\/recording_normalize\s*:\s*([\w\-]+)/);
             if (thresh) vad_threshold = thresh[1];
             if (hang) vad_hangover = hang[1];
             if (dbThresh) vad_db_threshold = dbThresh[1];
@@ -21392,6 +21398,9 @@ app.get('/api/config/audio-globals', async (req, res) => {
             if (rnnoiseMatch) cellular_rnnoise = rnnoiseMatch[1];
             if (agcMatch) cellular_agc = agcMatch[1];
             if (jbMatch) cellular_jitterbuffer = jbMatch[1];
+            if (recAgentMatch) recording_agent_gain_db = recAgentMatch[1];
+            if (recCustomerMatch) recording_customer_gain_db = recCustomerMatch[1];
+            if (recNormalizeMatch) recording_normalize = recNormalizeMatch[1];
         } catch (_) {}
         res.json({
             success: true,
@@ -21402,7 +21411,10 @@ app.get('/api/config/audio-globals', async (req, res) => {
                 cellular_denoise,
                 cellular_rnnoise,
                 cellular_agc,
-                cellular_jitterbuffer
+                cellular_jitterbuffer,
+                recording_agent_gain_db,
+                recording_customer_gain_db,
+                recording_normalize
             }
         });
     } catch (error) {
@@ -21593,6 +21605,29 @@ app.put('/api/config/audio-globals', async (req, res) => {
         if (req.body.cellular_jitterbuffer) {
             const cJb = ['adaptive', 'fixed', 'off'].includes(req.body.cellular_jitterbuffer) ? req.body.cellular_jitterbuffer : 'adaptive';
             await execPromise(`${ASTERISK_BIN} -rx "database put AUDIO_GLOBALS cellular_jb ${cJb}"`);
+        }
+        if (req.body.recording_agent_gain_db !== undefined ||
+            req.body.recording_customer_gain_db !== undefined ||
+            req.body.recording_normalize !== undefined) {
+            const clampGain = value => Math.max(-12, Math.min(12, Number(value) || 0));
+            const agentGain = clampGain(req.body.recording_agent_gain_db);
+            const customerGain = clampGain(req.body.recording_customer_gain_db);
+            const normalize = req.body.recording_normalize === true ||
+                req.body.recording_normalize === 1 ||
+                req.body.recording_normalize === '1' ||
+                req.body.recording_normalize === 'true';
+            const factor = db => Math.max(0.25, Math.min(4, Math.pow(10, Number(db) / 20))).toFixed(2);
+            const agentFactor = factor(agentGain);
+            const customerFactor = factor(customerGain);
+            // MixMonitor v() is the heard side, V() the spoken side. Agent-side
+            // recordings hear the customer; dongle-side recordings hear the agent.
+            const agentChannelOpts = `v(${customerFactor})V(${agentFactor})`;
+            const dongleChannelOpts = `v(${agentFactor})V(${customerFactor})`;
+            await execPromise(`${ASTERISK_BIN} -rx "database put AUDIO_GLOBALS recording_agent_gain_db ${agentGain}"`);
+            await execPromise(`${ASTERISK_BIN} -rx "database put AUDIO_GLOBALS recording_customer_gain_db ${customerGain}"`);
+            await execPromise(`${ASTERISK_BIN} -rx "database put AUDIO_GLOBALS recording_normalize ${normalize ? 1 : 0}"`);
+            await execPromise(`${ASTERISK_BIN} -rx "database put AUDIO_GLOBALS recording_mix_opts ${agentChannelOpts}"`);
+            await execPromise(`${ASTERISK_BIN} -rx "database put AUDIO_GLOBALS recording_mix_opts_dongle ${dongleChannelOpts}"`);
         }
         res.json({
             success: true,
