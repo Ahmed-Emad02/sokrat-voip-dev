@@ -257,6 +257,14 @@ test('Federation deployers: fresh install, offline bundle and upgrade all verify
     }
 });
 
+test('Federation SSH bootstrap dependency is installed by all deployers', () => {
+    for (const file of ['install.sh', 'installer-bundle/install-sokrat.sh', 'scripts/safe-upgrade.sh']) {
+        const script = fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
+        assert.match(script, /sshpass/, `${file} must install or verify sshpass`);
+        assert.match(script, /openssh-clients/, `${file} must ensure ssh/scp clients are available`);
+    }
+});
+
 test('Federation Bootstrap: code sync only runs when remote checksums differ', () => {
     const { decideCodeSync } = require('../lib/federation-bootstrap');
     const local = { 'server.js': 'aaa', 'lib/federation-auth.js': 'bbb' };

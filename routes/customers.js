@@ -59,6 +59,12 @@ function createCustomersRouter({ service, isRootRequest, getTenantId }) {
     });
 
     router.use((req, res, next) => {
+        // This router is mounted at /api. Its auth guard must not swallow
+        // unrelated unauthenticated API namespaces such as /api/federation/v1.
+        const path = String(req.path || '');
+        if (!/^\/(?:customers(?:\/|$)|customer-fields(?:\/|$)|tenant\/branding(?:\/|$))/.test(path)) {
+            return next();
+        }
         if (!req.session || !req.session.userId) {
             return res.status(401).json({ success: false, code: 'AUTH_REQUIRED', error: 'Authentication is required.' });
         }
