@@ -25,6 +25,7 @@ const multer = require('multer');
 const ffmpeg = require('fluent-ffmpeg');
 const axios = require('axios');
 const crypto = require('crypto');
+const { createWgAdmissionRouter } = require('./lib/wg-admission');
 
 let XLSX = null;
 try {
@@ -36,6 +37,7 @@ const createExtensionContactsRouter = require('./routes/extension-contacts');
 const { requireExtensionSignature } = require('./lib/extension-auth');
 const { parseCallStateLines } = require('./lib/call-state');
 const { dbToAsteriskVolume } = require('./lib/call-volume');
+const { createWakeAnswerCancel } = require('./lib/webrtc-wake-answer');
 const { DEFAULT_OUTBOUND_DIAL_PATTERNS, resolveOutboundDialPatterns } = require('./lib/outbound-routes');
 const createExtensionChatRouter = require('./routes/extension-chat');
 const createExtensionVideoRouter = require('./routes/extension-video');
@@ -107,6 +109,7 @@ const {
     leaveNetwork: overlayLeaveNetwork,
     PROVIDER_IDS: OVERLAY_PROVIDER_IDS
 } = require('./lib/overlay-vpn');
+const { listWireGuardStatus } = require('./lib/wireguard-dashboard');
 const {
     listConnections: networkListConnections,
     configureConnection: networkConfigureConnection,
@@ -572,6 +575,7 @@ app.use((req, res, next) => {
     return jsonBodyParser(req, res, next);
 });
 app.use(express.urlencoded({ extended: true }));
+app.use('/api/gateway/wg', createWgAdmissionRouter());
 
 // --- GATEWAY INSTALLATION READINESS (NOT A SESSION/API-KEY BYPASS) ---
 // Only this POST is authenticated by the per-installation readiness key. Mount
@@ -2161,7 +2165,7 @@ async function syncExtensionCallPickupGroups() {
                     'rtp_symmetric=yes',
                     'disallow=all',
                     'allow=opus,ulaw,alaw',
-                    'rtp_timeout=30',
+                    'rtp_timeout=360',
                     'rtp_timeout_hold=60',
                     'rtp_keepalive=5',
                     `named_call_group=${namedGroup}`,
@@ -2970,7 +2974,7 @@ app.post('/api/extension/v1/call-volume', requireExtensionSignature(pool), async
     res.set('Cache-Control', 'no-store');
     try {
         const extension = String(req.sokratExtension || '').trim();
-        const gainDb = Math.max(-24, Math.min(42, parseFloat(req.body?.micGainDb ?? req.body?.gainDb) || 0));
+        const gainDb = Math.max(-30, Math.min(42, parseFloat(req.body?.micGainDb ?? req.body?.gainDb) || 0));
         const output = await execFileAsync(ASTERISK_BIN, ['-rx', 'core show channels concise']);
         const state = parseCallStateLines(String(output || '').split('\n'), extension);
         if (!state.callerChannel) {
@@ -3845,6 +3849,15 @@ function connectAMI() {
         console.log('AMI: Connection opened, login sent');
     });
     amiClient = client;
+    const wakeAnswer = createWakeAnswerCancel({
+        sendAction: action => {
+            if (!client.destroyed) client.write(action);
+        },
+        cancel: (callee, callId) => execFileAsync('/usr/bin/python3', [
+            '/usr/local/bin/sokrat-webrtc-wake-dispatch.py', callee, callId,
+        ]),
+        logger: console,
+    });
 
     // Fallback: if login detection fails, try SIPpeers and PJSIPShowEndpoints anyway after 3s
     setTimeout(() => {
@@ -3883,6 +3896,14 @@ function connectAMI() {
                 const parts = line.split(': ');
                 if (parts[0] && parts[1]) event[parts[0].trim()] = parts[1].trim();
             });
+
+            if (event.Event === 'DialEnd' ||
+                (typeof event.ActionID === 'string' && event.ActionID.startsWith('wake-answer-'))) {
+                const answerResult = wakeAnswer.handleEvent(event);
+                if (answerResult && typeof answerResult.catch === 'function') {
+                    answerResult.catch(error => console.error('Wake-answer cancel failed:', error.message));
+                }
+            }
 
             // Detect successful login from Response or FullyBooted event
             if (!loggedIn) {
@@ -4295,7 +4316,7 @@ function connectAMI() {
     });
 
     client.on('error', (err) => { console.error('AMI Error:', err.message); });
-    client.on('close', () => { setTimeout(connectAMI, 5000); });
+    client.on('close', () => { wakeAnswer.close(); setTimeout(connectAMI, 5000); });
 }
 connectAMI();
 
@@ -11706,6 +11727,45 @@ function getEnrichedDevices() {
     });
 }
 
+// Root-only WireGuard VPN/device inventory. This is intentionally a strict
+// interactive-root surface: federation trust and super-admin permissions do
+// not grant access to the PBX's tunnel topology.
+function requireWireGuardRoot(req, res, next) {
+    if (!isRootSession(req)) {
+        return res.status(403).render('403', {
+            currentLang: res.locals.currentLang || 'en',
+            isRtl: res.locals.currentLang === 'ar'
+        });
+    }
+    next();
+}
+
+app.get('/vpn', requireAuth, requireWireGuardRoot, async (req, res) => {
+    try {
+        const wireguard = await listWireGuardStatus();
+        res.render('vpn', {
+            currentPage: '/vpn',
+            currentLang: res.locals.currentLang || 'en',
+            isRtl: (res.locals.currentLang || 'en') === 'ar',
+            isRootUser: true,
+            currentUser: req.session ? req.session.username : '',
+            allowedTabs: res.locals.allowedTabs || [],
+            wireguard
+        });
+    } catch (error) {
+        res.status(500).send('WireGuard dashboard error');
+    }
+});
+
+app.get('/api/vpn/status', requireAuth, requireWireGuardRoot, async (req, res) => {
+    try {
+        res.set('Cache-Control', 'no-store');
+        res.json(await listWireGuardStatus());
+    } catch (error) {
+        res.status(503).json({ error: 'WireGuard status unavailable' });
+    }
+});
+
 // Page View route
 app.get('/gsm-dongles', async (req, res) => {
     try {
@@ -15317,7 +15377,7 @@ function updatePjsipCustomConfig(extNum, secret, displayName, action = 'create',
         'rtp_symmetric=yes',
         'disallow=all',
         'allow=opus,ulaw,alaw',
-        'rtp_timeout=30',
+        'rtp_timeout=360',
         'rtp_timeout_hold=60',
         'rtp_keepalive=5'
     ];
@@ -15873,7 +15933,7 @@ async function provisionExtension(payload = {}, options = {}) {
             [extNum, 'dtls_private_key', '/etc/asterisk/keys/asterisk.key', 18],
             [extNum, 'dtls_setup', 'actpass', 18],
             [extNum, 'dtls_verify', 'fingerprint', 18],
-            [extNum, 'rtp_timeout', '30', 18],
+            [extNum, 'rtp_timeout', '360', 18],
             [extNum, 'rtp_timeout_hold', '60', 18],
             [extNum, 'rtp_keepalive', '5', 18]
         );
@@ -16112,7 +16172,7 @@ app.put('/api/config/extensions/:extension', async (req, res) => {
                 ['dtls_private_key', '/etc/asterisk/keys/asterisk.key', 18],
                 ['dtls_setup', 'actpass', 18],
                 ['dtls_verify', 'fingerprint', 18],
-                ['rtp_timeout', '30', 18],
+                ['rtp_timeout', '360', 18],
                 ['rtp_timeout_hold', '60', 18],
                 ['rtp_keepalive', '5', 18]
             );

@@ -212,6 +212,8 @@ collect_extensions() {
 upsert_extension_settings() {
     local ext="$1"
     local sql=""
+    # Outbound WebRTC calls can ring up to the 300s dial timeout before media
+    # starts; a shorter RTP watchdog would tear the call down at answer time.
     while IFS='|' read -r keyword data flags; do
         sql+="INSERT INTO sip (id,keyword,data,flags) VALUES ('${ext}','${keyword}','${data}',${flags}) ON DUPLICATE KEY UPDATE data=VALUES(data),flags=VALUES(flags);"
     done <<'EOF'
@@ -234,7 +236,7 @@ remove_existing|no|18
 remove_unavailable|yes|18
 inband_progress|yes|18
 direct_media|no|18
-rtp_timeout|30|18
+rtp_timeout|360|18
 rtp_timeout_hold|60|18
 rtp_keepalive|5|18
 EOF
@@ -281,7 +283,7 @@ required_params = [
     'rtp_symmetric=yes',
     'disallow=all',
     'allow=opus,ulaw,alaw',
-    'rtp_timeout=30',
+    'rtp_timeout=360',
     'rtp_timeout_hold=60',
     'rtp_keepalive=5'
 ]

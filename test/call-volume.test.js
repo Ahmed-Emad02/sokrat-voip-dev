@@ -8,5 +8,7 @@ test('converts mic dB values to Asterisk linear factors', () => {
     assert.equal(dbToAsteriskVolume(0), 0);
     assert.equal(dbToAsteriskVolume(6), 1.9953);
     assert.equal(dbToAsteriskVolume(-6), -1.9953);
+    assert.equal(dbToAsteriskVolume(-30), -31.6228);
+    assert.equal(dbToAsteriskVolume(-99), -31.6228);
     assert.equal(dbToAsteriskVolume(99), 125.8925);
 });

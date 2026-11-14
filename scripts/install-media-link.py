@@ -3,6 +3,12 @@
 
 Used by both gateway and PBX installers. Does not accept paths, commands, routes
 or scripts from the caller. Must be promoted to a root-owned bundle before use.
+The bundle's optional ``transport`` selects the media path: absent/null keeps
+the legacy reverse-TLS FRP link, ``{'mode': 'direct-udp', 'host': ..., 'port':
+...}`` installs the gateway as the public UDP TLS server, and ``mode:
+'plain-udp'`` installs the HMAC-authenticated UDP daemon instead of OpenVPN.
+The effective choice is written to ``transport.json`` beside plan.json for
+operational inspection.
 No secret is printed. Does not alter FRP, Asterisk, TURN or existing call paths.
 """
 import argparse
@@ -11,12 +17,13 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import stat
 import subprocess
 import sys
 import tempfile
 
-from tunnel_media import link_script, media_config, validate_plan
+from tunnel_media import link_script, media_config, validate_plan, validate_transport
 
 ROOT = Path('/etc/sokrat/media')
 UNIT_ROOT = Path('/etc/systemd/system')
@@ -57,8 +64,19 @@ def write(path, data, mode):
     return True
 
 
+def openvpn_binary():
+    # Resolve the packaged binary for both the version probe and media unit.
+    for candidate in ('/usr/sbin/openvpn', '/usr/bin/openvpn', '/usr/local/sbin/openvpn'):
+        if os.access(candidate, os.X_OK):
+            return candidate
+    found = shutil.which('openvpn')
+    if found:
+        return found
+    raise ValueError('Supported OpenVPN package required')
+
+
 def version():
-    result = subprocess.run(['/usr/sbin/openvpn', '--version'], stdout=subprocess.PIPE,
+    result = subprocess.run([openvpn_binary(), '--version'], stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE, universal_newlines=True, timeout=10)
     text = result.stdout
     match = re.search(r'^OpenVPN (2)\.(\d+)', text)
@@ -67,7 +85,36 @@ def version():
     return tuple(map(int, match.groups()))
 
 
-def validate_material(material, plan, role):
+def link_daemon():
+    daemon = Path(__file__).absolute().with_name('udp-media-link.py')
+    try:
+        for parent in daemon.parents:
+            info = parent.lstat()
+            if (not stat.S_ISDIR(info.st_mode) or info.st_uid != 0
+                    or info.st_mode & 0o022):
+                raise ValueError('Trusted plain media daemon directory required')
+        info = daemon.lstat()
+    except FileNotFoundError:
+        raise ValueError('Trusted plain media daemon required') from None
+    if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022:
+        raise ValueError('Trusted plain media daemon required')
+    return daemon
+
+
+def validate_material(material, plan, role, transport=None):
+    validate_plan(plan)
+    if role not in ('gateway', 'pbx'):
+        raise ValueError('Invalid media role')
+    transport = validate_transport(transport, plan)
+    if transport is not None and transport['mode'] == 'plain-udp':
+        # One shared key, exact syntax, checked before any directory or unit
+        # change. Plain material must never be parsed as a certificate bundle.
+        if not isinstance(material, dict) or set(material) != {'udp.key'}:
+            raise ValueError('Invalid plain media material')
+        key = material['udp.key']
+        if not isinstance(key, str) or not re.fullmatch(r'[a-f0-9]{64}\n', key):
+            raise ValueError('Invalid plain media key')
+        return
     from cryptography import x509
     from cryptography.hazmat.primitives import serialization
     from cryptography.hazmat.primitives.asymmetric import ec
@@ -97,7 +144,10 @@ def validate_material(material, plan, role):
         raise ValueError('Mismatched media certificate')
     if cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value != plan['pbxId'] + '-' + role:
         raise ValueError('Wrong media identity')
-    usage = ExtendedKeyUsageOID.CLIENT_AUTH if role == 'gateway' else ExtendedKeyUsageOID.SERVER_AUTH
+    # The presented role follows the transport: direct-udp makes the gateway
+    # the TLS server, so a certificate from the other mode is refused here.
+    server = (role == 'gateway') == (transport is not None)
+    usage = ExtendedKeyUsageOID.SERVER_AUTH if server else ExtendedKeyUsageOID.CLIENT_AUTH
     if list(cert.extensions.get_extension_for_class(x509.ExtendedKeyUsage).value) != [usage]:
         raise ValueError('Wrong media certificate role')
     if not re.fullmatch(r'-----BEGIN OpenVPN Static key V1-----\n(?:[a-f0-9]{32}\n){16}-----END OpenVPN Static key V1-----\n', material['tls-crypt.key']):
@@ -108,11 +158,21 @@ def install(document, role, start=False):
     if os.geteuid() != 0:
         raise ValueError('Root is required')
     plan = validate_plan(document['plan'])
+    # Transport is checked before any directory, key, unit or service change.
+    transport = validate_transport(document.get('transport'), plan)
+    plain = transport is not None and transport['mode'] == 'plain-udp'
     material = document['material']
-    validate_material(material, plan, role)
-    config_version = version()
+    validate_material(material, plan, role, transport)
     directory = ROOT / plan['pbxId']
-    config = media_config(plan, role, str(directory), config_version)
+    daemon = link_daemon() if plain else None
+    # A plain host needs no OpenVPN package or version probe at all.
+    if plain:
+        config = media_config(plan, role, str(directory), transport=transport)
+        execute = f'{sys.executable} {daemon} --config {directory}/media.conf'
+    else:
+        binary = openvpn_binary()
+        config = media_config(plan, role, str(directory), version(), transport)
+        execute = f'{binary} --config {directory}/media.conf'
     private_directory(directory)
     private_directory(UNIT_ROOT)
     unit = UNIT_ROOT / ('sokrat-media-' + plan['pbxId'] + '.service')
@@ -125,14 +185,16 @@ def install(document, role, start=False):
     changed = write(directory / 'link-down', link_script(plan, role, False), 0o700) or changed
     changed = write(directory / 'media.conf', config, 0o600) or changed
     changed = write(directory / 'plan.json', json.dumps(plan, sort_keys=True) + '\n', 0o600) or changed
+    changed = write(directory / 'transport.json', json.dumps(transport, sort_keys=True) + '\n', 0o600) or changed
+    kind = 'plain UDP' if plain else ('direct UDP' if transport is not None else 'reverse TLS')
     content = MARKER + f'''[Unit]
-Description=Sokrat isolated reverse TLS media {plan['pbxId']}
+Description=Sokrat isolated {kind} media {plan['pbxId']}
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/sbin/openvpn --config {directory}/media.conf
+ExecStart={execute}
 Restart=on-failure
 RestartSec=3
 NoNewPrivileges=true
@@ -155,7 +217,8 @@ WantedBy=multi-user.target
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         subprocess.run(['systemctl', 'restart' if changed else 'start', unit.name],
                        check=True, timeout=30)
-    return {'pbxId': plan['pbxId'], 'role': role, 'configured': True, 'started': start}
+    return {'pbxId': plan['pbxId'], 'role': role, 'configured': True,
+            'started': start, 'transport': transport}
 
 
 def main():

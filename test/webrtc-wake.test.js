@@ -228,7 +228,7 @@ class Reply:
 def opener(request,**kwargs):
  calls.append((request,kwargs));return Reply()
 args=['404','%2B442012345678','Caller%20Name','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa']
-with mock.patch.object(ssl,'create_default_context',return_value='pinned-context') as tls:
+with mock.patch.object(ssl,'create_default_context',return_value='pinned-context') as tls, mock.patch.object(wake,'read_config',side_effect=RuntimeError('no local config')):
  for result,expected in [({'status':'dispatched','count':1},True),({'status':'partial','count':1},True),({'status':'dispatched','count':0},False),({'status':'dispatched','count':True},False),({'status':'already_connected','count':0},False)]:
   assert wake.dispatch(config,args,opener)==expected
  request,options=calls[0]
@@ -289,7 +289,7 @@ class Reply:
  def __exit__(self,*args):pass
 def opener(request,**kwargs):
  calls.append((request,kwargs));return Reply()
-with mock.patch.object(ssl,'create_default_context',return_value='pinned-context') as tls:
+with mock.patch.object(ssl,'create_default_context',return_value='pinned-context') as tls, mock.patch.object(wake,'read_config',side_effect=RuntimeError('no local config')):
  assert wake.cancel(config,['223',call_id],opener)==True
  request,options=calls[0]
  assert options=={'timeout':3,'context':'pinned-context'}
@@ -319,7 +319,7 @@ class Reply500:
  def __exit__(self,*args):pass
 def opener_500(request,**kwargs):return Reply500()
 def opener_err(request,**kwargs):raise ConnectionError('network down')
-with mock.patch.object(ssl,'create_default_context',return_value='ctx'):
+with mock.patch.object(ssl,'create_default_context',return_value='ctx'), mock.patch.object(wake,'read_config',side_effect=RuntimeError('no local config')):
  assert wake.cancel(config,['223',valid_id],opener_500)==False
  assert wake.cancel(config,['223',valid_id],opener_err)==False
  assert wake.cancel(config,['223','not-a-uuid'])==False
@@ -328,6 +328,33 @@ with mock.patch.object(ssl,'create_default_context',return_value='ctx'):
  assert wake.cancel(dict(config,gatewayUrl='http://gateway.example'),['223',valid_id])==False
  assert wake.cancel(config,[])==False
  assert wake.cancel(config,['only-one'])==False
+print('PASS')
+`;
+    const result = spawnSync('python3', ['-c', script], { encoding: 'utf8', env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' } });
+    assert.equal(result.status, 0, result.stderr);
+});
+
+test('dispatcher reaches loopback when central config is unavailable and cancels through every configured gateway', () => {
+    const script = `import importlib.util,json,ssl,unittest.mock as mock
+spec=importlib.util.spec_from_file_location('wake',${JSON.stringify(path.join(root, 'scripts/webrtc-wake-dispatch.py'))})
+wake=importlib.util.module_from_spec(spec);spec.loader.exec_module(wake)
+local={'gatewayUrl':'http://127.0.0.1:18080','pbxId':'pbx_'+'a'*16,'token':'a'*64}
+central=dict(local,gatewayUrl='https://central.example:7443',caFile='/etc/frp/gateway-ca.crt')
+calls=[]
+class Reply:
+ status=200
+ def __enter__(self):return self
+ def __exit__(self,*args):pass
+ def read(self,size):return json.dumps({'status':'dispatched','count':1}).encode()
+def opener(request,**kwargs):
+ calls.append(request.full_url);return Reply()
+args=['404','Caller','Name','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa']
+with mock.patch.object(wake,'read_config',return_value=local), mock.patch.object(ssl,'create_default_context',return_value='pinned-context'):
+ assert wake.dispatch(None,args,opener) is True
+ assert calls==['http://127.0.0.1:18080/api/gateway/incoming-call'],calls
+ calls.clear()
+ assert wake.cancel(central,['404',args[3]],opener) is True
+ assert calls==['https://central.example:7443/api/gateway/cancel-call','http://127.0.0.1:18080/api/gateway/cancel-call'],calls
 print('PASS')
 `;
     const result = spawnSync('python3', ['-c', script], { encoding: 'utf8', env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' } });

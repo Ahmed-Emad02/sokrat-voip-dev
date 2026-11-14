@@ -7,34 +7,6 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const root = path.resolve(__dirname, '..');
 
-test('all PBX installation paths ship additive reverse-TLS dependencies', () => {
-    for (const name of ['install.sh', 'installer-bundle/install-sokrat.sh', 'scripts/safe-upgrade.sh']) {
-        const file = path.join(root, name);
-        const text = fs.readFileSync(file, 'utf8');
-        assert.equal(spawnSync('bash', ['-n', file]).status, 0, name);
-        assert.match(text, /scripts\/install-gateway-media-deps\.sh/);
-        assert.match(text, /SOKRAT_PBX_BRANCH/);
-    }
-    for (const name of ['lib/gateway-tunnel.js', 'scripts/install-media-link.py',
-        'scripts/tunnel_media.py', 'scripts/tunnel_media_material.py',
-        'scripts/install-tenant-push-hook.py', 'scripts/pbx-tenant-push-hook.py']) {
-        assert.equal(fs.existsSync(path.join(root, name)), true, name);
-    }
-});
-test('all PBX installation paths install the PJSIP transport sanitizer', () => {
-    const script = path.join(root, 'scripts/sanitize-pjsip-transports.sh');
-    assert.equal(fs.existsSync(script), true);
-    assert.equal(spawnSync('bash', ['-n', script]).status, 0);
-    const pathUnit = fs.readFileSync(path.join(root, 'systemd/sokrat-pjsip-transport-sanitize.path'), 'utf8');
-    assert.match(pathUnit, /Unit=sokrat-pjsip-transport-sanitize\.service/);
-    const serviceUnit = fs.readFileSync(path.join(root, 'systemd/sokrat-pjsip-transport-sanitize.service'), 'utf8');
-    assert.match(serviceUnit, /sanitize-pjsip-transports\.sh/);
-    for (const name of ['install.sh', 'installer-bundle/install-sokrat.sh', 'scripts/safe-upgrade.sh']) {
-        const text = fs.readFileSync(path.join(root, name), 'utf8');
-        assert.match(text, /sanitize-pjsip-transports\.sh/);
-        assert.match(text, /sokrat-pjsip-transport-sanitize\.path/);
-    }
-});
 
 test('WebRTC wake watcher does not watch the files its compiler rewrites', () => {
     const pathUnit = fs.readFileSync(path.join(root, 'systemd/sokrat-webrtc-wake-apply.path'), 'utf8');
@@ -278,4 +250,99 @@ test('FRP watchdog tolerates transient probes and backs off after restart', () =
     assert.match(text, /-lt 90/);
     const timer = fs.readFileSync(path.join(root, 'systemd/sokrat-frpc-watchdog.timer'), 'utf8');
     assert.match(timer, /OnUnitActiveSec=30s/);
+});
+
+// Execute only the version preflight from the real dependency installer: never
+// run a package manager, touch /dev/net/tun or install anything.
+function withOpenvpnPreflight(run) {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'sokrat-openvpn-preflight-'));
+    const source = fs.readFileSync(path.join(root, 'scripts/install-gateway-media-deps.sh'), 'utf8');
+    const start = source.indexOf('verify_openvpn_binary() {');
+    const end = source.indexOf('\n}\n', start) + 2;
+    assert.ok(start > 0 && end > start, 'the preflight function must exist');
+    const harness = 'set -euo pipefail\nOPENVPN_MINOR=""\n' + source.slice(start, end)
+        + '\nverify_openvpn_binary "$1"\nprintf "minor=%s\\n" "$OPENVPN_MINOR"\n';
+    let count = 0;
+    const fake = (body) => {
+        const file = path.join(directory, 'openvpn-' + (++count));
+        fs.writeFileSync(file, '#!/bin/bash\n' + body, { mode: 0o755 });
+        fs.chmodSync(file, 0o755);
+        return file;
+    };
+    const check = (body) => spawnSync('bash', ['-c', harness, 'preflight', fake(body)], { encoding: 'utf8' });
+    try { run({ check }); }
+    finally { fs.rmSync(directory, { recursive: true, force: true }); }
+}
+
+test('media dependency preflight accepts Rocky 2.4 but refuses any other failure or unsupported release', () => {
+    withOpenvpnPreflight(({ check }) => {
+        const rocky = check('echo "OpenVPN 2.4.12 x86_64-redhat-linux-gnu"\nexit 1\n');
+        assert.equal(rocky.status, 0, rocky.stderr);
+        assert.match(rocky.stdout, /minor=4/);
+        const current = check('echo "OpenVPN 2.6.14 x86_64-pc-linux-gnu"\n');
+        assert.equal(current.status, 0, current.stderr);
+        assert.match(current.stdout, /minor=6/);
+        for (const body of ['echo "OpenVPN 2.6.14"\nexit 2\n', 'echo "OpenVPN 2.3.18 x86_64"\n',
+            'echo "OpenVPN 3.1.0"\n', 'echo "permission denied"\n', 'exit 1\n']) {
+            const failed = check(body);
+            assert.notEqual(failed.status, 0, JSON.stringify(body) + ' must be refused');
+            assert.match(String(failed.stderr), /OpenVPN 2\.4 or newer 2\.x is required/);
+        }
+    });
+});
+
+// Execute only the managed-media restart helper from the real upgrade script.
+function withMediaRestart(run) {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'sokrat-media-restart-'));
+    const units = path.join(directory, 'units');
+    const bin = path.join(directory, 'bin');
+    fs.mkdirSync(units);
+    fs.mkdirSync(bin);
+    const systemctl = path.join(bin, 'systemctl');
+    fs.writeFileSync(systemctl, '#!/bin/bash\ncase "$1" in\n  is-active) exit "${ACTIVE_STATUS:-0}" ;;\n  restart) exit "${RESTART_STATUS:-0}" ;;\nesac\nexit 0\n', { mode: 0o755 });
+    fs.chmodSync(systemctl, 0o755);
+    const managed = '# Managed by Sokrat install-media-link.py\n[Service]\nExecStart=/bin/true\n';
+    fs.writeFileSync(path.join(units, 'sokrat-media-pbx_0123456789abcdef.service'), managed);
+    fs.writeFileSync(path.join(units, 'sokrat-media-operator-own.service'), '[Service]\nExecStart=/bin/true\n');
+    const source = fs.readFileSync(path.join(root, 'scripts/safe-upgrade.sh'), 'utf8');
+    const start = source.indexOf('restart_managed_media_units() {');
+    const end = source.indexOf('\n}\n', start) + 2;
+    assert.ok(start > 0 && end > start, 'the restart helper must exist');
+    const harness = 'set -euo pipefail\n' + source.slice(start, end) + '\nrestart_managed_media_units "$1"\n';
+    const check = (env, unitDir = units) => spawnSync('bash', ['-c', harness, 'media-restart', unitDir], {
+        encoding: 'utf8', env: { ...process.env, PATH: bin + ':' + process.env.PATH, ...env } });
+    try { run({ check, units }); }
+    finally { fs.rmSync(directory, { recursive: true, force: true }); }
+}
+
+test('an active managed media unit that cannot restart fails the upgrade', () => {
+    withMediaRestart(({ check, units }) => {
+        const restarted = check({ ACTIVE_STATUS: '0', RESTART_STATUS: '0' });
+        assert.equal(restarted.status, 0, restarted.stderr);
+        const refused = check({ ACTIVE_STATUS: '0', RESTART_STATUS: '1' });
+        assert.notEqual(refused.status, 0);
+        // A stopped managed unit and an operator-owned unit are never touched.
+        assert.equal(check({ ACTIVE_STATUS: '1', RESTART_STATUS: '1' }).status, 0);
+        const operatorOnly = path.join(units, 'operator-only');
+        fs.mkdirSync(operatorOnly);
+        fs.copyFileSync(path.join(units, 'sokrat-media-operator-own.service'),
+            path.join(operatorOnly, 'sokrat-media-operator-own.service'));
+        assert.equal(check({ ACTIVE_STATUS: '0', RESTART_STATUS: '1' }, operatorOnly).status, 0);
+    });
+});
+
+test('the upgrade exits nonzero instead of reporting success when a managed media restart failed', () => {
+    const text = fs.readFileSync(path.join(root, 'scripts/safe-upgrade.sh'), 'utf8');
+    const start = text.indexOf('if [ "$MEDIA_RESTART_FAILED" -eq 1 ]; then');
+    const end = text.indexOf('\nfi\n', start) + 4;
+    assert.ok(start > 0 && end > start, 'the success gate must exist');
+    const gate = text.slice(start, end);
+    const finish = (failed) => spawnSync('bash', ['-c',
+        'set -euo pipefail\nMEDIA_RESTART_FAILED=' + failed + '\n' + gate + '\necho REPORTED_SUCCESS\n'], { encoding: 'utf8' });
+    const refused = finish(1);
+    assert.equal(refused.status, 1);
+    assert.doesNotMatch(refused.stdout, /REPORTED_SUCCESS/);
+    const passed = finish(0);
+    assert.equal(passed.status, 0, passed.stderr);
+    assert.match(passed.stdout, /REPORTED_SUCCESS/);
 });

@@ -63,6 +63,9 @@ test('FRPC always verifies pinned TLS and creates exactly three scoped loopback 
     assert.match(config,/transport.tls.serverName = "gateway.example.test"/);
     assert.equal((config.match(/\[\[proxies\]\]/g)||[]).length,3);
     assert.equal((config.match(/localIP = "127.0.0.1"/g)||[]).length,3);
+    for (const block of config.split('[[proxies]]').slice(1)) {
+        assert.match(block, /type = "tcp"/);
+    }
     assert.doesNotMatch(config,/rejectUnauthorized|insecure|tailscale|zerotier/i);
 });
 
@@ -82,4 +85,79 @@ test('OpenVPN preflight accepts Rocky 2.4 version exit 1, but not failed or unsu
         { status: 1, signal: 'SIGTERM', stdout: 'OpenVPN 2.6.14' }]) {
         assert.throws(() => tunnel.verifyOpenvpn(result), /Supported OpenVPN/);
     }
+});
+
+test('direct media transport pins the pairing host and validates its explicit UDP port', () => {
+    const direct = { mode: 'direct-udp', host: code.host, port: 26154 };
+    assert.doesNotThrow(() => tunnel.validateResponse({ ...result, mediaTransport: direct }, code, installation));
+    const bad = [null, 'direct-udp', [], {},
+        { mode: 'legacy', host: code.host, port: 26003 },
+        { mode: 'direct-udp', host: 'other.example.test', port: 26003 },
+        { mode: 'direct-udp', host: code.host + ' ', port: 26003 },
+        { mode: 'direct-udp', host: 'gateway;reboot', port: 26003 },
+        { mode: 'direct-udp', host: code.host, port: 1023 },
+        { mode: 'direct-udp', host: code.host, port: 65536 },
+        { mode: 'direct-udp', host: code.host, port: String(26003) },
+        { mode: 'direct-udp', host: code.host, port: true },
+        { mode: 'direct-udp', host: code.host, port: 26003, ttl: 64 }];
+    for (const mediaTransport of bad) {
+        assert.throws(() => tunnel.validateResponse({ ...result, mediaTransport }, code, installation),
+            /Invalid gateway media transport/);
+    }
+});
+
+test('FRPC omits only the media proxy for an explicit direct UDP link', () => {
+    const legacy = tunnel.frpcConfig(result, installation);
+    const mediaBlock = '\n[[proxies]]\nname = "media"';
+    const at = legacy.indexOf(mediaBlock);
+    assert.ok(at > 0, 'legacy layout still carries the media proxy');
+    assert.equal((legacy.match(/\[\[proxies\]\]/g) || []).length, 3);
+    const direct = tunnel.frpcConfig({ ...result, mediaTransport: { mode: 'direct-udp', host: code.host, port: 26003 } }, installation);
+    assert.equal(direct, legacy.slice(0, at), 'WS/API proxies and pinned TLS are byte-identical');
+    assert.equal((direct.match(/\[\[proxies\]\]/g) || []).length, 2);
+    assert.doesNotMatch(direct, /name = "media"/);
+    for (const name of ['ws', 'api']) assert.match(direct, new RegExp(`name = "${name}"`));
+});
+
+test('a direct media installation cannot be reenrolled back onto legacy FRP media', () => {
+    const direct = { mode: 'direct-udp', host: code.host, port: 26003 };
+    assert.equal(tunnel.trustedTransport(null, result), null);
+    assert.equal(tunnel.trustedTransport({ pbxId: result.pbxId }, result), null);
+    const withMedia = { ...result, mediaTransport: direct };
+    assert.deepEqual(tunnel.trustedTransport(null, withMedia), direct);
+    assert.deepEqual(tunnel.trustedTransport({ pbxId: result.pbxId, mediaTransport: direct }, withMedia), direct);
+    assert.throws(() => tunnel.trustedTransport({ pbxId: result.pbxId, mediaTransport: direct }, result),
+        /direct media transport; re-enrollment must keep it/);
+});
+
+test('plain UDP is an approved direct media mode with the same pinned endpoint', () => {
+    const plain = { mode: 'plain-udp', host: code.host, port: 26154 };
+    assert.doesNotThrow(() => tunnel.validateResponse({ ...result, mediaTransport: plain }, code, installation));
+    for (const mediaTransport of [{ mode: 'plain-upd', host: code.host, port: 26003 },
+        { mode: 'Plain-udp', host: code.host, port: 26003 },
+        { mode: 'plain-udp', host: 'other.example.test', port: 26003 },
+        { mode: 'plain-udp', host: code.host, port: 1023 },
+        { mode: 'plain-udp', host: code.host, port: 26003, key: 'x' }]) {
+        assert.throws(() => tunnel.validateResponse({ ...result, mediaTransport }, code, installation),
+            /Invalid gateway media transport/);
+    }
+});
+
+test('FRPC omits the media proxy for plain UDP and keeps the plain downgrade guard', () => {
+    const plain = { mode: 'plain-udp', host: code.host, port: 26003 };
+    const legacy = tunnel.frpcConfig(result, installation);
+    const direct = tunnel.frpcConfig({ ...result, mediaTransport: plain }, installation);
+    assert.equal(direct, legacy.slice(0, legacy.indexOf('\n[[proxies]]\nname = "media"')));
+    assert.equal((direct.match(/\[\[proxies\]\]/g) || []).length, 2);
+    assert.doesNotMatch(direct, /name = "media"/);
+    assert.deepEqual(tunnel.trustedTransport(null, { ...result, mediaTransport: plain }), plain);
+    assert.throws(() => tunnel.trustedTransport({ pbxId: result.pbxId, mediaTransport: plain }, result),
+        /direct media transport; re-enrollment must keep it/);
+});
+
+test('only an OpenVPN-backed transport requires the OpenVPN preflight', () => {
+    assert.equal(tunnel.requiresOpenvpn(null), true); // legacy reverse-TLS media
+    assert.equal(tunnel.requiresOpenvpn(undefined), true);
+    assert.equal(tunnel.requiresOpenvpn({ mode: 'direct-udp', host: code.host, port: 26003 }), true);
+    assert.equal(tunnel.requiresOpenvpn({ mode: 'plain-udp', host: code.host, port: 26154 }), false);
 });

@@ -752,35 +752,27 @@ echo "  Database schema migrations complete. All PBX and CDR data preserved."
 
 # 4. Rebuild & Patch chan_dongle Module
 echo "[4/7] Applying Asterisk / chan_dongle stability patches (Call Waiting rejection, CRING detection, 20ms audio framing, modem pacing, and SMS/PDU memory safety)..."
+DONGLE_HELPER="$INSTALL_DIR/scripts/dongle-module.sh"
+if [ ! -f "$DONGLE_HELPER" ] && [ -f "$(dirname "$0")/dongle-module.sh" ]; then
+    DONGLE_HELPER="$(dirname "$0")/dongle-module.sh"
+fi
+if [ ! -f "$DONGLE_HELPER" ]; then
+    echo "ERROR: Missing shared dongle module installer: $DONGLE_HELPER" >&2
+    exit 1
+fi
+# shellcheck source=scripts/dongle-module.sh
+. "$DONGLE_HELPER"
+dongle_module_require_idle || exit 1
 if [ -f "$INSTALL_DIR/installer-bundle/binaries/chan_dongle.so" ]; then
-    mkdir -p "$MODULES_DIR"
-    if [ ! -f "$MODULES_DIR/chan_dongle.so" ] || ! cmp -s "$INSTALL_DIR/installer-bundle/binaries/chan_dongle.so" "$MODULES_DIR/chan_dongle.so"; then
-        cp "$INSTALL_DIR/installer-bundle/binaries/chan_dongle.so" "$MODULES_DIR/chan_dongle.so.tmp"
-        chmod 644 "$MODULES_DIR/chan_dongle.so.tmp"
-        mv -f "$MODULES_DIR/chan_dongle.so.tmp" "$MODULES_DIR/chan_dongle.so"
-        echo "  Hardened chan_dongle.so installed from bundle binary into $MODULES_DIR (atomic update)"
-    else
-        echo "  Hardened chan_dongle.so already matches bundle binary in $MODULES_DIR (preserved live inode)"
-    fi
+    dongle_module_install_bundle "$INSTALL_DIR/installer-bundle/binaries/chan_dongle.so" "$MODULES_DIR"
 elif [ -d "$SRC_CHAN_DONGLE" ] && [ -f "$INSTALL_DIR/asterisk/chan_dongle.patch" ]; then
-    cd "$SRC_CHAN_DONGLE"
-    git reset --hard HEAD >/dev/null 2>&1 || true
-    git clean -fd >/dev/null 2>&1 || true
-    patch -p1 < "$INSTALL_DIR/asterisk/chan_dongle.patch"
-    ./bootstrap 2>/dev/null || true
-    ./configure --with-astversion=18.19.0 >/dev/null 2>&1 || ./configure >/dev/null 2>&1
-    make clean >/dev/null 2>&1
-    make -j"$(nproc 2>/dev/null || echo 1)" >/dev/null 2>&1
-    if [ -f chan_dongle.so ]; then
-        if [ ! -f "$MODULES_DIR/chan_dongle.so" ] || ! cmp -s chan_dongle.so "$MODULES_DIR/chan_dongle.so"; then
-            cp chan_dongle.so "$MODULES_DIR/chan_dongle.so.tmp"
-            chmod 644 "$MODULES_DIR/chan_dongle.so.tmp"
-            mv -f "$MODULES_DIR/chan_dongle.so.tmp" "$MODULES_DIR/chan_dongle.so"
-            echo "  Patched chan_dongle.so built and installed into $MODULES_DIR (atomic update)"
-        else
-            echo "  Patched chan_dongle.so already matches built binary in $MODULES_DIR (preserved live inode)"
-        fi
-    fi
+    DONGLE_ORIGIN=$(dongle_module_source_origin "$SRC_CHAN_DONGLE")
+    dongle_module_build_source "$DONGLE_ORIGIN" "$SOKRAT_CHAN_DONGLE_COMMIT" "$INSTALL_DIR/asterisk/chan_dongle.patch" "$INSTALL_DIR/asterisk/dongle_rx_condition.h" "$MODULES_DIR" 18.19.0
+elif [ ! -f "$MODULES_DIR/chan_dongle.so" ]; then
+    echo "  ERROR: No bundled chan_dongle.so, no buildable source tree, and no installed module" >&2
+    exit 1
+else
+    echo "  WARNING: No bundled or buildable chan_dongle.so; existing module left untouched"
 fi
 
 if [ -f "$INSTALL_DIR/installer-bundle/binaries/func_rnnoise.so" ]; then
@@ -1675,6 +1667,24 @@ REPOEOF
 }
 install_overlay_vpn_clients
 
+# [10w] Embedded WireGuard server for the Sokrat mobile direct-PBX path.
+# Upgraded hosts must reach the same state as a fresh install: without
+# /etc/sokrat/wg-admission.json the gateway's admission calls fail with 503 and
+# the direct path never works. Additive only - an existing wg0.conf, key,
+# admission token and firewall layout are preserved.
+echo "  [10w] Configuring embedded WireGuard server..."
+WIREGUARD_HELPER="$INSTALL_DIR/scripts/wireguard-server.sh"
+if [ ! -f "$WIREGUARD_HELPER" ] && [ -n "${SELF_PATH:-}" ] && [ -f "$(dirname "$SELF_PATH")/wireguard-server.sh" ]; then
+    WIREGUARD_HELPER="$(dirname "$SELF_PATH")/wireguard-server.sh"
+fi
+if [ ! -f "$WIREGUARD_HELPER" ]; then
+    echo "  ERROR: Missing shared WireGuard server setup: $WIREGUARD_HELPER" >&2
+    exit 1
+fi
+# shellcheck source=scripts/wireguard-server.sh
+. "$WIREGUARD_HELPER"
+install_wireguard_server
+
 # [10y] NetworkManager - the GUI network manager changes the DHCP / static
 # state of the physical interfaces with nmcli, so NetworkManager has to be
 # installed and running.
@@ -1735,17 +1745,54 @@ echo "  WARNING: the host firewall is off - every port is exposed to the network
 
 # 6. Reload Asterisk Modules & Sokrat Daemons
 echo "[6/7] Refreshing Asterisk modules and restarting Sokrat services..."
+dongle_module_require_idle || exit 1
 if command -v systemctl &>/dev/null && systemctl is-active asterisk >/dev/null 2>&1; then
     echo "  Restarting Asterisk service to reload shared driver libraries..."
     systemctl restart asterisk
     sleep 2
 elif command -v asterisk &>/dev/null && pgrep -x asterisk >/dev/null 2>&1; then
     asterisk -rx "module unload chan_dongle.so" >/dev/null 2>&1 || true
+    dongle_module_wait_stopped 10 || {
+        echo "  ERROR: chan_dongle.so did not unload; refusing to claim a reload" >&2
+        exit 1
+    }
     asterisk -rx "module unload func_rnnoise.so" >/dev/null 2>&1 || true
     sleep 1
-    asterisk -rx "module load chan_dongle.so" >/dev/null 2>&1 || true
+    asterisk -rx "module load chan_dongle.so" >/dev/null 2>&1 || {
+        echo "  ERROR: chan_dongle.so failed to load" >&2
+        exit 1
+    }
     asterisk -rx "module load func_rnnoise.so" >/dev/null 2>&1 || true
 fi
+dongle_module_wait_running 20 || {
+    echo "  ERROR: chan_dongle.so is not running after the reload" >&2
+    exit 1
+}
+
+# The media helper scripts are part of the code that was just updated. Restart
+# only the Sokrat-managed media units so an already paired PBX runs the new
+# helper after the upgrade. The unit file, transport.json, plan, keys and
+# credentials are not rewritten, and stopped or unmanaged units are left alone.
+# An active managed unit that cannot restart leaves that PBX without media, so
+# it is reported as a failure and the upgrade must not claim success.
+restart_managed_media_units() {
+    local unit_dir="$1" media_unit media_unit_name failed=0
+    for media_unit in "$unit_dir"/sokrat-media-*.service; do
+        [ -f "$media_unit" ] || continue
+        grep -q '^# Managed by Sokrat install-media-link.py' "$media_unit" 2>/dev/null || continue
+        media_unit_name=$(basename "$media_unit" .service)
+        systemctl is-active --quiet "$media_unit_name" 2>/dev/null || continue
+        if systemctl restart "$media_unit_name" >/dev/null 2>&1; then
+            echo "  $media_unit_name restarted with the upgraded media helper"
+        else
+            echo "  ERROR: $media_unit_name did not restart; its saved transport and credentials were not changed" >&2
+            failed=1
+        fi
+    done
+    return "$failed"
+}
+MEDIA_RESTART_FAILED=0
+restart_managed_media_units /etc/systemd/system || MEDIA_RESTART_FAILED=1
 
 # Decommission obsolete local whisper service and files
 if systemctl is-active --quiet sokrat-whisper.service 2>/dev/null; then
@@ -1857,6 +1904,13 @@ else
     echo "  Peer panel reverse proxy: module missing"
 fi
 
+if [ "$MEDIA_RESTART_FAILED" -eq 1 ]; then
+    echo "========================================================"
+    echo " ❌ Safe upgrade completed with errors: a managed media service did not restart." >&2
+    echo "    Media for that gateway stays offline until the unit is repaired." >&2
+    echo "========================================================"
+    exit 1
+fi
 echo "========================================================"
 echo " ✅ Safe upgrade completed successfully!"
 echo "========================================================"

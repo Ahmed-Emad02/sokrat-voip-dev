@@ -808,17 +808,18 @@ diff --git a/channel.c b/channel.c
 index 3cb2815..da1b23a 100644
 --- a/channel.c
 +++ b/channel.c
-@@ -17,6 +17,9 @@
+@@ -17,6 +17,10 @@
  #include <asterisk/musiconhold.h>		/* ast_moh_start() ast_moh_stop() */
  #include <asterisk/lock.h>			/* AST_MUTEX_DEFINE_STATIC */
  #include <asterisk/timing.h>			/* ast_timer_fd() ast_timer_set_rate() ast_timer_ack() */
 +#include <unistd.h>
 +#include <fcntl.h>
 +#include <termios.h>
++#include "dongle_rx_condition.h"
  
  #include "ast_compat.h"
  #if ASTERISK_VERSION_NUM >= 130000 /* 13+ */
-@@ -260,6 +263,14 @@ static int channel_call(struct ast_channel* channel, char* dest, attribute_unuse
+@@ -260,6 +264,14 @@ static int channel_call(struct ast_channel* channel, char* dest, attribute_unuse
  		ast_log (LOG_ERROR, "[%s] Error device already in use or uninitialized\n", PVT_ID(pvt));
  		return -1;
  	}
@@ -833,7 +834,7 @@ index 3cb2815..da1b23a 100644
  	CPVT_SET_FLAGS(cpvt, opts);
  
  	ast_debug (1, "[%s] Calling %s on %s\n", PVT_ID(pvt), dest, ast_channel_name(channel));
-@@ -338,7 +349,7 @@ static void activate_call(struct cpvt* cpvt)
+@@ -338,7 +350,7 @@ static void activate_call(struct cpvt* cpvt)
  			if(cpvt2->channel)
  			{
  				ast_channel_set_fd (cpvt2->channel, 1, -1);
@@ -842,7 +843,7 @@ index 3cb2815..da1b23a 100644
  				{
  					ast_channel_set_fd (cpvt2->channel, 0, cpvt2->rd_pipe[PIPE_READ]);
  					ast_debug (6, "[%s] call idx %d still active fd %d\n", PVT_ID(pvt), cpvt2->call_idx, cpvt2->rd_pipe[PIPE_READ]);
-@@ -359,6 +370,24 @@ static void activate_call(struct cpvt* cpvt)
+@@ -359,6 +371,24 @@ static void activate_call(struct cpvt* cpvt)
  
  	if (pvt->audio_fd >= 0)
  	{
@@ -867,14 +868,13 @@ index 3cb2815..da1b23a 100644
  		CPVT_SET_FLAGS(cpvt, CALL_FLAG_ACTIVATED | CALL_FLAG_MASTER);
  		if(cpvt->channel)
  		{
-@@ -374,6 +403,10 @@ static void activate_call(struct cpvt* cpvt)
+@@ -374,6 +404,9 @@ static void activate_call(struct cpvt* cpvt)
  		if(pvt->dsp)
  			ast_dsp_digitreset(pvt->dsp);
  		pvt->dtmf_digit = 0;
 +		/* Inbound only: mark answer instant for the RX gate. Outbound keeps
 +		 * a zero timeval so a remote greeting is never clipped. */
 +		cpvt->answer_time = (cpvt->dir == CALL_DIR_INCOMING) ? ast_tvnow() : ast_tv(0, 0);
-+		cpvt->env_peak = 200;
  		ast_debug (6, "[%s] call idx %d was master\n", PVT_ID(pvt), cpvt->call_idx);
  	}
  }
@@ -1081,90 +1081,22 @@ index 3cb2815..da1b23a 100644
  
  		if(CPVT_IS_MASTER(cpvt))
  		{
-@@ -785,6 +892,82 @@ static struct ast_frame* channel_read (struct ast_channel* channel)
+@@ -785,6 +892,14 @@ static struct ast_frame* channel_read (struct ast_channel* channel)
  			}
  		}
  
-+		/* Sokrat: inbound answer-phase RX conditioning (2 s mute) , applied BEFORE rxgain.
-+		 *
-+		 * Carriers cut the ringback tone the moment the call is answered and
-+		 * deliver a short, extremely loud burst (raw peak ~8000 vs normal
-+		 * speech under 3000). Amplified by rxgain and again by MixMonitor it
-+		 * hard-clipped into a buzzing square wave.
-+		 *
-+		 * 1) Blank RX for the first 1300 ms after answer (the burst window is
-+		 *    0.5-1.1 s), ending with a 20 ms fade so there is no audible swell.
-+		 * 2) Time-independent level gate: zero any frame that is both
-+		 *    absolutely loud and far above the running envelope.
-+		 * 3) Soft-knee limiter as a final safety net. Speech below the knee is
-+		 *    bit-identical and keeps its full configured gain.
-+		 */
++		/* Restrict frame muting to the bounded inbound answer interval. */
 +		if (f->frametype == AST_FRAME_VOICE && f->samples > 0 && f->data.ptr)
 +		{
-+			const int knee = 5000;
-+			const long gate_ms = 2100;
-+			short *sp = (short *) f->data.ptr;
-+			int i;
-+			int peak = 0;
-+
-+			for (i = 0; i < f->samples; i++)
-+			{
-+				int a = sp[i] < 0 ? -sp[i] : sp[i];
-+				if (a > peak) peak = a;
-+			}
-+
-+			if (!ast_tvzero(cpvt->answer_time))
-+			{
-+				long elapsed = ast_tvdiff_ms(ast_tvnow(), cpvt->answer_time);
-+
-+				if (elapsed < gate_ms)
-+				{
-+					int gain_pct = 0;
-+
-+					if (elapsed > gate_ms - 20)
-+						gain_pct = (int)((elapsed - (gate_ms - 20)) * 100 / 20);
-+
-+					peak = 0;
-+					for (i = 0; i < f->samples; i++)
-+					{
-+						int a;
-+						if (gain_pct <= 0)
-+							sp[i] = 0;
-+						else
-+							sp[i] = (short)(((int)sp[i] * gain_pct) / 100);
-+						a = sp[i] < 0 ? -sp[i] : sp[i];
-+						if (a > peak) peak = a;
-+					}
-+				}
-+			}
-+
-+			if (peak > 4500 && peak > cpvt->env_peak * 6)
-+			{
-+				memset(sp, 0, f->samples * sizeof(short));
-+			}
-+			else
-+			{
-+				cpvt->env_peak = (cpvt->env_peak * 31 + peak) / 32;
-+				if (cpvt->env_peak < 200) cpvt->env_peak = 200;
-+			}
-+
-+			for (i = 0; i < f->samples; i++)
-+			{
-+				int v = sp[i];
-+				int a = (v < 0) ? -v : v;
-+
-+				if (a > knee)
-+				{
-+					int nv = knee + ((a - knee) * knee) / a;
-+					sp[i] = (short)((v < 0) ? -nv : nv);
-+				}
-+			}
++			long elapsed = ast_tvzero(cpvt->answer_time) ? -1 :
++				ast_tvdiff_ms(ast_tvnow(), cpvt->answer_time);
++			sokrat_condition_rx((short *) f->data.ptr, (size_t) f->samples, elapsed);
 +		}
 +
  		if (CONF_SHARED(pvt, rxgain) && f->frametype == AST_FRAME_VOICE)
  		{
  			if (ast_frame_adjust_volume (f, CONF_SHARED(pvt, rxgain)) == -1)
-@@ -829,10 +1012,24 @@ static int channel_write (struct ast_channel* channel, struct ast_frame* f)
+@@ -829,10 +944,24 @@ static int channel_write (struct ast_channel* channel, struct ast_frame* f)
  	}
  
  	/* TODO: write silence better ? */
@@ -1191,7 +1123,7 @@ index 3cb2815..da1b23a 100644
  
  	pvt = cpvt->pvt;
  
-@@ -843,6 +1040,12 @@ static int channel_write (struct ast_channel* channel, struct ast_frame* f)
+@@ -843,6 +972,12 @@ static int channel_write (struct ast_channel* channel, struct ast_frame* f)
  		CHANNEL_DEADLOCK_AVOIDANCE (channel);
  	}
  
@@ -1204,7 +1136,7 @@ index 3cb2815..da1b23a 100644
  	if(!CPVT_IS_ACTIVE(cpvt))
  		goto e_return;
  
-@@ -998,6 +1201,18 @@ static int channel_fixup (struct ast_channel* oldchannel, struct ast_channel* ne
+@@ -998,6 +1133,18 @@ static int channel_fixup (struct ast_channel* oldchannel, struct ast_channel* ne
  	if (cpvt->channel == oldchannel)
  	{
  		cpvt->channel = newchannel;
@@ -1223,7 +1155,7 @@ index 3cb2815..da1b23a 100644
  	}
  	ast_mutex_unlock (&pvt->lock);
  
-@@ -1042,6 +1257,8 @@ static int channel_devicestate (void* data)
+@@ -1042,6 +1189,8 @@ static int channel_devicestate (void* data)
  #/* */
  static int channel_indicate (struct ast_channel* channel, int condition, const void* data, attribute_unused size_t datalen)
  {
@@ -1232,7 +1164,7 @@ index 3cb2815..da1b23a 100644
  	int res = 0;
  
  	ast_debug (1, "[%s] Requested indication %d\n", ast_channel_name(channel), condition);
-@@ -1065,10 +1282,23 @@ static int channel_indicate (struct ast_channel* channel, int condition, const v
+@@ -1065,10 +1214,23 @@ static int channel_indicate (struct ast_channel* channel, int condition, const v
  #if ASTERISK_VERSION_NUM >= 110000 /* 11+ */
  		case AST_CONTROL_PVT_CAUSE_CODE:
  #endif /* ^11+ */
@@ -1256,7 +1188,7 @@ index 3cb2815..da1b23a 100644
  			break;
  
  		case AST_CONTROL_UNHOLD:
-@@ -1076,8 +1306,8 @@ static int channel_indicate (struct ast_channel* channel, int condition, const v
+@@ -1076,8 +1238,8 @@ static int channel_indicate (struct ast_channel* channel, int condition, const v
  			break;
  
  		default:
@@ -1267,7 +1199,7 @@ index 3cb2815..da1b23a 100644
  			break;
  	}
  
-@@ -1186,6 +1416,19 @@ EXPORT_DEF void change_channel_state(struct cpvt * cpvt, unsigned newstate, int
+@@ -1186,6 +1348,19 @@ EXPORT_DEF void change_channel_state(struct cpvt * cpvt, unsigned newstate, int
  					disactivate_call(cpvt);
  					/* from +CEND, restart or disconnect */
  
@@ -1287,7 +1219,7 @@ index 3cb2815..da1b23a 100644
  
  					/* drop channel -> cpvt reference */
  					ast_channel_tech_pvt_set(channel, NULL);
-@@ -1449,6 +1692,11 @@ static int channel_func_read(struct ast_channel* channel, attribute_unused const
+@@ -1449,6 +1624,11 @@ static int channel_func_read(struct ast_channel* channel, attribute_unused const
  		{
  			CHANNEL_DEADLOCK_AVOIDANCE (channel);
  		}
@@ -1299,7 +1231,7 @@ index 3cb2815..da1b23a 100644
  		call_state_t state = cpvt->state;
  		ast_mutex_unlock(&pvt->lock);
  
-@@ -1491,7 +1739,7 @@ static int channel_func_read(struct ast_channel* channel, attribute_unused const
+@@ -1491,7 +1671,7 @@ static int channel_func_read(struct ast_channel* channel, attribute_unused const
  static int channel_func_write(struct ast_channel* channel, const char* function, char* data, const char* value)
  {
  	struct cpvt* cpvt = ast_channel_tech_pvt(channel);
@@ -1308,7 +1240,7 @@ index 3cb2815..da1b23a 100644
  	call_state_t newstate, oldstate;
  	int ret = 0;
  
-@@ -1500,6 +1748,7 @@ static int channel_func_write(struct ast_channel* channel, const char* function,
+@@ -1500,6 +1680,7 @@ static int channel_func_write(struct ast_channel* channel, const char* function,
  		ast_log (LOG_WARNING, "call on unreferenced %s\n", ast_channel_name(channel));
  		return -1;
  	}
@@ -1397,7 +1329,7 @@ index 1ceefbb..ab871f9 100644
  
  #include "export.h"				/* EXPORT_DECL EXPORT_DEF */
  #include "mixbuffer.h"				/* struct mixstream */
-@@ -70,8 +71,13 @@ typedef struct cpvt {
+@@ -70,8 +71,12 @@ typedef struct cpvt {
  #define PIPE_WRITE		1
  
  	struct mixstream	mixstream;			/*!< mix stream */
@@ -1408,7 +1340,6 @@ index 1ceefbb..ab871f9 100644
 +	size_t			a_read_buf_used;		/*!< accumulated bytes in a_read_buf */
 +	unsigned int		zombie_ticks;			/*!< consecutive unconfirmed CLCC ticks */
 +	struct timeval		answer_time;			/*!< when call went active (inbound RX gate reference) */
-+	int			env_peak;			/*!< slow envelope of RX peak level */
  
  //	size_t			write;				/*!< write position in pvt->a_write_buf */
  //	size_t			used;				/*!< bytes used in pvt->a_write_buf */

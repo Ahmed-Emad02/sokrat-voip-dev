@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="<%= currentLang %>" dir="<%= isRtl ? 'rtl' : 'ltr' %>">
+<head>
+    <script>
+        (function () {
+            const theme = localStorage.getItem('theme') || 'dark';
+            document.documentElement.classList.toggle('light-theme', theme === 'light');
+        })();
+    </script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sokrat VOIP - WireGuard VPN</title>
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="/js/tailwindcss-browser.js"></script>
+    <style>
+        :root {
+            --bg-primary: #000000;
+            --bg-secondary: #0c0c0e;
+            --bg-card: #121215;
+            --bg-hover: #1e1e24;
+            --border-primary: #18181c;
+            --border-accent: #2c2c34;
+            --text-primary: #f4f4f5;
+            --text-secondary: #a1a1aa;
+            --text-muted: #8e8e93;
+            --accent-color: #e53e3e;
+            --accent-soft: rgba(229, 62, 62, 0.14);
+        }
+        body.light-theme {
+            --bg-primary: #f4f4f6;
+            --bg-secondary: #ffffff;
+            --bg-card: #ffffff;
+            --bg-hover: #e4e4e9;
+            --border-primary: #e4e4e9;
+            --border-accent: #d4d4de;
+            --text-primary: #18181b;
+            --text-secondary: #3f3f46;
+            --text-muted: #71717a;
+            --accent-color: #b91c1c;
+            --accent-soft: rgba(254, 226, 226, 0.72);
+        }
+        body {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: 'JetBrains Mono', 'Cairo', monospace;
+        }
+        .vpn-surface { background: var(--bg-secondary); border: 1px solid var(--border-primary); }
+        .vpn-muted { color: var(--text-muted); }
+        .vpn-secondary { color: var(--text-secondary); }
+        .vpn-accent { color: var(--accent-color); }
+        .vpn-chip { background: var(--accent-soft); color: var(--accent-color); border: 1px solid rgba(229,62,62,.28); }
+        .vpn-ok { color: #34d399; background: rgba(52,211,153,.1); border: 1px solid rgba(52,211,153,.25); }
+        .vpn-warn { color: #fbbf24; background: rgba(251,191,36,.1); border: 1px solid rgba(251,191,36,.25); }
+        .vpn-bad { color: #f87171; background: rgba(248,113,113,.1); border: 1px solid rgba(248,113,113,.25); }
+        .vpn-key { word-break: break-all; }
+        .vpn-table th { color: var(--text-muted); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+        .vpn-table td { border-top: 1px solid var(--border-primary); vertical-align: top; }
+        .vpn-table tr:hover td { background: var(--bg-hover); }
+    </style>
+</head>
+<body class="flex flex-col md:flex-row min-h-screen m-0 p-0">
+    <%- include('sidebar') %>
+
+    <main class="flex-1 p-4 sm:p-6 xl:p-8 min-w-0">
+        <div class="max-w-6xl mx-auto">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                <div>
+                    <div class="text-[10px] uppercase tracking-[0.22em] vpn-muted mb-2">Sokrat VOIP / Root</div>
+                    <h1 class="text-2xl sm:text-3xl font-black tracking-tight">WireGuard VPN</h1>
+                    <p class="text-sm vpn-secondary mt-1">Tunnel interfaces and admitted devices. Private keys are never displayed.</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span id="vpn-updated" class="text-[10px] vpn-muted"></span>
+                    <button id="vpn-refresh" type="button" class="px-4 py-2 rounded-lg text-xs font-bold vpn-surface hover:bg-[var(--bg-hover)] transition">Refresh</button>
+                </div>
+            </div>
+
+            <div id="vpn-summary" class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6"></div>
+            <div id="vpn-content"></div>
+
+            <p class="text-[10px] vpn-muted mt-6">Auto-refreshes every 10 seconds. Root-only view; no private key material is exposed.</p>
+        </div>
+    </main>
+
+    <script>
+        const initialWireGuard = <%- JSON.stringify(wireguard).replace(/</g, '\\u003c') %>;
+
+        function escapeHtml(value) {
+            return String(value == null ? '' : value)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+        }
+        function bytes(value) {
+            const n = Number(value) || 0;
+            if (n < 1024) return n + ' B';
+            if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KiB';
+            if (n < 1024 * 1024 * 1024) return (n / (1024 * 1024)).toFixed(1) + ' MiB';
+            return (n / (1024 * 1024 * 1024)).toFixed(2) + ' GiB';
+        }
+        function age(seconds) {
+            if (seconds == null) return 'Never';
+            if (seconds < 60) return seconds + 's ago';
+            if (seconds < 3600) return Math.floor(seconds / 60) + 'm ago';
+            if (seconds < 86400) return Math.floor(seconds / 3600) + 'h ago';
+            return Math.floor(seconds / 86400) + 'd ago';
+        }
+        function statusChip(peer) {
+            if (peer.online) return '<span class="vpn-ok px-2 py-0.5 rounded text-[10px] font-bold">ONLINE</span>';
+            if (peer.handshakeAgeSeconds == null) return '<span class="vpn-bad px-2 py-0.5 rounded text-[10px] font-bold">NEVER</span>';
+            return '<span class="vpn-warn px-2 py-0.5 rounded text-[10px] font-bold">STALE</span>';
+        }
+        function summaryCard(label, value, accent) {
+            return '<div class="vpn-surface rounded-xl p-4"><div class="text-[10px] uppercase tracking-wider vpn-muted mb-2">' + label +
+                '</div><div class="text-2xl font-black ' + (accent ? 'vpn-accent' : '') + '">' + value + '</div></div>';
+        }
+        function render(data) {
+            const interfaces = Array.isArray(data.interfaces) ? data.interfaces : [];
+            const peers = interfaces.reduce((sum, iface) => sum + (iface.peerCount || 0), 0);
+            const online = interfaces.reduce((sum, iface) => sum + (iface.onlinePeerCount || 0), 0);
+            const managed = interfaces.reduce((sum, iface) => sum + (iface.managedPeerCount || 0), 0);
+            document.getElementById('vpn-summary').innerHTML = [
+                summaryCard('VPN interfaces', interfaces.length, false),
+                summaryCard('Devices', peers, false),
+                summaryCard('Online', online, true),
+                summaryCard('Gateway managed', managed, false)
+            ].join('');
+
+            const updated = data.generatedAt ? new Date(data.generatedAt) : new Date();
+            document.getElementById('vpn-updated').textContent = 'Updated ' + updated.toLocaleTimeString();
+
+            if (!data.available) {
+                document.getElementById('vpn-content').innerHTML =
+                    '<div class="vpn-surface rounded-xl p-6"><div class="font-bold mb-1">WireGuard is not available</div>' +
+                    '<div class="text-sm vpn-secondary">Install wireguard-tools and run the Sokrat installer WireGuard setup.</div></div>';
+                return;
+            }
+            if (!interfaces.length) {
+                document.getElementById('vpn-content').innerHTML =
+                    '<div class="vpn-surface rounded-xl p-6"><div class="font-bold mb-1">No WireGuard interfaces</div>' +
+                    '<div class="text-sm vpn-secondary">The WireGuard tools are installed, but no active interface was found.</div></div>';
+                return;
+            }
+
+            document.getElementById('vpn-content').innerHTML = interfaces.map((iface) => {
+                const rows = (iface.peers || []).map((peer) => {
+                    const addresses = (peer.allowedIps || []).join(', ') || '—';
+                    return '<tr>' +
+                        '<td class="py-3 pe-3"><div class="text-xs font-bold">' + escapeHtml(addresses) + '</div>' +
+                        (peer.managed ? '<span class="vpn-chip px-1.5 py-0.5 rounded text-[9px] font-bold mt-1 inline-block">MANAGED</span>' : '<span class="vpn-muted text-[9px]">MANUAL</span>') + '</td>' +
+                        '<td class="py-3 pe-3"><div class="text-[11px] vpn-key" title="' + escapeHtml(peer.publicKey) + '">' + escapeHtml(peer.shortKey) + '</div></td>' +
+                        '<td class="py-3 pe-3 text-[11px] vpn-secondary">' + escapeHtml(peer.endpoint || '—') + '</td>' +
+                        '<td class="py-3 pe-3 text-[11px] vpn-secondary">' + escapeHtml(age(peer.handshakeAgeSeconds)) + '</td>' +
+                        '<td class="py-3 pe-3 text-[11px] vpn-secondary">' + escapeHtml(bytes(peer.rxBytes)) + ' / ' + escapeHtml(bytes(peer.txBytes)) + '</td>' +
+                        '<td class="py-3 text-end">' + statusChip(peer) + '</td></tr>';
+                }).join('');
+                return '<section class="vpn-surface rounded-xl overflow-hidden mb-5">' +
+                    '<div class="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[var(--border-primary)]">' +
+                    '<div><div class="text-lg font-black">' + escapeHtml(iface.name) + '</div>' +
+                    '<div class="text-[11px] vpn-secondary mt-1">' + escapeHtml(iface.address || 'No IPv4 address') + ' · UDP ' + escapeHtml(iface.listenPort || '—') + '</div></div>' +
+                    '<div class="text-[10px] vpn-muted">' + escapeHtml(iface.peerCount || 0) + ' peers · ' + escapeHtml(iface.onlinePeerCount || 0) + ' online</div></div>' +
+                    '<div class="overflow-x-auto"><table class="w-full text-start vpn-table"><thead><tr>' +
+                    '<th class="text-start py-2 pe-3">Address</th><th class="text-start py-2 pe-3">Public key</th>' +
+                    '<th class="text-start py-2 pe-3">Endpoint</th><th class="text-start py-2 pe-3">Handshake</th>' +
+                    '<th class="text-start py-2 pe-3">RX / TX</th><th class="text-end py-2">Status</th></tr></thead><tbody>' +
+                    (rows || '<tr><td colspan="6" class="py-5 vpn-muted text-sm">No admitted devices.</td></tr>') +
+                    '</tbody></table></div></section>';
+            }).join('');
+        }
+        async function refresh() {
+            try {
+                const response = await fetch('/api/vpn/status', { credentials: 'same-origin', cache: 'no-store' });
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+                render(await response.json());
+            } catch (_) {
+                document.getElementById('vpn-updated').textContent = 'Refresh failed';
+            }
+        }
+        document.getElementById('vpn-refresh').addEventListener('click', refresh);
+        render(initialWireGuard);
+        setInterval(refresh, 10000);
+    </script>
+</body>
+</html>

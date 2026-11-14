@@ -66,8 +66,6 @@ def post(config, path, body, timeout, opener, read_body=True):
 
 
 def dispatch(config, args, opener=urllib.request.urlopen):
-    if not isinstance(config, dict) or not str(config.get('gatewayUrl', '')).startswith('https://'):
-        return False
     if len(args) not in (4, 5):
         return False
     has_websocket_contact = len(args) == 5 and args[4] == '1'
@@ -79,11 +77,15 @@ def dispatch(config, args, opener=urllib.request.urlopen):
             or not re.fullmatch(r'[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}', call_id, re.I)):
         return False
     body = {'callee': callee, 'caller': caller[:128], 'callerName': name[:256], 'callId': call_id}
-    configs = [config]
+    configs = []
+    if isinstance(config, dict) and str(config.get('gatewayUrl', '')).startswith('https://'):
+        configs.append(config)
     try:
         configs.append(read_config(LOCAL_HOOK, allow_http=True))
     except Exception:
         pass
+    if not configs:
+        return False
     dispatched = False
     for candidate in configs:
         try:
@@ -115,18 +117,24 @@ def cancel(config, args, opener=urllib.request.urlopen):
                 or not re.fullmatch(r'[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}', call_id, re.I)):
             return False
         body = {'callee': callee, 'callId': call_id}
-        configs = [config]
+        configs = []
+        if isinstance(config, dict) and str(config.get('gatewayUrl', '')).startswith('https://'):
+            configs.append(config)
         try:
             configs.append(read_config(LOCAL_HOOK, allow_http=True))
         except Exception:
             pass
+        if not configs:
+            return False
+        delivered = False
         for candidate in configs:
             try:
                 status, _ = post(candidate, '/api/gateway/cancel-call', body, 3, opener, read_body=False)
                 if status == 200:
-                    return True
+                    delivered = True
             except Exception:
                 continue
+        return delivered
     except Exception:
         pass
     return False
@@ -140,9 +148,9 @@ def main():
             config = None
         argv = sys.argv[1:]
         if len(argv) in (4, 5):
-            result = dispatch(config, argv) if config else False
+            result = dispatch(config, argv)
         elif len(argv) == 2:
-            result = cancel(config, argv) if config else False
+            result = cancel(config, argv)
         else:
             result = False
     except Exception:

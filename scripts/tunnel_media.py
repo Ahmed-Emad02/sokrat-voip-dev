@@ -1,14 +1,28 @@
-"""Pure, bounded configuration for a per-PBX TLS media link.
+"""Pure, bounded configuration for a per-PBX media link.
 
-The PBX is the TLS server on loopback only. FRPC carries that listener to the
-gateway; the gateway's TLS client dials the FRPS loopback mapping. Consequently
-the PBX needs only one outbound TCP connection and no public media listener.
-No default route, LAN route, NAT, Asterisk option or SIP endpoint is changed.
+Three transports are supported. By default (``transport is None``) the PBX is
+the TLS server on loopback only and FRPC carries that listener to the gateway
+over FRP's TCP transport; the gateway's TLS client dials the FRPS loopback
+mapping. That path is not end-to-end UDP below the tunnel: only the OpenVPN
+payload is UDP. With ``transport={'mode': 'direct-udp', ...}`` the TLS roles
+are reversed: the gateway is the TLS server on UDP 0.0.0.0:transport.port and
+PBX dials transport.host:transport.port as the TLS client with ``nobind``.
+With ``transport={'mode': 'plain-udp', ...}`` a small HMAC-authenticated UDP
+daemon carries the same point-to-point TUN on the selected port; no OpenVPN
+daemon or certificate material is used. Direct modes never fall back to FRP;
+an explicit transaction changes them and enrollment preserves the selected
+transport. The gateway needs no new route and the PBX gets no public media
+listener. No default route, LAN route, NAT, Asterisk option or SIP endpoint is
+changed.
 """
 import ipaddress
+import json
 import re
 
 ID_RE = re.compile(r"^pbx_[a-f0-9]{16}$")
+HOST_LABEL_RE = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?")
+TRANSPORT_KEYS = frozenset(("mode", "host", "port"))
+TRANSPORT_MODES = frozenset(("direct-udp", "plain-udp"))
 PRIVATE_POOLS = tuple(ipaddress.ip_network(cidr) for cidr in
                       ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"))
 
@@ -55,14 +69,56 @@ def validate_role(role):
         raise ValueError("Invalid media role")
 
 
-def media_config(plan, role, directory, version=(2, 6)):
+def validate_transport(transport, plan):
+    """Return a validated transport, or None for the existing FRP path.
+
+    The value is interpolated into root-owned OpenVPN configuration, so it is
+    checked as a whole before any material, key or service write happens.
+    """
+    if transport is None:
+        return None
+    validate_plan(plan)
+    if not isinstance(transport, dict) or set(transport) != TRANSPORT_KEYS:
+        raise ValueError("Invalid media transport")
+    if not isinstance(transport["mode"], str) or transport["mode"] not in TRANSPORT_MODES:
+        raise ValueError("Invalid media transport mode")
+    host = transport["host"]
+    if not isinstance(host, str) or not 0 < len(host) <= 253:
+        raise ValueError("Invalid media transport host")
+    try:
+        ipaddress.IPv4Address(host)
+    except ValueError:
+        if re.fullmatch(r"[0-9.]+", host):
+            raise ValueError("Invalid media transport host") from None
+        # DNS name: bounded labels, no whitespace, comma, '#' or trailing dot.
+        if not all(HOST_LABEL_RE.fullmatch(label) for label in host.split(".")):
+            raise ValueError("Invalid media transport host") from None
+    port = transport["port"]
+    if type(port) is not int or not 1024 <= port <= 65535:
+        raise ValueError("Invalid media transport port")
+    return transport
+
+
+def media_config(plan, role, directory, version=(2, 6), transport=None):
     validate_plan(plan)
     validate_role(role)
-    if version < (2, 4) or version >= (3, 0):
-        raise ValueError("OpenVPN 2.4 or newer 2.x required")
+    transport = validate_transport(transport, plan)
     # Configuration paths are operator-derived, not arbitrary request input.
     if not re.fullmatch(r"/[A-Za-z0-9/_-]+", directory):
         raise ValueError("Invalid TLS material directory")
+    if transport is not None and transport["mode"] == "plain-udp":
+        # The plain daemon owns the TUN and both hooks; it never reads OpenVPN
+        # options or certificate material, so no OpenVPN version is involved.
+        return json.dumps({
+            "role": role,
+            "plan": plan,
+            "transport": transport,
+            "keyFile": f"{directory}/udp.key",
+            "up": f"{directory}/link-up",
+            "down": f"{directory}/link-down",
+        }, sort_keys=True) + "\n"
+    if version < (2, 4) or version >= (3, 0):
+        raise ValueError("OpenVPN 2.4 or newer 2.x required")
     gateway = role == "gateway"
     local = plan["gatewayIp"] if gateway else plan["pbxIp"]
     remote = plan["pbxIp"] if gateway else plan["gatewayIp"]
@@ -85,17 +141,30 @@ def media_config(plan, role, directory, version=(2, 6)):
         lines += ["ncp-ciphers AES-256-GCM:AES-128-GCM"]
     if version >= (2, 6):
         lines += ["disable-dco"]
-    if gateway:
-        lines += ["tls-client", "proto tcp-client", "nobind",
-                  f"remote 127.0.0.1 {plan['remoteMediaPort']}",
-                  "remote-cert-tls server", f"verify-x509-name {plan['pbxId']}-pbx name"]
-    else:
-        lines += ["tls-server", "proto tcp-server", "local 127.0.0.1",
-                  f"port {plan['localMediaPort']}", "dh none",
-                  # OpenVPN 2.4 p2p tls-server restarts on its default poll
-                  # timeout even while a peer is connected; 0 disables it.
+    if transport is None:
+        if gateway:
+            lines += ["tls-client", "proto tcp-client", "nobind",
+                      f"remote 127.0.0.1 {plan['remoteMediaPort']}",
+                      "remote-cert-tls server", f"verify-x509-name {plan['pbxId']}-pbx name"]
+        else:
+            lines += ["tls-server", "proto tcp-server", "local 127.0.0.1",
+                      f"port {plan['localMediaPort']}", "dh none",
+                      # OpenVPN 2.4 p2p tls-server restarts on its default poll
+                      # timeout even while a peer is connected; 0 disables it.
+                      "server-poll-timeout 0",
+                      "remote-cert-tls client", f"verify-x509-name {plan['pbxId']}-gateway name"]
+    elif gateway:
+        # Direct UDP reverses the TLS roles: the gateway is the server and
+        # pins the PBX certificate identity; no FRP loopback is involved.
+        lines += ["tls-server", "proto udp", "local 0.0.0.0",
+                  f"port {transport['port']}", "dh none",
+                  # Same 2.4 p2p restart avoidance as the legacy server side.
                   "server-poll-timeout 0",
-                  "remote-cert-tls client", f"verify-x509-name {plan['pbxId']}-gateway name"]
+                  "remote-cert-tls client", f"verify-x509-name {plan['pbxId']}-pbx name"]
+    else:
+        lines += ["tls-client", "proto udp", "nobind",
+                  f"remote {transport['host']} {transport['port']}",
+                  "remote-cert-tls server", f"verify-x509-name {plan['pbxId']}-gateway name"]
     return "\n".join(lines) + "\n"
 
 

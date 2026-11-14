@@ -39,7 +39,9 @@ if [ ! -d "$SCRIPT_DIR/all-rpms" ] && [ ! -d "$SCRIPT_DIR/rpms" ] && ls "$SCRIPT
     else
         cat "$SCRIPT_DIR"/sokrat-prereqs.tar.gz.part-* | tar -xz -C "$SCRIPT_DIR/" --exclude="binaries/chan_dongle.so"
     fi
-    git -C "$SCRIPT_DIR" checkout -- binaries/chan_dongle.so 2>/dev/null || git -C "$SCRIPT_DIR/.." checkout -- installer-bundle/binaries/chan_dongle.so 2>/dev/null || true
+    if [ ! -f "$SCRIPT_DIR/binaries/chan_dongle.so" ]; then
+        git -C "$SCRIPT_DIR" checkout -- binaries/chan_dongle.so 2>/dev/null || git -C "$SCRIPT_DIR/.." checkout -- installer-bundle/binaries/chan_dongle.so 2>/dev/null || true
+    fi
 fi
 
 # Detect rpm directory
@@ -104,11 +106,17 @@ if [ -d "$SCRIPT_DIR/binaries/picotts" ]; then
 fi
 
 if [ -f "$SCRIPT_DIR/binaries/chan_dongle.so" ]; then
-    mkdir -p /usr/lib64/asterisk/modules
-    if [ -f /usr/lib64/asterisk/modules/chan_dongle.so ]; then
-        cp -a /usr/lib64/asterisk/modules/chan_dongle.so /usr/lib64/asterisk/modules/chan_dongle.so.bak-install 2>/dev/null || true
+    DONGLE_HELPER="$SCRIPT_DIR/../scripts/dongle-module.sh"
+    if [ ! -f "$DONGLE_HELPER" ]; then
+        DONGLE_HELPER="$SCRIPT_DIR/dongle-module.sh"
     fi
-    cp "$SCRIPT_DIR/binaries/chan_dongle.so" /usr/lib64/asterisk/modules/
+    if [ ! -f "$DONGLE_HELPER" ]; then
+        echo "ERROR: Missing reviewed dongle module installer: $DONGLE_HELPER" >&2
+        exit 1
+    fi
+    . "$DONGLE_HELPER"
+    dongle_module_require_idle || exit 1
+    dongle_module_install_bundle "$SCRIPT_DIR/binaries/chan_dongle.so" /usr/lib64/asterisk/modules
 fi
 
 if [ -f "$SCRIPT_DIR/binaries/librnnoise.so.0.4.1" ]; then

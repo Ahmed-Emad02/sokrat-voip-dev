@@ -1707,7 +1707,7 @@ echo "[8/14] Configuring WebRTC / PJSIP infrastructure..."
 # case 'remove_unavailable':
 # UPDATE sip SET data='10' WHERE keyword IN ('maxcontacts','max_contacts')
 # SELECT id, 'direct_media', 'no'
-# SELECT id, 'rtp_timeout', '30'
+# SELECT id, 'rtp_timeout', '360'
 # SELECT id, 'rtp_keepalive', '5'
 WEBRTC_REPAIR_SCRIPT="$INSTALL_DIR/scripts/configure-webrtc-pjsip.sh"
 if [ ! -x "$WEBRTC_REPAIR_SCRIPT" ]; then
@@ -2770,46 +2770,22 @@ fi
 
 # 10c — Install or Compile chan_dongle (with Sokrat decline detection, 20ms audio frame accumulator, modem cooldown pacing, Call Waiting rejection, CRING ring detection, and SMS/PDU memory safety)
 echo "  [10c] Installing chan_dongle..."
+DONGLE_HELPER="$INSTALL_DIR/scripts/dongle-module.sh"
+if [ ! -f "$DONGLE_HELPER" ] && [ -f "$SCRIPT_DIR/scripts/dongle-module.sh" ]; then
+    DONGLE_HELPER="$SCRIPT_DIR/scripts/dongle-module.sh"
+fi
+if [ ! -f "$DONGLE_HELPER" ]; then
+    echo "ERROR: Missing shared dongle module installer: $DONGLE_HELPER" >&2
+    exit 1
+fi
+# shellcheck source=scripts/dongle-module.sh
+. "$DONGLE_HELPER"
+dongle_module_require_idle || exit 1
 if [ -f "$INSTALL_DIR/installer-bundle/binaries/chan_dongle.so" ]; then
-    mkdir -p /usr/lib64/asterisk/modules
-    if [ -f /usr/lib64/asterisk/modules/chan_dongle.so ]; then
-        cp -a /usr/lib64/asterisk/modules/chan_dongle.so /usr/lib64/asterisk/modules/chan_dongle.so.bak-install 2>/dev/null || true
-    fi
-    if [ ! -f /usr/lib64/asterisk/modules/chan_dongle.so ] || ! cmp -s "$INSTALL_DIR/installer-bundle/binaries/chan_dongle.so" /usr/lib64/asterisk/modules/chan_dongle.so; then
-        cp "$INSTALL_DIR/installer-bundle/binaries/chan_dongle.so" /usr/lib64/asterisk/modules/chan_dongle.so.tmp
-        chmod 644 /usr/lib64/asterisk/modules/chan_dongle.so.tmp
-        mv -f /usr/lib64/asterisk/modules/chan_dongle.so.tmp /usr/lib64/asterisk/modules/chan_dongle.so
-        echo "  chan_dongle.so installed from bundle"
-    else
-        echo "  chan_dongle.so already matches bundle binary (preserved live inode)"
-    fi
+    dongle_module_install_bundle "$INSTALL_DIR/installer-bundle/binaries/chan_dongle.so" /usr/lib64/asterisk/modules
 else
-    cd /usr/src
-    if [ ! -d asterisk-chan-dongle ]; then
-        git clone https://github.com/wdoekes/asterisk-chan-dongle.git
-    fi
-    cd asterisk-chan-dongle
-    git pull origin master 2>/dev/null || true
-    if [ -f "$INSTALL_DIR/asterisk/chan_dongle.patch" ]; then
-        if command -v patch &>/dev/null; then
-            if patch -p1 -N --dry-run < "$INSTALL_DIR/asterisk/chan_dongle.patch" &>/dev/null; then
-                patch -p1 < "$INSTALL_DIR/asterisk/chan_dongle.patch"
-                echo "  Applied Sokrat chan_dongle patch (via patch)"
-            else
-                echo "  Sokrat chan_dongle patch already applied"
-            fi
-        elif git apply --check "$INSTALL_DIR/asterisk/chan_dongle.patch" &>/dev/null; then
-            git apply "$INSTALL_DIR/asterisk/chan_dongle.patch"
-            echo "  Applied Sokrat chan_dongle patch (via git apply)"
-        else
-            echo "  Sokrat chan_dongle patch already applied"
-        fi
-    fi
-    ./bootstrap
-    ./configure --with-astversion=18.19.0
-    make -j$(nproc 2>/dev/null || echo 1)
-    make install
-    echo "  chan_dongle compiled and installed"
+    DONGLE_ORIGIN=$(dongle_module_source_origin /usr/src/asterisk-chan-dongle)
+    dongle_module_build_source "$DONGLE_ORIGIN" "$SOKRAT_CHAN_DONGLE_COMMIT" "$INSTALL_DIR/asterisk/chan_dongle.patch" "$INSTALL_DIR/asterisk/dongle_rx_condition.h" /usr/lib64/asterisk/modules 18.19.0
 fi
 
 # 10d — Configure and apply dongle.conf
@@ -2940,8 +2916,10 @@ chmod 666 /dev/ttyUSB* 2>/dev/null || true
 systemctl daemon-reload
 udevadm control --reload-rules 2>/dev/null || true
 udevadm trigger 2>/dev/null || true
+dongle_module_require_idle || exit 1
 systemctl restart asterisk
 echo "  Asterisk restarted"
+dongle_module_wait_running 20 || exit 1
 
 # 10x — Overlay VPN clients (ZeroTier / Tailscale) for remote management
 echo "  [10x] Installing overlay VPN clients (ZeroTier / Tailscale)..."
@@ -3078,6 +3056,23 @@ REPOEOF
     echo "  overlay VPN services running - join the networks from Settings -> Overlay VPN"
 }
 install_overlay_vpn_clients
+
+# [10w] Embedded WireGuard server for the Sokrat mobile direct-PBX path.
+# This is the PBX data plane only; the central gateway still supplies each
+# device's public key and admission signal. Shared with the in-place upgrade so
+# both paths reach the same state, and additive to an existing wg0 setup.
+echo "  [10w] Configuring embedded WireGuard server..."
+WIREGUARD_HELPER="$INSTALL_DIR/scripts/wireguard-server.sh"
+if [ ! -f "$WIREGUARD_HELPER" ] && [ -f "$SCRIPT_DIR/scripts/wireguard-server.sh" ]; then
+    WIREGUARD_HELPER="$SCRIPT_DIR/scripts/wireguard-server.sh"
+fi
+if [ ! -f "$WIREGUARD_HELPER" ]; then
+    echo "ERROR: Missing shared WireGuard server setup: $WIREGUARD_HELPER" >&2
+    exit 1
+fi
+# shellcheck source=scripts/wireguard-server.sh
+. "$WIREGUARD_HELPER"
+install_wireguard_server
 
 # [10y] NetworkManager - the GUI network manager changes the DHCP / static
 # state of the physical interfaces with nmcli, so NetworkManager has to be

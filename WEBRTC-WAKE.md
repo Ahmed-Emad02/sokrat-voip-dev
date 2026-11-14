@@ -35,6 +35,15 @@ mobile push enables the bounded registration wait. Credential errors, missing
 devices and gateway outages continue into normal FreePBX routing; credentials
 and provider payloads are never logged.
 
+For a single extension and each ring-group member, eligibility skips the push
+only when `EXTENSION_STATE` is not `NOT_INUSE`, `UNAVAILABLE` or `UNKNOWN` and
+(`CWIGNORE` is set or `DB(CW/<extension>)` is empty). There is no separate
+CFB-empty condition: with call waiting unavailable, `macro-dial-one` clears
+`DEXTEN` and sets `BUSY` before `macro-exten-vm` reaches call forwarding; with
+call waiting available it continues and dials the original extension even when
+CFB is populated. DND, CF and CFU checks remain. Eligibility does not increase
+the HTTP or registration budget.
+
 When `PJSIP_DIAL_CONTACTS` reports a WebSocket contact, the dispatcher uses the
 gateway's `/api/gateway/incoming-call-live` endpoint instead. The gateway owns
 the actual SIP WebSocket and suppresses the push only when that socket has
@@ -45,6 +54,17 @@ a push, as before. Upgrade the gateway first to gain stale-contact recovery;
 upgrading the PBX first is safe but does not fix stale contacts until the
 gateway is updated. Installers warn if the installed dispatcher lacks the
 live-gated endpoint.
+
+Central dispatcher configuration is optional. A valid `LOCAL_HOOK` is tried when
+the central configuration is absent, unreachable or reports zero devices.
+Cancellation attempts every configured gateway; a first `200` response no longer
+masks local-only delivery.
+
+The gateway sends FCM data messages with `android.priority=high`, a TTL of
+15000 ms for incoming and 120000 ms for cancellation, and `type=cancel-call`
+alongside `msg`. The same `buildCtx().sendToDevice` path covers legacy and tenant
+delivery. This requires a gateway image rebuild/redeploy; no environment change
+is needed. Tests perform no provider sends.
 
 The HTTP deadline is6 seconds; registration wait is at most12 seconds. Comparing
 the new contact count with the pre-push count prevents an existing CRM contact
@@ -58,6 +78,28 @@ A canonical raw call UUID is placed in inherited FreePBX SIP headers. The gatewa
 scopes the same raw UUID for push and the SIP application header; SIP protocol
 Call-ID and SDP are not modified. A WebRTC-only compatibility flag prevents
 duplicate historical Sokrat wake hooks on that same leg, without editing them.
+
+For ring groups, the same per-member eligibility is applied. The shared callId is
+placed in `HASH(__SIPHEADERS,X-Sokrat-Call-ID)`, `__SOKRAT_PUSH_SENT` and the
+hangup handler are set before dispatch, and every dispatched member is appended
+to `__SOKRAT_WAKE_CALLEES`. `GROUP_TOTAL`/`READY` count only members that were
+actually woken.
+
+The hangup handler loops `CUT` over `__SOKRAT_WAKE_CALLEES`; `DIALSTATUS=ANSWER`
+still skips cancellation. It is not the only cancellation path:
+`lib/webrtc-wake-answer.js` runs one bridge per AMI connection and, on `DialEnd`
+with `DialStatus=ANSWER`, reads `SOKRAT_CALL_ID` and `SOKRAT_WAKE_CALLEES` from
+the original `event.Channel` through two correlated AMI `Getvar` requests with a
+bounded 1.5-second timeout. After validating the canonical UUID and numeric
+callee list it invokes the existing
+`/usr/local/bin/sokrat-webrtc-wake-dispatch.py <callee> <callId>` for every
+remaining unique woken recipient. The answered recipient is excluded when
+`DestChannel` parses as a standard numeric PJSIP, SIP or Local endpoint. An
+unknown non-mobile winner (for example a Dongle channel) cancels all woken mobile
+callees; malformed or ambiguous endpoints and values fail closed. Pending lookups
+are invalidated on AMI close/reconnect; there are no retries, UserEvent messages,
+caches or telemetry. Caller-hangup cancellation still uses the hangup handler's
+callee loop. Audio, RTP and outbound dialplan are untouched.
 
 ## Installation and lifecycle
 
@@ -143,12 +185,64 @@ This is not a phone cold-wake acceptance test; actual FCM delivery, answer, audi
 decline and cancellation must be verified separately on the selected employee
 phone, including one inbound ring-group call after FreePBX Apply Config.
 
+`test/wake-routing-harness.py` and `test/wake-routing.test.js` are test-only and
+gated by `WAKE_ASTERISK_BIN`. The harness imports the pure `render()` function,
+never runs the installer with `--apply`, and uses a temporary Asterisk with
+`-f autoload=no` plus nonce and directory verification. The real wake file is
+recompiled and reapplied only through the normal installer promotion after the
+release gate is green. The answer-time cancellation contract is
+`test/webrtc-wake-answer.test.js`.
+
+For GSM audio, validate normal-to-louder speech separately from call wake.
+The bundled `chan_dongle` preserves its bounded 2100-ms inbound answer protection
+and soft-knee limiter, but never blanks ongoing speech based on a peak/background
+ratio. NetEq cannot recover speech already zeroed by the PBX. The native regression
+is `node --test test/dongle-rx-conditioning.test.js` and requires a C compiler
+(`CC` or `cc`); it covers quiet-to-loud transitions, signed PCM, and startup/fade
+boundaries. Updating the bundled module requires an idle dongle-module reload,
+not a new APK; the wake installer itself does not reload that module.
+
+Fresh installs and in-place upgrades share `scripts/dongle-module.sh`. Source
+builds materialize the pinned `asterisk-chan-dongle` commit, require
+`asterisk/dongle_rx_condition.h`, stage outside the operator tree, refuse to
+reload while channels are active, and fail if `chan_dongle.so` is not Running
+after the restart. Existing dongle gains, SIM accounts, call-waiting and AOR
+settings are not rewritten. The install/reload behavior is covered by
+`node --test test/dongle-module-install.test.js`.
+Bundled installs, including the offline Issabel bootstrap, verify the
+release-pinned SHA-256 before copying a module. A stale valid ELF is refused;
+source builds remain governed by the pinned commit, patch and header rather
+than the bundle's compiler-dependent digest. Authenticated mirror origins
+are redacted from build output.
+
+All three installation paths also source `scripts/wireguard-server.sh`.
+Its private WireGuard key, profile and admission configuration survive repeat
+installs/upgrades. Preserved secret paths are accepted only as root-owned
+regular files: old permissive modes are tightened to 0600, and a symlink or
+other non-regular entry makes the helper skip WireGuard setup rather than
+follow it. The advertised server public key comes from the running `wg0`
+interface, or from the `PrivateKey` in the preserved `wg0.conf`; when neither
+can be verified the key is not printed. `/etc/sokrat` must remain traversable
+by `asterisk` so the wake dispatcher can read its scoped hook; WireGuard setup
+keeps that shared directory at 0755 and only removes group/other write access.
+Those preservation, permission and public-key rules are covered by
+`node --test test/wireguard-server.test.js`.
+The WireGuard interface address must be one literal IPv4 address/prefix;
+extra configuration lines are rejected before a profile is written.
+The upgrader refreshes active, explicitly managed media units using their
+existing unit/configuration and keys. Run upgrades
+without active calls; this is not a live, interruption-free media migration.
+Legacy media remains TCP through FRP; explicit plain/direct media stays UDP.
+
 Destinations that call `Dial(PJSIP/...)` directly and bypass both `macro-dial`
 and the normal FreePBX queue `Local/<ext>@from-queue/n` path remain outside this
 adapter. Do not claim coverage for a custom queue-agent dial string without
-exercising that configured path. Caller cancellation before SIP INVITE and
-notification timeout behavior remain explicit acceptance gates; no independent
-push-cancel protocol is added here.
+exercising that configured path. Caller cancellation and notification timeout
+remain explicit acceptance gates. The hangup handler covers caller hangup, and
+the AMI answer bridge covers `DialEnd ANSWER`; the bridge is fail-closed, so
+malformed or ambiguous UUID/callee/endpoint values leave the remaining
+notifications to the native 90-second timeout. The gateway emits the matching
+`cancel-call` FCM message. Verification on the selected phone is still required.
 
 For rollback, remove only this managed include/output using the private snapshot
 and reload the dialplan. Do not restore an old whole PBX database or gateway
