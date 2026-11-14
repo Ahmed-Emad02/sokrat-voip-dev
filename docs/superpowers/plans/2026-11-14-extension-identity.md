@@ -179,3 +179,41 @@ main: retain its existing settings layout and remove its corresponding seeds,
 forced key-1 fallback, voicemail placeholder and key-1 clear restriction.
 Use an alternate Git index; do not include asset deletions, media changes,
 WhatsApp defaults, dependency removals or the pending UI redesign.
+
+### Extension-conversion follow-through — fix and test only
+
+- [x] Replace the update route's separate technology test with the existing
+  `agentStatusService.isPjsipTech(tech || currentTech)` predicate. Omitted
+  technology must preserve imported `webrtc` accounts as PJSIP.
+- [x] Keep one module-local list of the existing managed WebRTC SIP options,
+  including their current values/flags, shared by creation, WebRTC updates and
+  conversion cleanup. When leaving a PJSIP/WebRTC driver for SIP, delete only
+  those keywords for that extension using parameterized SQL. Do not clear
+  ordinary SIP/legacy chan_sip WebRTC metadata on an unrelated SIP edit.
+- [x] Replace the source-wording assertions in
+  `test/extension-astdb-sync.test.js` with actual-handler regressions against
+  an explicitly labeled, network-isolated disposable MariaDB container.
+  Prove the two failures before fixing production code; cover driver
+  preservation, conversion policy eligibility, unrelated settings/accounts,
+  SIP-to-WebRTC and round-trip timeout/media metadata.
+- [x] Run the focused regression/agent suites and syntax checks, then obtain
+  OpenCode DeepSeek 4.1 Flash medium reviews and update existing behavior notes.
+  The user subsequently requested a local commit. No live account changes,
+  migration, APK build/install, deployment or push is authorized.
+
+Conversion verification: before the fix, legacy omitted-tech edits downgraded
+to SIP and conversion/round-trip policy checks retained stale WebRTC settings
+(three failing behavioral subcases). After the fix, all five MariaDB conversion
+subcases and ten agent tests passed (16 Node test entries including the parent,
+zero skips/failures). `node --check server.js` passed. A throwaway AST comparison
+against committed HEAD proved all 19 original creation/update values and flags
+unchanged. Both medium reviews completed with no introduced production defect.
+The test review's AstDB coverage gap was resolved with real private AstDB reads,
+not assertions of CLI command strings; its follow-up review found no issue.
+
+Final verification with both disposable fixtures configured: 19 Node test
+entries passed, zero failures/skips. This includes six conversion subcases
+(five MariaDB behaviors plus actual AstDB SIP/PJSIP/SIP state), ten agent tests
+and both existing isolated routing tests. Server/test JavaScript syntax and
+Python harness parsing passed. These checks changed no live accounts, APKs or
+production configuration.

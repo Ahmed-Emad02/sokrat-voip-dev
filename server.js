@@ -203,6 +203,28 @@ function safeIdentifier(name, value) {
 const ASTERISK_DB = safeIdentifier('ASTERISK_DB', process.env.ASTERISK_DB || 'asterisk');
 const CDR_DB = safeIdentifier('CDR_DB', process.env.CDR_DB || process.env.DB_NAME || 'asteriskcdrdb');
 const ASTERISK_BIN = process.env.ASTERISK_BIN || '/usr/sbin/asterisk';
+const WEBRTC_SIP_OPTIONS = [
+    ['webrtc', 'yes', 18],
+    ['media_encryption', 'dtls', 18],
+    ['max_contacts', '10', 16],
+    ['remove_existing', 'no', 18],
+    ['remove_unavailable', 'yes', 18],
+    ['direct_media', 'no', 18],
+    ['rtp_symmetric', 'yes', 18],
+    ['force_rport', 'yes', 18],
+    ['rewrite_contact', 'yes', 18],
+    ['rtcp_mux', 'yes', 18],
+    ['use_avpf', 'yes', 18],
+    ['ice_support', 'yes', 18],
+    ['dtls_cert_file', '/etc/asterisk/keys/asterisk.pem', 18],
+    ['dtls_private_key', '/etc/asterisk/keys/asterisk.key', 18],
+    ['dtls_setup', 'actpass', 18],
+    ['dtls_verify', 'fingerprint', 18],
+    ['rtp_timeout', '360', 18],
+    ['rtp_timeout_hold', '60', 18],
+    ['rtp_keepalive', '5', 18],
+];
+const WEBRTC_SIP_OPTION_KEYS = WEBRTC_SIP_OPTIONS.map(([keyword]) => keyword);
 const RECORDING_ROOT = process.env.RECORDING_ROOT || '/var/spool/asterisk/monitor';
 const AMI_HOST = process.env.AMI_HOST || '127.0.0.1';
 const UPLOAD_TMP = '/tmp/dashboard-uploads';
@@ -16260,27 +16282,7 @@ async function provisionExtension(payload = {}, options = {}) {
     ];
 
     if (isWebRTC) {
-        sipPairs.push(
-            [extNum, 'webrtc', 'yes', 18],
-            [extNum, 'media_encryption', 'dtls', 18],
-            [extNum, 'max_contacts', '10', 16],
-            [extNum, 'remove_existing', 'no', 18],
-            [extNum, 'remove_unavailable', 'yes', 18],
-            [extNum, 'direct_media', 'no', 18],
-            [extNum, 'rtp_symmetric', 'yes', 18],
-            [extNum, 'force_rport', 'yes', 18],
-            [extNum, 'rewrite_contact', 'yes', 18],
-            [extNum, 'rtcp_mux', 'yes', 18],
-            [extNum, 'use_avpf', 'yes', 18],
-            [extNum, 'ice_support', 'yes', 18],
-            [extNum, 'dtls_cert_file', '/etc/asterisk/keys/asterisk.pem', 18],
-            [extNum, 'dtls_private_key', '/etc/asterisk/keys/asterisk.key', 18],
-            [extNum, 'dtls_setup', 'actpass', 18],
-            [extNum, 'dtls_verify', 'fingerprint', 18],
-            [extNum, 'rtp_timeout', '360', 18],
-            [extNum, 'rtp_timeout_hold', '60', 18],
-            [extNum, 'rtp_keepalive', '5', 18]
-        );
+        sipPairs.push(...WEBRTC_SIP_OPTIONS.map(([keyword, data, flags]) => [extNum, keyword, data, flags]));
     }
 
     for (const [id, kw, data, flags] of sipPairs) {
@@ -16474,7 +16476,7 @@ app.put('/api/config/extensions/:extension', async (req, res) => {
             effectiveVm = (voicemail === 'default' || voicemail === 'enabled' || voicemail === true) ? 'default' : 'novm';
         }
 
-        const targetTech = tech ? (tech === 'webrtc' || tech === 'pjsip' ? 'pjsip' : 'sip') : (currentTech === 'pjsip' ? 'pjsip' : 'sip');
+        const targetTech = agentStatusService.isPjsipTech(tech || currentTech) ? 'pjsip' : 'sip';
         const isWebRTC = targetTech === 'pjsip';
         const devTech = isWebRTC ? 'pjsip' : 'sip';
         const devDial = isWebRTC ? `PJSIP/${extNum}` : `SIP/${extNum}`;
@@ -16504,26 +16506,11 @@ app.put('/api/config/extensions/:extension', async (req, res) => {
             ['disallow', isWebRTC ? 'all' : '', 25]
         ];
         if (isWebRTC) {
-            sipUpdates.push(
-                ['webrtc', 'yes', 18],
-                ['media_encryption', 'dtls', 18],
-                ['max_contacts', '10', 16],
-                ['remove_existing', 'no', 18],
-                ['remove_unavailable', 'yes', 18],
-                ['direct_media', 'no', 18],
-                ['rtp_symmetric', 'yes', 18],
-                ['force_rport', 'yes', 18],
-                ['rewrite_contact', 'yes', 18],
-                ['rtcp_mux', 'yes', 18],
-                ['use_avpf', 'yes', 18],
-                ['ice_support', 'yes', 18],
-                ['dtls_cert_file', '/etc/asterisk/keys/asterisk.pem', 18],
-                ['dtls_private_key', '/etc/asterisk/keys/asterisk.key', 18],
-                ['dtls_setup', 'actpass', 18],
-                ['dtls_verify', 'fingerprint', 18],
-                ['rtp_timeout', '360', 18],
-                ['rtp_timeout_hold', '60', 18],
-                ['rtp_keepalive', '5', 18]
+            sipUpdates.push(...WEBRTC_SIP_OPTIONS);
+        } else if (agentStatusService.isPjsipTech(currentTech)) {
+            await pool.query(
+                'DELETE FROM `asterisk`.`sip` WHERE id = ? AND keyword IN (?)',
+                [extNum, WEBRTC_SIP_OPTION_KEYS]
             );
         }
         if (displayName) {

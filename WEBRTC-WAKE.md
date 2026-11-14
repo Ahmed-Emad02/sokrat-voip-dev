@@ -119,6 +119,27 @@ priorities on an isolated Asterisk, stopping before UUID/provider operations.
 The test-only `WAKE_ASTERISK_MODULE_DIR` and
 `WAKE_ASTERISK_DOCUMENTATION_DIR` variables allow a rootless extracted runtime.
 
+Extension edits with no requested technology preserve the stored driver,
+including imported `webrtc` aliases. Leaving PJSIP/WebRTC for SIP removes only
+the 19 managed WebRTC SIP-table options for that account. The cleanup does not
+run for ordinary SIP edits or delete secrets, custom settings or other accounts.
+Creation and WebRTC updates share the same option values/flags, retaining
+`rtp_timeout=360`, hold timeout 60 and keepalive 5.
+
+The conversion regression runs the actual creation/update/policy handlers and
+SQL against a disposable MariaDB fixture; file/reload/provider effects are stubbed.
+Run `SOKRAT_EXTENSION_TEST_DB=<container> node --test test/extension-astdb-sync.test.js`
+only after that fixture is ready. It must have a
+`sokrat-extension-conversion-test-<hex>` name, label
+`io.sokrat.test=extension-conversion`, network `none`, no host ports and no bind
+mounts. With no fixture variable the integration test is explicitly skipped.
+With `WAKE_ASTERISK_BIN` configured (and optional module/documentation paths),
+the same suite also starts its own nonce-verified private Asterisk fixture via
+`--serve`. It reads actual AstDB `DEVICE/<ext>/dial` and `tech` after SIP creation,
+SIP-to-PJSIP and PJSIP-to-SIP edits. Native commands never target a live instance;
+the fixture shuts down and removes its private state when the test closes stdin.
+Without that binary the native subcase is explicitly skipped.
+
 ## Installation and lifecycle
 
 ```sh

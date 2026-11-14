@@ -15,6 +15,8 @@ Safety:
 Run on a host with Asterisk modules and an empty temp-friendly environment:
   python3 test/wake-routing-harness.py --asterisk /usr/sbin/asterisk
 The Node wrapper skips unless WAKE_ASTERISK_BIN is set.
+The --serve mode emits the validated private config as JSON and keeps only that
+fixture alive until stdin closes; conversion tests use it for real AstDB reads.
 """
 import argparse
 import importlib.util
@@ -290,6 +292,7 @@ def main():
     parser.add_argument('--asterisk', default='/usr/sbin/asterisk')
     parser.add_argument('--keep', action='store_true')
     parser.add_argument('--installer-hooks', action='store_true')
+    parser.add_argument('--serve', action='store_true')
     args = parser.parse_args()
     if not Path(args.asterisk).exists():
         raise SystemExit('asterisk executable not found: ' + args.asterisk)
@@ -300,6 +303,10 @@ def main():
         build_root(root)
         installer_cases = build_installer_hook_fixture(root) if args.installer_hooks else None
         process, conf = start_asterisk(args.asterisk, root)
+        if args.serve:
+            print(json.dumps({'config': str(conf)}), flush=True)
+            sys.stdin.read()
+            return 0
         if installer_cases is not None:
             return check_installer_hooks(args.asterisk, conf, installer_cases)
         for case in CASES:
