@@ -252,6 +252,8 @@ echo "[1/14] Installing system packages..."
 # Install EPEL first so sox (which lives in EPEL) resolves
 yum install -y epel-release
 yum install -y nano net-tools sox sqlite picotts
+# Federation SSH bootstrap uses sshpass; keep it installed on fresh nodes.
+yum install -y sshpass openssh-clients 2>/dev/null || echo "  Warning: sshpass/openssh-clients unavailable; federation SSH bootstrap will need them installed manually."
 
 
 # Announcements in Issabel use picotts.agi, which requires both sox and pico2wave.
@@ -1703,12 +1705,6 @@ echo "[8/14] Configuring WebRTC / PJSIP infrastructure..."
 # Apply the same idempotent WebRTC/PJSIP repair used by in-place upgrades.
 # This creates the DTLS key pair, configures dedicated transports, repairs every
 # existing WSS/WebRTC AOR for multi-registration, and preserves desktop SIP.
-# IssabelPBX AOR options compatibility:
-# case 'remove_unavailable':
-# UPDATE sip SET data='10' WHERE keyword IN ('maxcontacts','max_contacts')
-# SELECT id, 'direct_media', 'no'
-# SELECT id, 'rtp_timeout', '360'
-# SELECT id, 'rtp_keepalive', '5'
 WEBRTC_REPAIR_SCRIPT="$INSTALL_DIR/scripts/configure-webrtc-pjsip.sh"
 if [ ! -x "$WEBRTC_REPAIR_SCRIPT" ]; then
     echo "ERROR: Missing WebRTC repair script: $WEBRTC_REPAIR_SCRIPT" >&2
@@ -2020,7 +2016,7 @@ same => n,Set(__FROMEXTEN=${IF($[${LEN(${CALLERID(num)})}]?${CALLERID(num)}:unkn
 same => n,Set(__CALLFILENAME=in-${DONGLENAME}-${FROMEXTEN}-${TIMESTR}-${UNIQUEID})
 same => n,Set(__MON_FMT=wav)
 same => n,Set(__MIXMON_DIR=/var/spool/asterisk/monitor/)
-same => n,Set(MIXMON_OPTS=v(1)V(1))
+same => n,Set(MIXMON_OPTS=${IF($["${DB(AUDIO_GLOBALS/recording_mix_opts_dongle)}" != ""]?${DB(AUDIO_GLOBALS/recording_mix_opts_dongle)}:v(1)V(1))})
 same => n,MixMonitor(${MIXMON_DIR}${YEAR}/${MONTH}/${DAY}/${CALLFILENAME}.${MON_FMT},a${MIXMON_OPTS})
 same => n,Set(__REC_STATUS=RECORDING)
 same => n,Set(__REC_POLICY_MODE=always)
@@ -2057,7 +2053,7 @@ append_context '[macro-dialout-trunk-predial-hook]' '[macro-dialout-trunk-predia
 
 [macro-dialout-trunk-predial-hook]
 exten => s,1,NoOp(--- Outbound call via Dongle (CID auto-set by trunk outcid & Extension RNNoise Filter) ---)
-same => n,Set(DIAL_TRUNK_OPTIONS=${DIAL_TRUNK_OPTIONS}r)
+same => n,Set(DIAL_TRUNK_OPTIONS=${STRREPLACE(DIAL_TRUNK_OPTIONS,r)}R)
 same => n,Set(CALLER_DENOISE=${DB(AMPUSER/${REALCALLERIDNUM}/ai_denoise)})
 same => n,ExecIf($["${CALLER_DENOISE}" = ""]?Set(CALLER_DENOISE=${DB(AMPUSER/${CALLERID(num)}/ai_denoise)}))
 same => n,ExecIf($["${CALLER_DENOISE}" = ""]?Set(CALLER_DENOISE=off))
@@ -2086,6 +2082,24 @@ same => n,ExecIf($["${DONGLE_TARGET}"=""]?Set(DONGLE_TARGET=${RAW_TARGET}))
 same => n,Set(CHANNEL(hangup_handler_push)=cdr-cause-capture,s,1)
 same => n,MacroExit()
 MACRO
+
+# Ensure every managed dialplan copy allows carrier early media.
+for early_conf in /etc/asterisk/extensions_custom.conf /etc/asterisk/extensions_override_issabel.conf; do
+    [ -f "$early_conf" ] || continue
+    python3 - "$early_conf" <<'PY_EARLY_MEDIA'
+import sys
+from pathlib import Path
+path = Path(sys.argv[1])
+text = path.read_text()
+early_media = 'same => n,Set(DIAL_TRUNK_OPTIONS=${STRREPLACE(DIAL_TRUNK_OPTIONS,r)}R)'
+legacy_ringback = 'same => n,Set(DIAL_TRUNK_OPTIONS=${DIAL_TRUNK_OPTIONS}r)'
+marker = 'exten => s,1,NoOp(--- Outbound call via Dongle (CID auto-set by trunk outcid & Extension RNNoise Filter) ---)'
+text = text.replace(legacy_ringback, '')
+if marker in text and early_media not in text:
+    text = text.replace(marker, marker + '\n' + early_media, 1)
+path.write_text(text)
+PY_EARLY_MEDIA
+done
 
 # Append safe dongle-hangup-cleanup stub (transfer-safe, restart disabled)
 append_context '[dongle-hangup-cleanup]' '[dongle-hangup-cleanup]' << 'CLEANUP_CTX'
@@ -2275,7 +2289,7 @@ same => n,Set(CHANNEL(hangup_handler_push)=sub-ai-outbound-hangup,s,1)
 same => n,ExecIf($["${AI_CALLER_ID}"!=""]?Set(CALLERID(num)=${AI_CALLER_ID}))
 same => n,Set(__MON_FMT=wav)
 same => n,Set(__MIXMON_DIR=/var/spool/asterisk/monitor/)
-same => n,Set(MIXMON_OPTS=v(1)V(1))
+same => n,Set(MIXMON_OPTS=${IF($["${DB(AUDIO_GLOBALS/recording_mix_opts)}" != ""]?${DB(AUDIO_GLOBALS/recording_mix_opts)}:v(1)V(1))})
 same => n,Set(NOW=${EPOCH})
 same => n,Set(__DAY=${STRFTIME(${NOW},,%d)})
 same => n,Set(__MONTH=${STRFTIME(${NOW},,%m)})
@@ -2389,7 +2403,7 @@ exten => s,1,Set(REC_POLICY_MODE_SAVE=${REC_POLICY_MODE})
 exten => s,n,GotoIf($["${BLINDTRANSFER}" = ""]?check)
 exten => s,n,ResetCDR()
 exten => s,n,GotoIf($["${REC_STATUS}" != "RECORDING"]?check)
-exten => s,n,Set(MIXMON_OPTS=${IF($["${MIXMON_OPTS}"=""]?v(1)V(1):${MIXMON_OPTS})})
+exten => s,n,Set(MIXMON_OPTS=${IF($["${MIXMON_OPTS}"=""]?${IF($["${DB(AUDIO_GLOBALS/recording_mix_opts)}" != ""]?${DB(AUDIO_GLOBALS/recording_mix_opts)}:v(1)V(1))}:${MIXMON_OPTS})})
 exten => s,n,MixMonitor(${MIXMON_DIR}${YEAR}/${MONTH}/${DAY}/${CALLFILENAME}.${MIXMON_FORMAT},a${MIXMON_OPTS},${MIXMON_POST})
 exten => s,n(check),Set(__MON_FMT=${IF($["${MIXMON_FORMAT}"="wav49"]?WAV:${MIXMON_FORMAT})})
 exten => s,n,GotoIf($["${REC_STATUS}"!="RECORDING"]?next)
@@ -2448,7 +2462,7 @@ exten => conf,n,Return()
 exten => page,1,GosubIf($["${REC_POLICY_MODE}"="always"]?recconf,1(${EXTEN},${ARG2},${FROMEXTEN}))
 exten => page,n,Return()
 
-exten => record,1,Set(MIXMON_OPTS=${IF($["${MIXMON_OPTS}"=""]?v(1)V(1):${MIXMON_OPTS})})
+exten => record,1,Set(MIXMON_OPTS=${IF($["${MIXMON_OPTS}"=""]?${IF($["${DB(AUDIO_GLOBALS/recording_mix_opts)}" != ""]?${DB(AUDIO_GLOBALS/recording_mix_opts)}:v(1)V(1))}:${MIXMON_OPTS})})
 exten => record,n,MixMonitor(${MIXMON_DIR}${YEAR}/${MONTH}/${DAY}/${CALLFILENAME}.${MIXMON_FORMAT},${MIXMON_OPTS},${MIXMON_POST})
 exten => record,n,Set(__REC_STATUS=RECORDING)
 exten => record,n,Set(CDR(recordingfile)=${CALLFILENAME}.${MON_FMT})
@@ -2459,7 +2473,7 @@ exten => record,n,Return()
 ; while the monitored channel is bridged - on a queue the monitored leg is
 ; often never bridged, which produced 44-byte (header-only) recordings.
 exten => recq,1,Set(MONITOR_FILENAME=${MIXMON_DIR}${YEAR}/${MONTH}/${DAY}/${CALLFILENAME})
-exten => recq,n,Set(MIXMON_OPTS=${IF($["${MIXMON_OPTS}"=""]?v(1)V(1):${MIXMON_OPTS})})
+exten => recq,n,Set(MIXMON_OPTS=${IF($["${MIXMON_OPTS}"=""]?${IF($["${DB(AUDIO_GLOBALS/recording_mix_opts)}" != ""]?${DB(AUDIO_GLOBALS/recording_mix_opts)}:v(1)V(1))}:${MIXMON_OPTS})})
 exten => recq,n,MixMonitor(${MONITOR_FILENAME}.${MIXMON_FORMAT},${MIXMON_OPTS},${MIXMON_POST})
 exten => recq,n,Set(__REC_STATUS=RECORDING)
 exten => recq,n,Set(CDR(recordingfile)=${CALLFILENAME}.${MON_FMT})
@@ -3457,6 +3471,21 @@ systemctl daemon-reload
 systemctl enable --now sokrat-stt.service 2>/dev/null || true
 echo "  Sokrat Cloud STT worker enabled and started"
 
+# Provision Sokrat recording loudness normalizer (post-call, non-live path).
+echo "  Provisioning Sokrat recording loudness normalizer..."
+install -d -o asterisk -g asterisk -m 0750 /var/lib/sokrat-recording-normalizer
+if [ -f "$INSTALL_DIR/scripts/systemd/sokrat-recording-normalize.service" ] && \
+   [ -f "$INSTALL_DIR/scripts/systemd/sokrat-recording-normalize.timer" ]; then
+    chmod 0755 "$INSTALL_DIR/scripts/normalize-call-recordings.js" 2>/dev/null || true
+    install -m 0644 "$INSTALL_DIR/scripts/systemd/sokrat-recording-normalize.service" /etc/systemd/system/sokrat-recording-normalize.service
+    install -m 0644 "$INSTALL_DIR/scripts/systemd/sokrat-recording-normalize.timer" /etc/systemd/system/sokrat-recording-normalize.timer
+    systemctl daemon-reload
+    systemctl enable --now sokrat-recording-normalize.timer 2>/dev/null || true
+    echo "  Sokrat recording normalizer enabled and started"
+else
+    echo "  Warning: recording normalizer units missing; skipped"
+fi
+
 # Provision Sokrat System Watchdog & Alert Daemon
 echo "  Provisioning Sokrat System Watchdog & Alert Daemon..."
 cat > /etc/systemd/system/sokrat-watchdog.service << 'UNIT'
@@ -3534,6 +3563,15 @@ if [ -f /etc/php.ini ]; then
     echo "  PHP timezone set to Africa/Cairo in /etc/php.ini"
 fi
 echo "  Current timezone: $(timedatectl 2>/dev/null | grep 'Time zone' || echo 'N/A')"
+
+# Ensure every existing trunk prefers carrier early media. New trunks receive
+# the same default from server.js. This only affects future outbound calls.
+if command -v asterisk >/dev/null 2>&1; then
+    for trunk_id in $(mysql -u root -p"$MYSQL_ROOT_PWD" asterisk -Nse "SELECT trunkid FROM trunks" 2>/dev/null || true); do
+        asterisk -rx "database put TRUNK ${trunk_id}/dialopts TR" >/dev/null 2>&1 || true
+    done
+fi
+
 # ──────────────────────────────────────────────
 # Step 14 — Verify
 # ──────────────────────────────────────────────

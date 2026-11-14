@@ -2686,6 +2686,43 @@ function isTabAllowed(tabName) {
                     </div>
                 </div>
             </div>
+            <!-- Recording Audio Mix (recording-only) -->
+            <div class="config-card">
+                <div class="p-4 sm:p-5 border-b border-[var(--border-primary)] flex items-center justify-between gap-3">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-8 h-8 rounded-lg bg-rose-500/10 text-rose-400 flex items-center justify-center font-bold text-xs">REC</div>
+                        <div>
+                            <h3 class="text-sm font-bold text-white"><%= isRtl ? 'مزج صوت التسجيل (تسجيل فقط)' : 'Recording Audio Mix (recording only)' %></h3>
+                            <p class="text-[10px] text-[var(--text-muted)]"><%= isRtl ? 'تعديل مستوى صوت الموظف والعميل داخل ملف التسجيل. لا يغير صوت المكالمة المباشرة.' : 'Adjusts employee and customer levels inside the recording file. Live call audio is never changed.' %></p>
+                        </div>
+                    </div>
+                    <span class="px-2 py-0.5 text-[10px] font-bold rounded-md uppercase bg-rose-500/15 text-rose-300 border border-rose-500/30"><%= isRtl ? 'تسجيل فقط' : 'Recording only' %></span>
+                </div>
+                <div class="p-5 grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                    <div>
+                        <label for="recordingAgentGain" class="text-[11px] font-bold text-[var(--text-secondary)] uppercase block mb-1.5 tracking-wider"><%= isRtl ? 'كسب الموظف في التسجيل (dB)' : 'Employee recording gain (dB)' %></label>
+                        <input id="recordingAgentGain" name="recording_agent_gain_db" type="number" min="-12" max="12" step="1" value="0" class="config-input w-full font-mono text-xs">
+                        <p class="text-[10px] text-[var(--text-muted)] mt-1"><%= isRtl ? 'القيمة الافتراضية 0 dB. النطاق -12 إلى +12.' : 'Default 0 dB. Range -12 to +12.' %></p>
+                    </div>
+                    <div>
+                        <label for="recordingCustomerGain" class="text-[11px] font-bold text-[var(--text-secondary)] uppercase block mb-1.5 tracking-wider"><%= isRtl ? 'كسب العميل في التسجيل (dB)' : 'Customer recording gain (dB)' %></label>
+                        <input id="recordingCustomerGain" name="recording_customer_gain_db" type="number" min="-12" max="12" step="1" value="0" class="config-input w-full font-mono text-xs">
+                        <p class="text-[10px] text-[var(--text-muted)] mt-1"><%= isRtl ? 'القيمة الافتراضية 0 dB. النطاق -12 إلى +12.' : 'Default 0 dB. Range -12 to +12.' %></p>
+                    </div>
+                    <div class="flex flex-col justify-center">
+                        <label class="flex items-center gap-2 text-[11px] font-bold text-[var(--text-primary)] cursor-pointer">
+                            <input id="recordingNormalize" name="recording_normalize" type="checkbox" class="w-4 h-4 accent-emerald-500" checked>
+                            <span><%= isRtl ? 'تطبيع مستوى التسجيل بعد المكالمة' : 'Normalize recording loudness after call' %></span>
+                        </label>
+                        <p class="text-[10px] text-[var(--text-muted)] mt-1.5"><%= isRtl ? 'يمنع التسجيلات الخافتة أو الصاخبة. لا يؤثر على المكالمات الجارية.' : 'Prevents quiet or clipped recordings. Does not affect live calls.' %></p>
+                    </div>
+                </div>
+                <div class="px-5 pb-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                    <p class="text-[10px] text-[var(--text-muted)]"><%= isRtl ? 'يُطبق على التسجيلات الجديدة فقط. التسجيلات القديمة تبقى كما هي.' : 'Applies to new recordings only. Existing recordings are unchanged.' %></p>
+                    <button type="button" onclick="resetRecordingAudioMix()" class="config-action-btn config-action-btn--neutral text-xs"><%= isRtl ? 'إعادة الضبط إلى المحايد' : 'Reset to neutral' %></button>
+                </div>
+            </div>
+
             <!-- Per-Dongle DSP Profiles Panel -->
             <div class="config-card overflow-hidden">
                 <div class="p-4 sm:p-5 border-b border-[var(--border-primary)] flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[var(--bg-card)]/50">

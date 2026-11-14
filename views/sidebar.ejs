@@ -1818,6 +1818,10 @@ function can(tab) {
             margin-right: 0 !important;
             margin-left: 0 !important;
         }
+        html.sidebar-collapsed #appSidebar .nav-item .sidebar-png-icon,
+        #appSidebar.sidebar-collapsed .nav-item .sidebar-png-icon {
+            margin-inline-end: 0 !important;
+        }
         html.sidebar-collapsed #appSidebar .settings-launcher,
         #appSidebar.sidebar-collapsed .settings-launcher {
             display: flex !important;
@@ -3380,7 +3384,7 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
             <a href="/?lang=<%= currentLang %>" title="<%= sbT.dashLink %>"
                class="nav-item flex items-center px-4 py-3 rounded-lg transition-all duration-150 text-sm font-semibold relative
                <%= curPage === '/' ? 'bg-[var(--accent-color)] text-white border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
-                <svg class="w-4 h-4 me-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                <span class="sidebar-png-icon shrink-0" aria-hidden="true" style="display:inline-block;width:18px;height:18px;margin-inline-end:10px;background-color:currentColor;-webkit-mask:url('/grid-bold.png') center/contain no-repeat;mask:url('/grid-bold.png') center/contain no-repeat;"></span>
                 <span class="sidebar-text"><%= sbT.dashLink %></span>
             </a>
             <% } %>
@@ -3432,6 +3436,16 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
                     <path d="M8 16c0-2 4-3 4-3s4 1 4 3"/>
                 </svg>
                 <span class="sidebar-text"><%= sbT.contactsLink %></span>
+            </a>
+            <% } %>
+
+            <!-- 4b. Business Customers (root or tenant-bound users) -->
+            <% if (isRoot || (typeof tenantId !== 'undefined' && tenantId)) { %>
+            <a href="/customers?lang=<%= currentLang %>" title="E-HotLine"
+               class="nav-item flex items-center px-4 py-3 rounded-lg transition-all duration-150 text-sm font-semibold relative
+               <%= curPage === '/customers' ? 'bg-[var(--accent-color)] text-white border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
+                <span class="sidebar-png-icon shrink-0" aria-hidden="true" style="display:inline-block;width:18px;height:18px;margin-inline-end:10px;background-color:currentColor;-webkit-mask:url('/24-7.png') center/contain no-repeat;mask:url('/24-7.png') center/contain no-repeat;"></span>
+                <span class="sidebar-text">E-HotLine</span>
             </a>
             <% } %>
 
@@ -3508,17 +3522,6 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
             </a>
             <% } %>
 
-            <!-- 8b. Cloud Tenants (root only) -->
-            <% if (isRoot) { %>
-            <a href="/tenants?lang=<%= currentLang %>" title="<%= currentLang === 'ar' ? 'المستأجرون السحابيون' : 'Cloud Tenants' %>"
-               class="nav-item flex items-center px-4 py-3 rounded-lg transition-all duration-150 text-sm font-semibold relative
-               <%= curPage === '/tenants' ? 'bg-[var(--accent-color)] text-white border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
-                <svg class="w-4 h-4 me-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-4h6v4"/><path d="M9 9h.01M15 9h.01M9 13h.01M15 13h.01"/>
-                </svg>
-                <span class="sidebar-text"><%= currentLang === 'ar' ? 'المستأجرون السحابيون' : 'Cloud Tenants' %></span>
-            </a>
-            <% } %>
 
             <!-- 9. Back up -->
             <% if (can('storage')) { %>

@@ -1,0 +1,10 @@
+[Unit]
+Description=Normalize completed Sokrat call recordings every two minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=2min
+Unit=sokrat-recording-normalize.service
+
+[Install]
+WantedBy=timers.target

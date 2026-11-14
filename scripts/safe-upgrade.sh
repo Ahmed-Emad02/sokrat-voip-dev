@@ -58,6 +58,19 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
+# Federation's automated SSH bootstrap requires sshpass. Existing nodes that
+# were installed before this dependency was added must receive it on upgrade.
+if ! command -v sshpass >/dev/null 2>&1; then
+    if command -v dnf >/dev/null 2>&1; then
+        dnf install -y sshpass openssh-clients >/dev/null 2>&1 || true
+    elif command -v yum >/dev/null 2>&1; then
+        yum install -y sshpass openssh-clients >/dev/null 2>&1 || true
+    fi
+fi
+if ! command -v sshpass >/dev/null 2>&1; then
+    echo "  Warning: sshpass is unavailable; federation SSH bootstrap will need it installed manually."
+fi
+
 # This script updates the very repository it lives in. Bash reads a script
 # incrementally, so without a re-exec the second half of the run would execute
 # the OLD file (new migrations/patches silently skipped). Remember our identity
@@ -810,10 +823,14 @@ text = path.read_text()
 # Restore adaptive jitter buffer.
 text = text.replace('; same => n,Set(JITTERBUFFER(adaptive)=default)', 'same => n,Set(JITTERBUFFER(adaptive)=default)')
 text = text.replace('ExecIf($["${D_JB}" != ""]?Set(JITTERBUFFER(${D_JB})=default))', 'ExecIf($["${D_JB}" != "" & "${D_JB}" != "off"]?Set(JITTERBUFFER(${D_JB})=default))')
-# Add ringback to the trunk hook exactly once.
+# Enable carrier early media. Capital R keeps ringback but passes early media;
+# remove any lower-case r that suppresses it.
 marker = 'exten => s,1,NoOp(--- Outbound call via Dongle (CID auto-set by trunk outcid & Extension RNNoise Filter) ---)'
-if marker in text and 'Set(DIAL_TRUNK_OPTIONS=${DIAL_TRUNK_OPTIONS}r)' not in text:
-    text = text.replace(marker, marker + '\nsame => n,Set(DIAL_TRUNK_OPTIONS=${DIAL_TRUNK_OPTIONS}r)', 1)
+early_media = 'same => n,Set(DIAL_TRUNK_OPTIONS=${STRREPLACE(DIAL_TRUNK_OPTIONS,r)}R)'
+legacy_ringback = 'same => n,Set(DIAL_TRUNK_OPTIONS=${DIAL_TRUNK_OPTIONS}r)'
+text = text.replace(legacy_ringback, '')
+if marker in text and early_media not in text:
+    text = text.replace(marker, marker + '\n' + early_media, 1)
 path.write_text(text)
 PY_AUDIO
     done
@@ -985,7 +1002,7 @@ same => n,Set(CHANNEL(hangup_handler_push)=sub-ai-outbound-hangup,s,1)
 same => n,ExecIf($["${AI_CALLER_ID}"!=""]?Set(CALLERID(num)=${AI_CALLER_ID}))
 same => n,Set(__MON_FMT=wav)
 same => n,Set(__MIXMON_DIR=/var/spool/asterisk/monitor/)
-same => n,Set(MIXMON_OPTS=v(1)V(1))
+same => n,Set(MIXMON_OPTS=${IF($["${DB(AUDIO_GLOBALS/recording_mix_opts)}" != ""]?${DB(AUDIO_GLOBALS/recording_mix_opts)}:v(1)V(1))})
 same => n,Set(NOW=${EPOCH})
 same => n,Set(__DAY=${STRFTIME(${NOW},,%d)})
 same => n,Set(__MONTH=${STRFTIME(${NOW},,%m)})
@@ -1186,7 +1203,7 @@ exten => s,1,Set(REC_POLICY_MODE_SAVE=${REC_POLICY_MODE})
 exten => s,n,GotoIf($["${BLINDTRANSFER}" = ""]?check)
 exten => s,n,ResetCDR()
 exten => s,n,GotoIf($["${REC_STATUS}" != "RECORDING"]?check)
-exten => s,n,Set(MIXMON_OPTS=${IF($["${MIXMON_OPTS}"=""]?v(1)V(1):${MIXMON_OPTS})})
+exten => s,n,Set(MIXMON_OPTS=${IF($["${MIXMON_OPTS}"=""]?${IF($["${DB(AUDIO_GLOBALS/recording_mix_opts)}" != ""]?${DB(AUDIO_GLOBALS/recording_mix_opts)}:v(1)V(1))}:${MIXMON_OPTS})})
 exten => s,n,MixMonitor(${MIXMON_DIR}${YEAR}/${MONTH}/${DAY}/${CALLFILENAME}.${MIXMON_FORMAT},a${MIXMON_OPTS},${MIXMON_POST})
 exten => s,n(check),Set(__MON_FMT=${IF($["${MIXMON_FORMAT}"="wav49"]?WAV:${MIXMON_FORMAT})})
 exten => s,n,GotoIf($["${REC_STATUS}"!="RECORDING"]?next)
@@ -1245,7 +1262,7 @@ exten => conf,n,Return()
 exten => page,1,GosubIf($["${REC_POLICY_MODE}"="always"]?recconf,1(${EXTEN},${ARG2},${FROMEXTEN}))
 exten => page,n,Return()
 
-exten => record,1,Set(MIXMON_OPTS=${IF($["${MIXMON_OPTS}"=""]?v(1)V(1):${MIXMON_OPTS})})
+exten => record,1,Set(MIXMON_OPTS=${IF($["${MIXMON_OPTS}"=""]?${IF($["${DB(AUDIO_GLOBALS/recording_mix_opts)}" != ""]?${DB(AUDIO_GLOBALS/recording_mix_opts)}:v(1)V(1))}:${MIXMON_OPTS})})
 exten => record,n,MixMonitor(${MIXMON_DIR}${YEAR}/${MONTH}/${DAY}/${CALLFILENAME}.${MIXMON_FORMAT},${MIXMON_OPTS},${MIXMON_POST})
 exten => record,n,Set(__REC_STATUS=RECORDING)
 exten => record,n,Set(CDR(recordingfile)=${CALLFILENAME}.${MON_FMT})
@@ -1256,7 +1273,7 @@ exten => record,n,Return()
 ; while the monitored channel is bridged - on a queue the monitored leg is
 ; often never bridged, which produced 44-byte (header-only) recordings.
 exten => recq,1,Set(MONITOR_FILENAME=${MIXMON_DIR}${YEAR}/${MONTH}/${DAY}/${CALLFILENAME})
-exten => recq,n,Set(MIXMON_OPTS=${IF($["${MIXMON_OPTS}"=""]?v(1)V(1):${MIXMON_OPTS})})
+exten => recq,n,Set(MIXMON_OPTS=${IF($["${MIXMON_OPTS}"=""]?${IF($["${DB(AUDIO_GLOBALS/recording_mix_opts)}" != ""]?${DB(AUDIO_GLOBALS/recording_mix_opts)}:v(1)V(1))}:${MIXMON_OPTS})})
 exten => recq,n,MixMonitor(${MONITOR_FILENAME}.${MIXMON_FORMAT},${MIXMON_OPTS},${MIXMON_POST})
 exten => recq,n,Set(__REC_STATUS=RECORDING)
 exten => recq,n,Set(CDR(recordingfile)=${CALLFILENAME}.${MON_FMT})
@@ -1408,7 +1425,7 @@ same => n(done),Hangup()
             '\nsame => n,Set(__CALLFILENAME=in-${DONGLENAME}-${FROMEXTEN}-${TIMESTR}-${UNIQUEID})'
             '\nsame => n,Set(__MON_FMT=wav)'
             '\nsame => n,Set(__MIXMON_DIR=/var/spool/asterisk/monitor/)'
-            '\nsame => n,Set(MIXMON_OPTS=v(1)V(1))'
+            '\nsame => n,Set(MIXMON_OPTS=${IF($["${DB(AUDIO_GLOBALS/recording_mix_opts_dongle)}" != ""]?${DB(AUDIO_GLOBALS/recording_mix_opts_dongle)}:v(1)V(1))})'
             '\nsame => n,MixMonitor(${MIXMON_DIR}${YEAR}/${MONTH}/${DAY}/${CALLFILENAME}.${MON_FMT},a${MIXMON_OPTS})'
             '\nsame => n,Set(__REC_STATUS=RECORDING)'
             '\nsame => n,Set(__REC_POLICY_MODE=always)'
@@ -1835,6 +1852,26 @@ systemctl restart sokrat-voip.service 2>/dev/null || true
 systemctl restart sokrat-watchdog.service 2>/dev/null || true
 systemctl restart sokrat-stt.service 2>/dev/null || true
 
+# Provision/refresh the recording-only loudness normalizer.
+if [ -f "$INSTALL_DIR/scripts/systemd/sokrat-recording-normalize.service" ] && \
+   [ -f "$INSTALL_DIR/scripts/systemd/sokrat-recording-normalize.timer" ]; then
+    install -d -o asterisk -g asterisk -m 0750 /var/lib/sokrat-recording-normalizer
+    chmod 0755 "$INSTALL_DIR/scripts/normalize-call-recordings.js" 2>/dev/null || true
+    install -m 0644 "$INSTALL_DIR/scripts/systemd/sokrat-recording-normalize.service" /etc/systemd/system/sokrat-recording-normalize.service
+    install -m 0644 "$INSTALL_DIR/scripts/systemd/sokrat-recording-normalize.timer" /etc/systemd/system/sokrat-recording-normalize.timer
+    systemctl daemon-reload
+    systemctl enable --now sokrat-recording-normalize.timer 2>/dev/null || true
+    echo "  Recording loudness normalizer refreshed"
+fi
+
+# Ensure existing trunks prefer carrier early media; new trunks get this from
+# the application defaults. This only changes future outbound calls.
+if command -v asterisk >/dev/null 2>&1; then
+    for trunk_id in $(mysql "${MYSQL_AUTH[@]}" asterisk -Nse "SELECT trunkid FROM trunks" 2>/dev/null || true); do
+        asterisk -rx "database put TRUNK ${trunk_id}/dialopts TR" >/dev/null 2>&1 || true
+    done
+fi
+
 # Provision/Restart Sokrat Laya GSM Maintenance Agent Daemon
 if [ -f "$INSTALL_DIR/laya/engine.py" ]; then
     chmod +x "$INSTALL_DIR/laya/cli.py" 2>/dev/null || true
@@ -1888,6 +1925,47 @@ echo "--- Asterisk GSM Dongles ---"
 if command -v asterisk &>/dev/null && pgrep -x asterisk >/dev/null 2>&1; then
     asterisk -rx "dongle show devices" 2>/dev/null || echo "chan_dongle not yet ready"
 fi
+
+# Business customers + per-tenant custom field definitions
+mysql "${MYSQL_AUTH[@]}" asterisk -e "
+CREATE TABLE IF NOT EXISTS \`sokrat_customer_fields\` (
+  \`id\` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  \`tenant_id\` INT UNSIGNED NOT NULL,
+  \`field_key\` VARCHAR(50) NOT NULL,
+  \`label_en\` VARCHAR(100) NOT NULL,
+  \`label_ar\` VARCHAR(100) DEFAULT NULL,
+  \`field_type\` ENUM('text','textarea','number','date','select','checkbox') NOT NULL DEFAULT 'text',
+  \`options_json\` TEXT DEFAULT NULL,
+  \`required\` TINYINT(1) NOT NULL DEFAULT 0,
+  \`sort_order\` SMALLINT NOT NULL DEFAULT 0,
+  \`active\` TINYINT(1) NOT NULL DEFAULT 1,
+  \`created_by\` INT UNSIGNED DEFAULT NULL,
+  \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (\`id\`),
+  UNIQUE KEY \`uq_sokrat_customer_field\` (\`tenant_id\`, \`field_key\`),
+  KEY \`idx_sokrat_customer_fields\` (\`tenant_id\`, \`active\`, \`sort_order\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE IF NOT EXISTS \`sokrat_customers\` (
+  \`id\` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  \`tenant_id\` INT UNSIGNED NOT NULL,
+  \`owner_user_id\` INT UNSIGNED NOT NULL,
+  \`name\` VARCHAR(160) NOT NULL,
+  \`phone\` VARCHAR(40) DEFAULT NULL,
+  \`email\` VARCHAR(255) DEFAULT NULL,
+  \`data_json\` JSON DEFAULT NULL,
+  \`source\` VARCHAR(40) NOT NULL DEFAULT 'manual',
+  \`last_session_id\` CHAR(32) DEFAULT NULL,
+  \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  \`deleted_at\` DATETIME DEFAULT NULL,
+  PRIMARY KEY (\`id\`),
+  KEY \`idx_sokrat_customers_scope\` (\`tenant_id\`, \`owner_user_id\`, \`updated_at\`),
+  KEY \`idx_sokrat_customers_phone\` (\`tenant_id\`, \`phone\`),
+  KEY \`idx_sokrat_customers_email\` (\`tenant_id\`, \`email\`),
+  KEY \`idx_sokrat_customers_session\` (\`last_session_id\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+" 2>/dev/null || true
 
 echo "--- Sokrat VoIP Service Status ---"
 systemctl is-active sokrat-voip.service 2>/dev/null && echo "sokrat-voip: active (running)" || echo "sokrat-voip: inactive"

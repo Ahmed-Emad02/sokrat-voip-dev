@@ -36,6 +36,17 @@ const createCrmRouter = require('./routes/crm-integration');
 const createExtensionContactsRouter = require('./routes/extension-contacts');
 const { requireExtensionSignature } = require('./lib/extension-auth');
 const { parseCallStateLines } = require('./lib/call-state');
+const {
+    findDongle,
+    evaluateRestartHealth,
+    buildImsiFailureEvent,
+    buildDongleRecoveredEvent,
+    updateImsiFailureStreak,
+    buildImsiEscalationEvent,
+    buildRestartFailedEvent,
+    buildRestartHealthyEvent,
+    formatRestartAuditEntry
+} = require('./lib/dongle-health');
 const { dbToAsteriskVolume } = require('./lib/call-volume');
 const { createWakeAnswerCancel } = require('./lib/webrtc-wake-answer');
 const { DEFAULT_OUTBOUND_DIAL_PATTERNS, resolveOutboundDialPatterns } = require('./lib/outbound-routes');
@@ -45,6 +56,8 @@ const createExtensionAgentStatusRouter = require('./routes/extension-agent-statu
 const createAiEvaluationRouter = require('./routes/ai-evaluation');
 const createTenantCallsRouter = require('./routes/tenant-calls');
 const { TenantCallService, normalizeOrigin } = require('./lib/tenant-calls');
+const createCustomersRouter = require('./routes/customers');
+const { CustomerService } = require('./lib/customers');
 const { isRootSession, isAiCampaignRow, canAccessAiCampaign } = require('./lib/ai/access');
 const agentStatusService = require('./lib/agent-status');
 const { attachChatSocket } = require('./lib/chat/socket');
@@ -2675,6 +2688,7 @@ app.use((req, res, next) => {
         '/login', '/logout', '/forgot-password', '/reset-password',
         '/api/auth/forgot-password', '/api/auth/reset-password', '/api/network-info',
         '/favicon.ico', '/favicon.png', '/robots.txt', '/embed/crm/live',
+        '/preview/guest-call',
         '/401', '/403', '/404', '/api/telephony/camp-on/dialplan-trigger',
         '/api/federation/v1/ping'
     ];
@@ -2940,6 +2954,11 @@ void tenantCallService.ensureSchema().catch((error) => {
     console.error('[tenant-calls] schema init:', error.message);
 });
 
+const customerService = new CustomerService({ db: asteriskPool });
+void customerService.ensureSchema().catch((error) => {
+    console.error('[customers] schema init:', error.message);
+});
+
 
 let activeCalls = {};
 // Extensions that currently have a live Asterisk channel. Maintained by the
@@ -3036,6 +3055,14 @@ app.use('/api/ai', createAiEvaluationRouter({
 // Public click-to-call sessions and platform tenant management.
 app.use('/api', createTenantCallsRouter(tenantCallService, {
     isRootRequest: (req) => isRootSession(req)
+}));
+
+// Per-tenant customer records and custom fields. Tenant users are scoped to
+// their own tenant and owner_user_id by the router/service.
+app.use('/api', createCustomersRouter({
+    service: customerService,
+    isRootRequest: (req) => isRootSession(req),
+    getTenantId
 }));
 
 // Register /crm-live Socket.io namespace
@@ -5443,29 +5470,62 @@ app.get('/users', async (req, res) => {
     }
 });
 
-// GET /tenants - platform-admin cloud tenant management (interactive root only)
+// GET /customers - combined businesses (cloud tenants) and business customers.
+// Root users get both views in one page; tenant users are owner-scoped by the API.
+app.get('/customers', requireAuth, async (req, res) => {
+    const currentLang = res.locals.currentLang || 'en';
+    const root = isRootSession(req);
+    const initialView = root && String(req.query.view || '') === 'businesses' ? 'businesses' : 'customers';
+    let tenantId = root ? Number(req.query.tenant_id) || null : getTenantId(req);
+    if (!root && !tenantId) {
+        return res.status(403).render('403', { currentLang, isRtl: currentLang === 'ar' });
+    }
+    let tenants = [];
+    let tenantName = res.locals.tenantName || null;
+    let assignedExtensions = [];
+    try {
+        if (root) {
+            const [rows] = await asteriskPool.execute(
+                "SELECT id, name FROM sokrat_tenants WHERE status = 'active' ORDER BY name ASC"
+            );
+            tenants = rows.map(row => ({ id: Number(row.id), name: row.name }));
+            if (!tenantId && tenants.length) tenantId = tenants[0].id;
+            const [assignedRows] = await asteriskPool.execute('SELECT DISTINCT extension FROM sokrat_tenant_agents');
+            assignedExtensions = assignedRows.map(row => String(row.extension));
+        }
+        if (tenantId && !tenantName) {
+            const [rows] = await asteriskPool.execute(
+                "SELECT name FROM sokrat_tenants WHERE id = ? AND status <> 'deleted' LIMIT 1",
+                [tenantId]
+            );
+            tenantName = rows.length ? rows[0].name : null;
+        }
+    } catch (_) {}
+    res.render('customers', {
+        currentPage: '/customers',
+        currentLang,
+        isRtl: currentLang === 'ar',
+        isSuperAdmin: isSuperAdmin(req),
+        isRootUser: root,
+        tenantId,
+        tenantName,
+        tenants,
+        initialView,
+        roster: res.locals.roster || [],
+        assignedExtensions,
+        currentUser: req.session ? req.session.username : '',
+        clientName: process.env.CLIENT_NAME || '',
+        allowedTabs: res.locals.allowedTabs || []
+    });
+});
+
+// Legacy /tenants entry point; the combined businesses view lives on /customers.
 app.get('/tenants', requireAuth, async (req, res) => {
     const currentLang = res.locals.currentLang || 'en';
     if (!isRootSession(req)) {
         return res.status(403).render('403', { currentLang, isRtl: currentLang === 'ar' });
     }
-    let assignedExtensions = [];
-    try {
-        const [assignedRows] = await asteriskPool.execute('SELECT DISTINCT extension FROM sokrat_tenant_agents');
-        assignedExtensions = assignedRows.map(row => String(row.extension));
-    } catch (_) {}
-    res.render('tenants', {
-        currentPage: '/tenants',
-        currentLang,
-        isRtl: currentLang === 'ar',
-        isSuperAdmin: isSuperAdmin(req),
-        isRootUser: isRootSession(req),
-        allowedTabs: res.locals.allowedTabs || [],
-        currentUser: req.session ? req.session.username : '',
-        clientName: process.env.CLIENT_NAME || '',
-        roster: res.locals.roster || [],
-        assignedExtensions
-    });
+    return res.redirect(`/customers?view=businesses&lang=${encodeURIComponent(currentLang)}`);
 });
 
 // POST /users/add - add new user
@@ -11322,6 +11382,132 @@ function getAstDbNumbers(callback) {
     }).catch(() => callback(mappings));
 }
 
+// Dongle restart audit, post-restart health verification, and recovery escalation.
+const DONGLE_RESTART_AUDIT_FILE = process.env.DONGLE_RESTART_AUDIT_FILE || path.join('/var/log/sokrat-voip', 'dongle-restarts.jsonl');
+const DONGLE_RESTART_COOLDOWN_MS = 5 * 60 * 1000;
+const DONGLE_IMSI_ESCALATION_THRESHOLD = 5;
+const DONGLE_IMSI_ESCALATION_WINDOW_MS = 5 * 60 * 1000;
+const dongleRestartHealthTimers = new Map();
+const dongleRestartCooldowns = new Map();
+const imsiFailureStreaks = new Map();
+
+function appendDongleRestartAudit(entry) {
+    const line = formatRestartAuditEntry(entry);
+    try {
+        fs.mkdirSync(path.dirname(DONGLE_RESTART_AUDIT_FILE), { recursive: true });
+        fs.appendFileSync(DONGLE_RESTART_AUDIT_FILE, line + '\n');
+    } catch (error) {
+        console.warn(`DONGLE-RESTART-AUDIT: failed to write ${DONGLE_RESTART_AUDIT_FILE}: ${error.message}`);
+    }
+    console.log(`DONGLE-RESTART-AUDIT ${line}`);
+}
+
+function scheduleDongleHealthCheck(dongleId, context = {}) {
+    const id = String(dongleId || '').trim().toLowerCase();
+    if (!id) return;
+
+    const delayMs = Math.min(30000, Math.max(1000, Number(context.delayMs) || 8000));
+    const existing = dongleRestartHealthTimers.get(id);
+    clearTimeout(existing);
+
+    const timer = setTimeout(() => {
+        dongleRestartHealthTimers.delete(id);
+        execFile(ASTERISK_BIN, ['-rx', 'dongle show devices'], (error, stdout) => {
+            let devices = [];
+            if (!error && stdout) {
+                try {
+                    devices = parseDevicesOutput(stdout, true);
+                } catch (parseError) {
+                    console.warn(`DONGLE-HEALTH: failed to parse dongle state for ${id}: ${parseError.message}`);
+                }
+            }
+
+            const device = findDongle(devices, id);
+            const health = evaluateRestartHealth(device);
+            appendDongleRestartAudit({
+                type: 'restart_health',
+                dongleId: id,
+                source: context.source || 'unknown',
+                reason: context.reason || 'restart',
+                healthy: health.healthy,
+                healthReason: health.reason,
+                state: health.state,
+                imsiPresent: Boolean(device && device.IMSI && device.IMSI !== '-' && device.IMSI !== 'Unknown')
+            });
+
+            if (health.healthy) {
+                dongleRestartCooldowns.delete(id);
+                imsiFailureStreaks.delete(id);
+                io.emit('dongleRestartHealthy', buildRestartHealthyEvent({ dongleId: id, state: health.state }));
+                io.emit('dongleRecovered', buildDongleRecoveredEvent(id, new Date().toISOString()));
+            } else {
+                const retryAfterSec = Math.ceil(DONGLE_RESTART_COOLDOWN_MS / 1000);
+                dongleRestartCooldowns.set(id, Date.now() + DONGLE_RESTART_COOLDOWN_MS);
+                io.emit('dongleRestartFailed', buildRestartFailedEvent({
+                    dongleId: id,
+                    state: health.state,
+                    reason: health.reason,
+                    retryAfterSec
+                }));
+            }
+            io.emit('usbDevicesUpdated');
+        });
+    }, delayMs);
+
+    if (typeof timer.unref === 'function') timer.unref();
+    dongleRestartHealthTimers.set(id, timer);
+}
+
+function restartDongleWithAudit(dongleId, options = {}) {
+    const id = String(dongleId || '').trim().toLowerCase();
+    const reason = options.reason || 'manual';
+    const source = options.source || 'api';
+    const now = Date.now();
+    const cooldownUntil = dongleRestartCooldowns.get(id) || 0;
+
+    if (now < cooldownUntil) {
+        const retryAfterSec = Math.max(1, Math.ceil((cooldownUntil - now) / 1000));
+        appendDongleRestartAudit({ type: 'restart', phase: 'blocked_cooldown', dongleId: id, reason, source, retryAfterSec });
+        return { ok: false, error: 'restart_cooldown', retryAfterSec };
+    }
+
+    appendDongleRestartAudit({ type: 'restart', phase: 'requested', dongleId: id, reason, source });
+
+    execFile(ASTERISK_BIN, ['-rx', `dongle restart now ${id}`], (error, stdout, stderr) => {
+        if (error) {
+            const retryAfterSec = 60;
+            dongleRestartCooldowns.set(id, Date.now() + retryAfterSec * 1000);
+            appendDongleRestartAudit({
+                type: 'restart',
+                phase: 'command_failed',
+                dongleId: id,
+                reason,
+                source,
+                error: (stderr || error.message || '').trim()
+            });
+            io.emit('dongleRestartFailed', buildRestartFailedEvent({
+                dongleId: id,
+                state: 'Unknown',
+                reason: 'restart_command_failed',
+                retryAfterSec
+            }));
+            return;
+        }
+
+        appendDongleRestartAudit({
+            type: 'restart',
+            phase: 'command_ok',
+            dongleId: id,
+            reason,
+            source,
+            output: (stdout || '').trim()
+        });
+        scheduleDongleHealthCheck(id, { source, reason, delayMs: 20000 });
+    });
+
+    return { ok: true, healthCheck: 'scheduled' };
+}
+
 // Start background tail log monitor on the Asterisk verbose log file
 function startUssdLogMonitor() {
     console.log("GSM MONITOR: Starting tail process on /var/log/asterisk/full...");
@@ -11334,6 +11520,86 @@ function startUssdLogMonitor() {
     const dongleLogPattern = /chan_dongle|at_response|app_ussd|dongle[0-9]+/i;
     const imsiErrorPattern = /\[([^\]]+)\]\s+ERROR\[\d+\](?:\s*:\s*)?\s+at_response\.c(?::\d+)?(?::|\s+)?(?:\s*log_cmd_response_error:\s*)?\s*\[([^\]]+)\]\s+Getting IMSI number failed/i;
     const latestImsiFailAlerts = {};
+    const pendingImsiLookups = new Map();
+
+    function handleDongleRecovered(dongleId, logTime) {
+        const id = String(dongleId || '').trim().toLowerCase();
+        if (!id) return;
+        imsiFailureStreaks.delete(id);
+        delete latestImsiFailAlerts[id];
+        pendingImsiLookups.delete(id);
+        console.log(`GSM MONITOR: ${id} initialized and ready; clearing SIM alerts`);
+        appendDongleRestartAudit({ type: 'dongle_recovered', dongleId: id, logTime, source: 'asterisk_log' });
+        io.emit('dongleRecovered', buildDongleRecoveredEvent(id, logTime));
+    }
+
+    function handleImsiFailure(dongleId, logTime) {
+        const id = String(dongleId || '').trim().toLowerCase();
+        if (!id) return;
+        const now = Date.now();
+        const streakResult = updateImsiFailureStreak(
+            imsiFailureStreaks.get(id),
+            now,
+            { threshold: DONGLE_IMSI_ESCALATION_THRESHOLD, windowMs: DONGLE_IMSI_ESCALATION_WINDOW_MS }
+        );
+        imsiFailureStreaks.set(id, streakResult.streak);
+
+        // Once escalated, keep the escalation state until a successful init clears it.
+        if (streakResult.streak.escalatedAt && !streakResult.shouldEscalate) return;
+
+        if (!streakResult.shouldEscalate) {
+            const lastAlert = latestImsiFailAlerts[id];
+            if (lastAlert && (now - lastAlert) <= 30000) return;
+        }
+        if (pendingImsiLookups.has(id) && !streakResult.shouldEscalate) return;
+
+        const lookupToken = Symbol(id);
+        pendingImsiLookups.set(id, lookupToken);
+        if (!streakResult.shouldEscalate) latestImsiFailAlerts[id] = now;
+
+        getDevicesOutputCached((error, stdout) => {
+            if (pendingImsiLookups.get(id) !== lookupToken) return;
+            pendingImsiLookups.delete(id);
+
+            let device = null;
+            if (!error && stdout) {
+                try {
+                    device = findDongle(parseDevicesOutput(stdout, true), id);
+                } catch (parseError) {
+                    console.warn(`GSM MONITOR: failed to parse live state for ${id}: ${parseError.message}`);
+                }
+            }
+
+            if (streakResult.shouldEscalate) {
+                const state = device ? (device.State || 'Unknown') : 'Unknown';
+                const escalation = buildImsiEscalationEvent({
+                    dongleId: id,
+                    count: streakResult.streak.count,
+                    state,
+                    windowMs: DONGLE_IMSI_ESCALATION_WINDOW_MS
+                });
+                console.warn(`GSM MONITOR: escalating ${id} after ${streakResult.streak.count} IMSI failures in ${DONGLE_IMSI_ESCALATION_WINDOW_MS / 60000} minutes`);
+                appendDongleRestartAudit({
+                    type: 'imsi_escalation',
+                    dongleId: id,
+                    count: streakResult.streak.count,
+                    state,
+                    logTime,
+                    windowMs: DONGLE_IMSI_ESCALATION_WINDOW_MS
+                });
+                io.emit('dongleEscalated', escalation);
+                return;
+            }
+
+            const failure = buildImsiFailureEvent({ dongleId: id, logTime, device });
+            if (failure.event === 'dongleSimError') {
+                console.warn(`GSM MONITOR: IMSI read failure on connected ${id} at ${logTime}`);
+            } else {
+                console.log(`GSM MONITOR: ${id} is offline at ${logTime}; suppressing SIM alert`);
+            }
+            io.emit(failure.event, failure.payload);
+        });
+    }
 
     function processLogStatement(statement) {
         if (!statement.trim()) return;
@@ -11374,25 +11640,18 @@ function startUssdLogMonitor() {
             }
         }
 
-        // Parse Getting IMSI number failed error from chan_dongle at_response.c
+        // Parse Getting IMSI number failed error from chan_dongle at_response.c.
+        // The live dongle state is checked before any SIM-facing alert is emitted.
         const imsiMatch = imsiErrorPattern.exec(statement);
         if (imsiMatch) {
-            const logTime = imsiMatch[1].trim();
-            const dongleId = imsiMatch[2].trim();
-            const now = Date.now();
-            const lastAlert = latestImsiFailAlerts[dongleId];
-            // Debounce alerts to avoid spamming the UI (alert at most once every 30 seconds per dongle)
-            if (!lastAlert || (now - lastAlert > 30000)) {
-                latestImsiFailAlerts[dongleId] = now;
-                console.warn(`GSM MONITOR: SIM error on ${dongleId} (Getting IMSI number failed) at ${logTime}`);
-                io.emit('dongleSimError', {
-                    dongleId,
-                    error: 'imsi_failed',
-                    logTime,
-                    messageEn: `SIM card is not connected properly on ${dongleId} (failed to read IMSI).`,
-                    messageAr: `بطاقة SIM غير متصلة بشكل صحيح في ${dongleId} (تعذر قراءة رقم IMSI).`
-                });
-            }
+            handleImsiFailure(imsiMatch[2].trim(), imsiMatch[1].trim());
+        }
+
+        // Clear any stale SIM/escalation alert as soon as the modem initializes.
+        const recoveredMatch = /\[(dongle\d+)\]\s+Dongle initialized and ready/i.exec(statement);
+        if (recoveredMatch) {
+            const logTime = (statement.match(/^\[([^\]]+)\]/) || [])[1] || '';
+            handleDongleRecovered(recoveredMatch[1], logTime);
         }
 
         // Parse USSD response
@@ -11900,16 +12159,22 @@ app.post('/api/gsm-dongles/reload/:dongleId', requireAuth, requireActionPermissi
             return res.status(403).json({ success: false, error: "Forbidden: Access denied to this dongle." });
         }
     }
-    execFile(ASTERISK_BIN, ['-rx', `dongle restart now ${dongleId}`], (error, stdout, stderr) => {
-        if (error) {
-            return res.status(500).json({ success: false, error: stderr || error.message });
-        }
-        setTimeout(() => io.emit('usbDevicesUpdated'), 2000);
-        res.json({
-            success: true,
-            message: `Dongle ${dongleId} restarted in Asterisk successfully`,
-            output: (stdout || '').trim()
+    const restart = restartDongleWithAudit(dongleId, {
+        reason: 'manual reload',
+        source: 'api:/api/gsm-dongles/reload'
+    });
+    if (!restart.ok) {
+        return res.status(429).json({
+            success: false,
+            error: 'Restart is paused after a failed health check. Use a USB replug or wait for the cooldown.',
+            retryAfterSec: restart.retryAfterSec
         });
+    }
+    setTimeout(() => io.emit('usbDevicesUpdated'), 2000);
+    res.json({
+        success: true,
+        message: `Dongle ${dongleId} restart requested; post-restart health check scheduled`,
+        healthCheck: restart.healthCheck
     });
 });
 
@@ -11967,12 +12232,41 @@ app.post('/api/gsm-dongles/reboot-modem/:dongleId', requireAuth, requireActionPe
             return res.status(403).json({ success: false, error: "Forbidden: Access denied to this dongle." });
         }
     }
+    appendDongleRestartAudit({
+        type: 'modem_reboot',
+        phase: 'requested',
+        dongleId,
+        source: 'api:/api/gsm-dongles/reboot-modem'
+    });
     execFile(ASTERISK_BIN, ['-rx', `dongle cmd ${dongleId} AT+CFUN=1,1`], (error, stdout, stderr) => {
         if (error) {
+            appendDongleRestartAudit({
+                type: 'modem_reboot',
+                phase: 'command_failed',
+                dongleId,
+                source: 'api:/api/gsm-dongles/reboot-modem',
+                error: (stderr || error.message || '').trim()
+            });
             return res.status(500).json({ success: false, error: stderr || error.message });
         }
+        appendDongleRestartAudit({
+            type: 'modem_reboot',
+            phase: 'command_ok',
+            dongleId,
+            source: 'api:/api/gsm-dongles/reboot-modem',
+            output: (stdout || '').trim()
+        });
+        scheduleDongleHealthCheck(dongleId, {
+            source: 'api:/api/gsm-dongles/reboot-modem',
+            reason: 'at_cfun_reboot',
+            delayMs: 20000
+        });
         setTimeout(() => io.emit('usbDevicesUpdated'), 3000);
-        res.json({ success: true, message: `Modem reboot command sent to ${dongleId}`, output: (stdout || '').trim() });
+        res.json({
+            success: true,
+            message: `Modem reboot command sent to ${dongleId}; post-reboot health check scheduled`,
+            healthCheck: 'scheduled'
+        });
     });
 });
 
@@ -11992,18 +12286,61 @@ app.post('/api/gsm-dongles/virtual-replug/:dongleId', async (req, res) => {
     }
     const busId = getUsbBusIdForDongle(dongleId);
     if (!busId) {
+        appendDongleRestartAudit({
+            type: 'virtual_replug',
+            phase: 'bus_not_found',
+            dongleId,
+            source: 'api:/api/gsm-dongles/virtual-replug'
+        });
         io.emit('usbDevicesUpdated');
         return res.json({ success: false, error: `USB bus ID not found for ${dongleId}` });
     }
 
+    appendDongleRestartAudit({
+        type: 'virtual_replug',
+        phase: 'requested',
+        dongleId,
+        busId,
+        source: 'api:/api/gsm-dongles/virtual-replug'
+    });
     const { exec } = require('child_process');
     const cmd = `echo "${busId}" > /sys/bus/usb/drivers/usb/unbind && sleep 2 && echo "${busId}" > /sys/bus/usb/drivers/usb/bind`;
     exec(cmd, (error, stdout, stderr) => {
         setTimeout(() => io.emit('usbDevicesUpdated'), 4000);
         if (error) {
+            appendDongleRestartAudit({
+                type: 'virtual_replug',
+                phase: 'command_failed',
+                dongleId,
+                busId,
+                source: 'api:/api/gsm-dongles/virtual-replug',
+                error: (stderr || error.message || '').trim()
+            });
+            io.emit('dongleRestartFailed', buildRestartFailedEvent({
+                dongleId,
+                state: 'Unknown',
+                reason: 'virtual_replug_failed',
+                retryAfterSec: 60
+            }));
             return res.status(500).json({ success: false, error: `Virtual re-plug failed for ${busId}: ${stderr || error.message}` });
         }
-        res.json({ success: true, message: `Virtual USB re-plug executed for ${dongleId} (${busId})` });
+        appendDongleRestartAudit({
+            type: 'virtual_replug',
+            phase: 'command_ok',
+            dongleId,
+            busId,
+            source: 'api:/api/gsm-dongles/virtual-replug'
+        });
+        scheduleDongleHealthCheck(dongleId, {
+            source: 'api:/api/gsm-dongles/virtual-replug',
+            reason: 'virtual_replug',
+            delayMs: 20000
+        });
+        res.json({
+            success: true,
+            message: `Virtual USB re-plug executed for ${dongleId} (${busId}); post-replug health check scheduled`,
+            healthCheck: 'scheduled'
+        });
     });
 });
 
@@ -12148,8 +12485,12 @@ app.post('/api/gsm-dongles/update-ports/:dongleId', requireAuth, async (req, res
 
         const updated = updateDonglePortsInConf(dongleId, audio, data);
 
-        // Restart dongle channel in Asterisk to bind to new ports immediately
-        execFile(ASTERISK_BIN, ['-rx', `dongle restart now ${dongleId}`], () => {});
+        // Restart dongle channel in Asterisk to bind to new ports immediately.
+        // The helper records the attempt and verifies modem health afterward.
+        const restart = restartDongleWithAudit(dongleId, {
+            reason: 'tty port update',
+            source: 'api:/api/gsm-dongles/update-ports'
+        });
 
         setTimeout(() => io.emit('usbDevicesUpdated'), 2500);
 
@@ -12158,7 +12499,10 @@ app.post('/api/gsm-dongles/update-ports/:dongleId', requireAuth, async (req, res
             dongleId,
             audio: updated.audio,
             data: updated.data,
-            message: `Updated TTY ports for [${dongleId}]: audio=${updated.audio}, data=${updated.data}`
+            message: `Updated TTY ports for [${dongleId}]: audio=${updated.audio}, data=${updated.data}`,
+            restart: restart.ok
+                ? { scheduled: true, healthCheck: restart.healthCheck }
+                : { scheduled: false, error: restart.error, retryAfterSec: restart.retryAfterSec }
         });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
@@ -16136,6 +16480,11 @@ app.put('/api/config/extensions/:extension', async (req, res) => {
         const devDial = isWebRTC ? `PJSIP/${extNum}` : `SIP/${extNum}`;
 
         await pool.query('UPDATE `asterisk`.`devices` SET tech = ?, dial = ? WHERE id = ?', [devTech, devDial, extNum]);
+        // The dialplan reads DEVICE/<ext>/dial at call time. Keep it in sync
+        // with the channel driver chosen above, otherwise switching an
+        // extension to WebRTC leaves it unreachable through the old SIP driver.
+        await execFileAsync(ASTERISK_BIN, ['-rx', `database put DEVICE/${extNum} dial "${devDial}"`]);
+        await execFileAsync(ASTERISK_BIN, ['-rx', `database put DEVICE/${extNum} tech "${devTech}"`]);
         if (displayName) {
             await pool.query('UPDATE `asterisk`.`devices` SET description = ? WHERE id = ?', [displayName, extNum]);
             await pool.query('UPDATE `asterisk`.`users` SET name = ? WHERE extension = ?', [displayName, extNum]);
@@ -18370,6 +18719,16 @@ function trunkProtocolTable(tech) {
     return null;
 }
 
+function ensureEarlyMediaDialOptions(value) {
+    let options = String(value || '').trim();
+    // Dial option 'r' forces Asterisk-generated local ringback and suppresses
+    // early media. Remove it and always allow early media with 'R'.
+    options = options.replace(/r/g, '');
+    if (!options) options = 'TR';
+    if (!/R/.test(options)) options += 'R';
+    return options;
+}
+
 function normalizeTrunkPayload(body) {
     const requestedTech = String(body.tech || 'custom').trim().toLowerCase();
     const tech = requestedTech === 'iax' ? 'iax2' : requestedTech;
@@ -18423,7 +18782,7 @@ function normalizeTrunkPayload(body) {
         maxchans: String(body.maxchans || '').trim(),
         dialoutprefix: String(body.dialoutprefix || '').trim(),
         disabled: String(body.disabled || '').trim() === 'on' ? 'on' : 'off',
-        dialopts: String(body.dialopts || '').trim(),
+        dialopts: ensureEarlyMediaDialOptions(body.dialopts),
         continue: String(body.continue || '').trim() === 'on' ? 'on' : 'off',
         failscript: String(body.failscript || '').trim(),
         peerdetails,
@@ -21077,6 +21436,9 @@ app.get('/api/config/audio-globals', async (req, res) => {
         let cellular_rnnoise = 'on';
         let cellular_agc = '8000';
         let cellular_jitterbuffer = 'off';
+        let recording_agent_gain_db = '0';
+        let recording_customer_gain_db = '0';
+        let recording_normalize = '1';
         try {
             const { stdout } = await execPromise(`${ASTERISK_BIN} -rx "database show AUDIO_GLOBALS"`);
             const thresh = (stdout || '').match(/\/AUDIO_GLOBALS\/vad_threshold\s*:\s*([\d\.]+)/);
@@ -21086,6 +21448,9 @@ app.get('/api/config/audio-globals', async (req, res) => {
             const rnnoiseMatch = (stdout || '').match(/\/AUDIO_GLOBALS\/cellular_rnnoise\s*:\s*([\w\-]+)/);
             const agcMatch = (stdout || '').match(/\/AUDIO_GLOBALS\/cellular_agc\s*:\s*([\w\-]+)/);
             const jbMatch = (stdout || '').match(/\/AUDIO_GLOBALS\/cellular_jb\s*:\s*([\w\-]+)/);
+            const recAgentMatch = (stdout || '').match(/\/AUDIO_GLOBALS\/recording_agent_gain_db\s*:\s*([\-\d\.]+)/);
+            const recCustomerMatch = (stdout || '').match(/\/AUDIO_GLOBALS\/recording_customer_gain_db\s*:\s*([\-\d\.]+)/);
+            const recNormalizeMatch = (stdout || '').match(/\/AUDIO_GLOBALS\/recording_normalize\s*:\s*([\w\-]+)/);
             if (thresh) vad_threshold = thresh[1];
             if (hang) vad_hangover = hang[1];
             if (dbThresh) vad_db_threshold = dbThresh[1];
@@ -21093,6 +21458,9 @@ app.get('/api/config/audio-globals', async (req, res) => {
             if (rnnoiseMatch) cellular_rnnoise = rnnoiseMatch[1];
             if (agcMatch) cellular_agc = agcMatch[1];
             if (jbMatch) cellular_jitterbuffer = jbMatch[1];
+            if (recAgentMatch) recording_agent_gain_db = recAgentMatch[1];
+            if (recCustomerMatch) recording_customer_gain_db = recCustomerMatch[1];
+            if (recNormalizeMatch) recording_normalize = recNormalizeMatch[1];
         } catch (_) {}
         res.json({
             success: true,
@@ -21103,7 +21471,10 @@ app.get('/api/config/audio-globals', async (req, res) => {
                 cellular_denoise,
                 cellular_rnnoise,
                 cellular_agc,
-                cellular_jitterbuffer
+                cellular_jitterbuffer,
+                recording_agent_gain_db,
+                recording_customer_gain_db,
+                recording_normalize
             }
         });
     } catch (error) {
@@ -21294,6 +21665,29 @@ app.put('/api/config/audio-globals', async (req, res) => {
         if (req.body.cellular_jitterbuffer) {
             const cJb = ['adaptive', 'fixed', 'off'].includes(req.body.cellular_jitterbuffer) ? req.body.cellular_jitterbuffer : 'adaptive';
             await execPromise(`${ASTERISK_BIN} -rx "database put AUDIO_GLOBALS cellular_jb ${cJb}"`);
+        }
+        if (req.body.recording_agent_gain_db !== undefined ||
+            req.body.recording_customer_gain_db !== undefined ||
+            req.body.recording_normalize !== undefined) {
+            const clampGain = value => Math.max(-12, Math.min(12, Number(value) || 0));
+            const agentGain = clampGain(req.body.recording_agent_gain_db);
+            const customerGain = clampGain(req.body.recording_customer_gain_db);
+            const normalize = req.body.recording_normalize === true ||
+                req.body.recording_normalize === 1 ||
+                req.body.recording_normalize === '1' ||
+                req.body.recording_normalize === 'true';
+            const factor = db => Math.max(0.25, Math.min(4, Math.pow(10, Number(db) / 20))).toFixed(2);
+            const agentFactor = factor(agentGain);
+            const customerFactor = factor(customerGain);
+            // MixMonitor v() is the heard side, V() the spoken side. Agent-side
+            // recordings hear the customer; dongle-side recordings hear the agent.
+            const agentChannelOpts = `v(${customerFactor})V(${agentFactor})`;
+            const dongleChannelOpts = `v(${agentFactor})V(${customerFactor})`;
+            await execPromise(`${ASTERISK_BIN} -rx "database put AUDIO_GLOBALS recording_agent_gain_db ${agentGain}"`);
+            await execPromise(`${ASTERISK_BIN} -rx "database put AUDIO_GLOBALS recording_customer_gain_db ${customerGain}"`);
+            await execPromise(`${ASTERISK_BIN} -rx "database put AUDIO_GLOBALS recording_normalize ${normalize ? 1 : 0}"`);
+            await execPromise(`${ASTERISK_BIN} -rx "database put AUDIO_GLOBALS recording_mix_opts ${agentChannelOpts}"`);
+            await execPromise(`${ASTERISK_BIN} -rx "database put AUDIO_GLOBALS recording_mix_opts_dongle ${dongleChannelOpts}"`);
         }
         res.json({
             success: true,
@@ -26420,6 +26814,41 @@ app.get('/c/:slug', async (req, res) => {
                     : 'Call link not found.'));
         return res.status(status).type('html').send(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Call unavailable</title></head><body style="background:#0b0b0f;color:#f8fafc;font-family:Arial,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0"><div style="max-width:380px;padding:24px;text-align:center"><h1 style="font-size:20px;margin:0 0 8px">${message}</h1><p style="color:#a1a1aa;font-size:13px">Please contact the business directly.</p></div></body></html>`);
     }
+});
+
+// --- PUBLIC GUEST CALL PAGE PREVIEW (no real call session) ---
+app.get('/preview/guest-call', (req, res) => {
+    const lang = req.query.lang === 'en' ? 'en' : 'ar';
+    const isAr = lang === 'ar';
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    return res.render('guest-call', {
+        tenant: {
+            name: isAr ? 'شركة النور للخدمات' : 'Al Nour Services',
+            public_id: 'preview',
+            branding: {
+                primary_color: '#cc090c',
+                secondary_color: '#7b0002',
+                background_color: '#000000',
+                text_color: '#f4f4f5',
+                muted_color: '#a1a1aa',
+                button_text_color: '#ffffff',
+                button_text: isAr ? 'اتصل بنا' : 'Call us'
+            },
+            consent_text: isAr
+                ? 'بالضغط على اتصال، سيتم توصيلك بفريق شركة النور. قد يتم تسجيل المكالمة.'
+                : 'By tapping Call, you will be connected to the Al Nour team. This call may be recorded.'
+        },
+        link: {
+            slug: 'preview',
+            label: isAr ? 'الموقع الإلكتروني' : 'Website'
+        },
+        currentLang: lang,
+        isEmbedded: false,
+        autoStart: false,
+        preview: true
+    });
 });
 
 // --- EMBEDDED CRM LIVE PANEL VIEW ---

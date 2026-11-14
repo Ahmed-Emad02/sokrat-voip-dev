@@ -1,0 +1,1365 @@
+<%
+const isRtl = currentLang === 'ar';
+const t = isRtl ? {
+    title: 'عملاء الأنشطة التجارية',
+    subtitle: 'بيانات العملاء وحقول كل نشاط تجاري',
+    customers: 'العملاء',
+    addCustomer: 'إضافة عميل',
+    configureFields: 'إعداد الحقول',
+    name: 'الاسم',
+    phone: 'الهاتف',
+    email: 'البريد الإلكتروني',
+    owner: 'المسؤول',
+    updated: 'آخر تحديث',
+    actions: 'إجراءات',
+    edit: 'تعديل',
+    delete: 'حذف',
+    save: 'حفظ',
+    cancel: 'إلغاء',
+    close: 'إغلاق',
+    search: 'بحث',
+    noCustomers: 'لا يوجد عملاء بعد.',
+    branding: 'الهوية',
+    brandingTitle: 'هوية النشاط التجاري',
+    logo: 'الشعار',
+    uploadLogo: 'رفع شعار PNG',
+    removeLogo: 'إزالة الشعار',
+    primaryColor: 'اللون الأساسي',
+    secondaryColor: 'اللون الثانوي',
+    backgroundColor: 'لون الخلفية',
+    textColor: 'لون النص',
+    mutedColor: 'لون النص الثانوي',
+    buttonTextColor: 'لون نص الزر',
+    buttonText: 'نص زر الاتصال',
+    brandingSaved: 'تم حفظ الهوية',
+    logoInvalid: 'اختر ملف PNG صالحاً',
+    noFields: 'لم يتم إعداد حقول العملاء لهذا النشاط بعد.',
+    fieldsTitle: 'حقول العملاء',
+    fieldLabel: 'اسم الحقل',
+    fieldKey: 'المفتاح',
+    fieldType: 'النوع',
+    fieldOptions: 'الخيارات (سطر لكل خيار: value|Label)',
+    fieldRequired: 'مطلوب',
+    fieldActive: 'نشط',
+    fieldOrder: 'الترتيب',
+    addField: 'إضافة حقل',
+    remove: 'إزالة',
+    saved: 'تم الحفظ',
+    failed: 'فشلت العملية',
+    typeText: 'نص',
+    typeTextarea: 'نص طويل',
+    typeNumber: 'رقم',
+    typeDate: 'تاريخ',
+    typeSelect: 'قائمة منسدلة',
+    typeCheckbox: 'مربع اختيار',
+    business: 'النشاط التجاري',
+    selectBusiness: 'اختر النشاط التجاري',
+    selectFieldsFirst: 'أضف حقول العملاء أولاً.',
+    confirmDelete: 'حذف هذا العميل؟'
+} : {
+    title: 'Business Customers',
+    subtitle: 'Customer records and custom fields per business',
+    customers: 'Customers',
+    addCustomer: 'Add Customer',
+    configureFields: 'Configure Fields',
+    name: 'Name',
+    phone: 'Phone',
+    email: 'Email',
+    owner: 'Owner',
+    updated: 'Updated',
+    actions: 'Actions',
+    edit: 'Edit',
+    delete: 'Delete',
+    save: 'Save',
+    cancel: 'Cancel',
+    close: 'Close',
+    search: 'Search',
+    noCustomers: 'No customers yet.',
+    branding: 'Branding',
+    brandingTitle: 'Business Branding',
+    logo: 'Logo',
+    uploadLogo: 'Upload PNG logo',
+    removeLogo: 'Remove logo',
+    primaryColor: 'Primary color',
+    secondaryColor: 'Secondary color',
+    backgroundColor: 'Background color',
+    textColor: 'Text color',
+    mutedColor: 'Muted text color',
+    buttonTextColor: 'Button text color',
+    buttonText: 'Call button text',
+    brandingSaved: 'Branding saved',
+    logoInvalid: 'Choose a valid PNG file',
+    noFields: 'No customer fields are configured for this business yet.',
+    fieldsTitle: 'Customer Fields',
+    fieldLabel: 'Label',
+    fieldKey: 'Key',
+    fieldType: 'Type',
+    fieldOptions: 'Options (one per line: value|Label)',
+    fieldRequired: 'Required',
+    fieldActive: 'Active',
+    fieldOrder: 'Order',
+    addField: 'Add Field',
+    remove: 'Remove',
+    saved: 'Saved',
+    failed: 'Operation failed',
+    typeText: 'Text',
+    typeTextarea: 'Long text',
+    typeNumber: 'Number',
+    typeDate: 'Date',
+    typeSelect: 'Dropdown',
+    typeCheckbox: 'Checkbox',
+    business: 'Business',
+    selectBusiness: 'Select business',
+    selectFieldsFirst: 'Add customer fields first.',
+    confirmDelete: 'Delete this customer?',
+    businessesTab: 'Businesses',
+    customersTab: 'Customers'
+};
+const bt = isRtl ? {
+    title: 'الأنشطة التجارية',
+    subtitle: 'المستأجرون السحابيون وروابط الاتصال العامة لكل نشاط تجاري',
+    newTenant: 'نشاط تجاري جديد',
+    business: 'النشاط التجاري',
+    status: 'الحالة',
+    ringGroup: 'مجموعة الرنين',
+    pool: 'خطوط الضيوف',
+    active: 'مكالمات نشطة',
+    link: 'رابط الاتصال',
+    actions: 'إجراءات',
+    copy: 'نسخ',
+    copyEmbed: 'نسخ كود التضمين',
+    suspend: 'تعليق',
+    activate: 'تفعيل',
+    empty: 'لا يوجد مستأجرون بعد.',
+    loading: 'جارٍ التحميل...',
+    name: 'اسم النشاط',
+    agents: 'تحويلات الموظفين',
+    selectExtensions: '-- اختر التحويلات --',
+    selectAll: 'تحديد الكل',
+    clearAll: 'مسح',
+    noExtensions: 'لا توجد تحويلات معرفة',
+    assigned: 'مُسند',
+    linkAutoNote: 'يتم إنشاء رابط الاتصال تلقائياً بعد الحفظ، ثم يظهر الرابط وكود التضمين.',
+    concurrency: 'أقصى مكالمات متزامنة',
+    poolSize: 'حجم خطوط الضيوف',
+    ringGroupOptional: 'رقم مجموعة الرنين (اختياري)',
+    linkLabel: 'اسم الرابط',
+    origins: 'النطاقات المسموح بها (مفصولة بفاصلة)',
+    recording: 'تسجيل المكالمات',
+    create: 'إنشاء',
+    cancel: 'إلغاء',
+    created: 'تم إنشاء النشاط التجاري',
+    failed: 'فشل إنشاء النشاط التجاري',
+    copied: 'تم النسخ',
+    snippet: 'كود التضمين',
+    publicLink: 'الرابط العام',
+    close: 'إغلاق',
+    edit: 'تعديل',
+    editBusiness: 'تعديل النشاط التجاري',
+    updated: 'تم تحديث النشاط التجاري',
+    save: 'حفظ',
+    selectAtLeastOneAgent: 'اختر موظفاً واحداً على الأقل',
+    noAgents: 'لا يوجد موظفون',
+    openCustomers: 'العملاء',
+    branding: 'الهوية'
+} : {
+    title: 'Businesses',
+    subtitle: 'Cloud tenants and public call links per business',
+    newTenant: 'New Business',
+    business: 'Business',
+    status: 'Status',
+    ringGroup: 'Ring Group',
+    pool: 'Guest Lines',
+    active: 'Active Calls',
+    link: 'Call Link',
+    actions: 'Actions',
+    copy: 'Copy',
+    copyEmbed: 'Copy Embed Code',
+    suspend: 'Suspend',
+    activate: 'Activate',
+    empty: 'No tenants yet.',
+    loading: 'Loading...',
+    name: 'Business Name',
+    agents: 'Agent Extensions',
+    selectExtensions: '-- Select extensions --',
+    selectAll: 'Select all',
+    clearAll: 'Clear',
+    noExtensions: 'No extensions configured',
+    assigned: 'assigned',
+    linkAutoNote: 'The public call link is generated automatically after saving; the URL and embed code are shown next.',
+    concurrency: 'Max Concurrent Calls',
+    poolSize: 'Guest Line Pool Size',
+    ringGroupOptional: 'Ring Group Number (optional)',
+    linkLabel: 'Link Label',
+    origins: 'Allowed Domains (comma separated)',
+    recording: 'Record Calls',
+    create: 'Create',
+    cancel: 'Cancel',
+    created: 'Business created',
+    failed: 'Could not create business',
+    copied: 'Copied',
+    snippet: 'Embed Code',
+    publicLink: 'Public Link',
+    close: 'Close',
+    edit: 'Edit',
+    editBusiness: 'Edit Business',
+    updated: 'Business updated',
+    save: 'Save',
+    selectAtLeastOneAgent: 'Select at least one agent',
+    noAgents: 'No agents',
+    openCustomers: 'Customers',
+    branding: 'Branding'
+};
+%>
+<!DOCTYPE html>
+<html lang="<%= currentLang === 'ar' ? 'ar' : 'en' %>" dir="<%= isRtl ? 'rtl' : 'ltr' %>">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sokrat VOIP - <%= isRootUser ? (isRtl ? 'الأنشطة والعملاء' : 'Businesses & Customers') : t.title %></title>
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600;800&display=swap" rel="stylesheet">
+    <script src="/js/tailwindcss-browser.js"></script>
+    <style>
+        :root { --bg-primary:#000; --bg-secondary:#121212; --bg-card:#18181b; --bg-hover:#27272a; --border-primary:#27272a; --text-primary:#fff; --text-secondary:#a1a1aa; --text-muted:#71717a; --accent-color:#e11d48; }
+        body { background:var(--bg-primary); color:var(--text-primary); font-family:'Cairo','Segoe UI',sans-serif; min-height:100vh; }
+        .panel-surface { background:var(--bg-secondary); border:1px solid var(--border-primary); border-radius:1rem; }
+        .config-input { width:100%; background:var(--bg-primary); border:1px solid var(--border-primary); border-radius:.7rem; padding:.6rem .75rem; color:var(--text-primary); font-size:.8rem; outline:none; }
+        .config-input:focus { border-color:var(--accent-color); }
+        .btn { border-radius:.65rem; padding:.55rem .8rem; font-size:.72rem; font-weight:800; cursor:pointer; border:1px solid var(--border-primary); background:var(--bg-hover); color:var(--text-primary); }
+        .btn-primary { background:var(--accent-color); border-color:var(--accent-color); color:#fff; }
+        .btn:hover { filter:brightness(1.08); }
+        .badge { display:inline-flex; padding:.2rem .5rem; border-radius:999px; font-size:.62rem; font-weight:800; background:var(--bg-hover); color:var(--text-secondary); }
+        .badge-active { display:inline-flex; align-items:center; padding:.2rem .55rem; border-radius:999px; font-size:.65rem; font-weight:800; background:rgba(16,185,129,.12); color:#34d399; border:1px solid rgba(16,185,129,.25); }
+        .badge-suspended { display:inline-flex; align-items:center; padding:.2rem .55rem; border-radius:999px; font-size:.65rem; font-weight:800; background:rgba(245,158,11,.12); color:#fbbf24; border:1px solid rgba(245,158,11,.25); }
+        .multi-menu { position:absolute; top:calc(100% + 6px); left:0; right:0; z-index:80; max-height:220px; overflow-y:auto; background:var(--bg-card); border:1px solid var(--border-primary); border-radius:.8rem; padding:.55rem; box-shadow:0 18px 50px rgba(0,0,0,.55); }
+        .multi-list { max-height:220px; overflow-y:auto; background:var(--bg-card); border:1px solid var(--border-primary); border-radius:.7rem; padding:.55rem; }
+        .multi-option { display:flex; align-items:center; gap:.5rem; padding:.42rem .5rem; border-radius:.5rem; cursor:pointer; font-size:.72rem; }
+        .multi-option:hover { background:var(--bg-hover); }
+        .multi-option input { accent-color: var(--accent-color); width:14px; height:14px; }
+        .code { font-family:monospace; font-size:.7rem; background:var(--bg-primary); border:1px solid var(--border-primary); border-radius:.6rem; padding:.65rem; overflow:auto; white-space:pre-wrap; word-break:break-all; }
+        .modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.75); display:none; align-items:center; justify-content:center; padding:16px; z-index:1000; }
+        .modal-backdrop.open { display:flex; }
+        .modal { width:min(620px,96vw); max-height:92vh; overflow:auto; background:var(--bg-card); border:1px solid var(--border-primary); border-radius:1.25rem; padding:22px; }
+        .toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:var(--bg-card); border:1px solid var(--border-primary); padding:12px 18px; border-radius:.8rem; font-size:.8rem; z-index:2000; opacity:0; pointer-events:none; transition:.2s; }
+        .toast.show { opacity:1; }
+        .field-row { border:1px solid var(--border-primary); border-radius:.8rem; padding:12px; margin-bottom:10px; background:var(--bg-secondary); }
+        .field-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+        @media (max-width:640px) { .field-grid { grid-template-columns:1fr; } }
+        .table-wrap { overflow-x:auto; }
+        table { width:100%; border-collapse:collapse; }
+        th, td { text-align:start; padding:10px 12px; border-bottom:1px solid var(--border-primary); font-size:.78rem; }
+        th { font-size:.65rem; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted); }
+        .muted { color:var(--text-muted); font-size:.72rem; }
+    </style>
+</head>
+<body class="flex flex-col md:flex-row min-h-screen m-0 p-0">
+    <%- include('sidebar') %>
+    <div class="flex-1 min-w-0 p-6 md:p-8 relative flex flex-col min-h-screen w-full">
+        <div class="w-full space-y-5">
+            <% if (isRootUser) { %>
+            <div class="flex flex-wrap gap-2 panel-surface p-1.5 w-fit" id="viewTabs" role="tablist">
+                <button type="button" class="btn <%= initialView === 'businesses' ? 'btn-primary' : '' %>" id="tabBusinesses" onclick="switchView('businesses')" role="tab" aria-selected="<%= initialView === 'businesses' ? 'true' : 'false' %>"><%= t.businessesTab %></button>
+                <button type="button" class="btn <%= initialView === 'customers' ? 'btn-primary' : '' %>" id="tabCustomers" onclick="switchView('customers')" role="tab" aria-selected="<%= initialView === 'customers' ? 'true' : 'false' %>"><%= t.customersTab %></button>
+            </div>
+            <div id="businessesView" class="<%= initialView === 'businesses' ? '' : 'hidden' %>">
+        <div class="w-full space-y-6">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                    <h1 class="text-2xl md:text-3xl font-black tracking-tight"><%= bt.title %></h1>
+                    <p class="text-xs text-[var(--text-muted)] mt-1"><%= bt.subtitle %></p>
+                </div>
+                <button type="button" class="btn btn-primary" onclick="openCreateModal()">+ <%= bt.newTenant %></button>
+            </div>
+
+            <div class="panel-surface overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="text-[10px] uppercase tracking-wider text-[var(--text-muted)] border-b border-[var(--border-primary)]">
+                            <th class="text-start p-3"><%= bt.business %></th>
+                            <th class="text-start p-3"><%= bt.status %></th>
+                            <th class="text-start p-3"><%= bt.ringGroup %></th>
+                            <th class="text-start p-3"><%= bt.pool %></th>
+                            <th class="text-start p-3"><%= bt.active %></th>
+                            <th class="text-start p-3"><%= bt.link %></th>
+                            <th class="text-start p-3"><%= bt.actions %></th>
+                        </tr>
+                    </thead>
+                    <tbody id="tenantsBody">
+                        <tr><td colspan="7" class="p-8 text-center text-[var(--text-muted)]"><%= bt.loading %></td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+            </div>
+            <% } %>
+            <div id="customersView" class="space-y-5 <%= initialView === 'businesses' ? 'hidden' : '' %>">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                    <h1 class="text-2xl md:text-3xl font-black tracking-tight"><%= t.title %></h1>
+                    <p class="text-xs text-[var(--text-muted)] mt-1"><%= t.subtitle %></p>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                    <% if (isRootUser) { %>
+                    <select id="tenantSelect" class="config-input max-w-[240px]">
+                        <option value=""><%= t.selectBusiness %></option>
+                        <% (tenants || []).forEach(tenant => { %>
+                        <option value="<%= tenant.id %>" <%= Number(tenant.id) === Number(tenantId) ? 'selected' : '' %>><%= tenant.name %></option>
+                        <% }); %>
+                    </select>
+                    <% } else { %>
+                    <span class="badge"><%= tenantName || t.business %></span>
+                    <% } %>
+                    <button type="button" class="btn" id="brandingBtn" onclick="openBranding()"><%= t.branding %></button>
+                    <button type="button" class="btn" id="fieldsBtn" onclick="openFields()"><%= t.configureFields %></button>
+                    <button type="button" class="btn btn-primary" id="addCustomerBtn" onclick="openCustomer()" disabled><%= t.addCustomer %></button>
+                </div>
+            </div>
+
+            <div class="panel-surface p-3 flex flex-col sm:flex-row sm:items-center gap-2">
+                <input id="searchInput" class="config-input max-w-sm" placeholder="<%= t.search %>">
+                <span class="muted" id="scopeHint"></span>
+            </div>
+
+            <div class="panel-surface table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th><%= t.name %></th>
+                            <th><%= t.phone %></th>
+                            <th><%= t.email %></th>
+                            <% if (isRootUser) { %><th><%= t.owner %></th><% } %>
+                            <th><%= t.updated %></th>
+                            <th><%= t.actions %></th>
+                        </tr>
+                    </thead>
+                    <tbody id="customersBody">
+                        <tr><td colspan="<%= isRootUser ? 6 : 5 %>" class="muted" style="text-align:center;padding:24px;"><%= t.noCustomers %></td></tr>
+                    </tbody>
+                </table>
+            </div>
+            </div>
+        </div>
+    </div>
+
+    <% if (isRootUser) { %>
+    <div class="modal-backdrop" id="createModal">
+        <div class="modal">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-black"><%= bt.newTenant %></h2>
+                <button type="button" class="btn" onclick="closeCreateModal()">✕</button>
+            </div>
+            <form id="createTenantForm" class="space-y-3">
+                <div>
+                    <label for="tenantName" class="block text-[11px] font-bold text-[var(--text-secondary)] mb-1"><%= bt.name %></label>
+                    <input id="tenantName" class="config-input" name="name" required maxlength="120" placeholder="Acme Ltd">
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div class="relative" id="tenantAgentsWrap">
+                        <span id="tenantAgentsLabel" class="block text-[11px] font-bold text-[var(--text-secondary)] mb-1"><%= bt.agents %></span>
+                        <button type="button" id="tenantAgentsBtn" class="config-input flex items-center justify-between text-start cursor-pointer" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="tenantAgentsLabel">
+                            <span id="tenantAgentsSummary" class="truncate text-xs font-semibold text-[var(--text-muted)]"><%= bt.selectExtensions %></span>
+                            <svg class="w-3.5 h-3.5 text-[var(--text-muted)] shrink-0 ms-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+                        </button>
+                        <div id="tenantAgentsMenu" class="multi-menu hidden" role="listbox" aria-multiselectable="true">
+                            <div class="flex items-center justify-between pb-1.5 mb-1 border-b border-[var(--border-primary)] text-[10px]">
+                                <button type="button" class="text-[var(--accent-color)] font-bold" onclick="selectAllTenantAgents(true)"><%= bt.selectAll %></button>
+                                <button type="button" class="text-[var(--text-muted)] font-bold" onclick="selectAllTenantAgents(false)"><%= bt.clearAll %></button>
+                            </div>
+                            <% if (typeof roster !== 'undefined' && roster && roster.length > 0) { %>
+                                <% roster.forEach(emp => { %>
+                                    <% const isAssigned = (typeof assignedExtensions !== 'undefined' && assignedExtensions.map(String).includes(String(emp.extension))); %>
+                                    <label class="multi-option" style="<%= isAssigned ? 'opacity:.45;cursor:not-allowed;' : '' %>">
+                                        <input type="checkbox" class="tenantAgentCheckbox" value="<%= emp.extension %>" <%= isAssigned ? 'disabled' : '' %>>
+                                        <span class="font-mono font-bold text-[var(--text-primary)]"><%= emp.extension %></span>
+                                        <span class="truncate text-[var(--text-muted)]"><%= emp.name %></span>
+                                        <% if (isAssigned) { %><span class="ms-auto text-[9px] font-bold text-[var(--text-muted)]"><%= isRtl ? 'مُسند' : 'assigned' %></span><% } %>
+                                    </label>
+                                <% }); %>
+                            <% } else { %>
+                                <p class="py-3 text-center text-[10px] text-[var(--text-muted)]"><%= bt.noExtensions %></p>
+                            <% } %>
+                        </div>
+                        <input type="hidden" id="tenantAgents" name="agent_extensions" value="">
+                    </div>
+                    <div>
+                        <label for="tenantRingGroup" class="block text-[11px] font-bold text-[var(--text-secondary)] mb-1"><%= bt.ringGroupOptional %></label>
+                        <input id="tenantRingGroup" class="config-input" name="ring_group" placeholder="7001">
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label for="tenantConcurrency" class="block text-[11px] font-bold text-[var(--text-secondary)] mb-1"><%= bt.concurrency %></label>
+                        <input id="tenantConcurrency" class="config-input" name="max_concurrency" type="number" min="1" max="50" value="5">
+                    </div>
+                    <div>
+                        <label for="tenantPoolSize" class="block text-[11px] font-bold text-[var(--text-secondary)] mb-1"><%= bt.poolSize %></label>
+                        <input id="tenantPoolSize" class="config-input" name="pool_size" type="number" min="1" max="50" value="5">
+                    </div>
+                </div>
+                <div class="rounded-xl border border-[var(--border-primary)] bg-[var(--bg-primary)]/60 p-3">
+                    <div class="text-[11px] font-bold text-[var(--text-secondary)]"><%= bt.publicLink %></div>
+                    <p class="text-[10px] text-[var(--text-muted)] mt-1 leading-relaxed"><%= bt.linkAutoNote %></p>
+                </div>
+                <div>
+                    <label for="tenantOrigins" class="block text-[11px] font-bold text-[var(--text-secondary)] mb-1"><%= bt.origins %></label>
+                    <input id="tenantOrigins" class="config-input" name="allowed_origins" placeholder="https://acme.example, https://www.acme.example">
+                </div>
+                <label for="tenantRecording" class="flex items-center gap-2 text-xs font-bold text-[var(--text-secondary)]">
+                    <input id="tenantRecording" type="checkbox" name="recording_enabled" checked>
+                    <%= bt.recording %>
+                </label>
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" class="btn" onclick="closeCreateModal()"><%= bt.cancel %></button>
+                    <button type="submit" class="btn btn-primary" id="createTenantBtn"><%= bt.create %></button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="modal-backdrop" id="editTenantModal">
+        <div class="modal">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-black"><%= bt.editBusiness %> <span id="editTenantHeadingName" class="text-[var(--accent-color)]"></span></h2>
+                <button type="button" class="btn" onclick="closeEditTenant()">✕</button>
+            </div>
+            <form id="editTenantForm" class="space-y-3">
+                <input type="hidden" id="editTenantId">
+                <div>
+                    <label for="editTenantName" class="block text-[11px] font-bold text-[var(--text-secondary)] mb-1"><%= bt.name %></label>
+                    <input id="editTenantName" class="config-input" required maxlength="120">
+                </div>
+                <div>
+                    <span id="editTenantAgentsLabel" class="block text-[11px] font-bold text-[var(--text-secondary)] mb-1"><%= bt.agents %></span>
+                    <div class="flex items-center justify-between pb-1.5 mb-1 border-b border-[var(--border-primary)] text-[10px]">
+                        <button type="button" class="text-[var(--accent-color)] font-bold" onclick="selectAgentCheckboxes('editTenantAgentCheckbox', true)"><%= bt.selectAll %></button>
+                        <button type="button" class="text-[var(--text-muted)] font-bold" onclick="selectAgentCheckboxes('editTenantAgentCheckbox', false)"><%= bt.clearAll %></button>
+                    </div>
+                    <div id="editTenantAgentsList" class="multi-list" role="group" aria-labelledby="editTenantAgentsLabel"></div>
+                    <p class="text-[10px] text-[var(--text-muted)] mt-1"><%= isRtl ? 'التحويلات المرتبطة بنشاط آخر تظهر معطلة.' : 'Extensions assigned to another business are disabled.' %></p>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label for="editTenantConcurrency" class="block text-[11px] font-bold text-[var(--text-secondary)] mb-1"><%= bt.concurrency %></label>
+                        <input id="editTenantConcurrency" type="number" min="1" max="50" class="config-input" value="5">
+                    </div>
+                    <label class="flex items-center gap-2 text-xs font-bold text-[var(--text-secondary)] mt-6">
+                        <input id="editTenantRecording" type="checkbox">
+                        <%= bt.recording %>
+                    </label>
+                </div>
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" class="btn" onclick="closeEditTenant()"><%= bt.cancel %></button>
+                    <button type="submit" class="btn btn-primary" id="saveEditTenantBtn"><%= bt.save %></button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="modal-backdrop" id="linkModal">
+        <div class="modal">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-black"><%= bt.publicLink %></h2>
+                <button type="button" class="btn" onclick="closeLinkModal()">✕</button>
+            </div>
+            <div class="space-y-3">
+                <div>
+                    <div class="text-[11px] font-bold text-[var(--text-secondary)] mb-1"><%= bt.publicLink %></div>
+                    <div class="code" id="linkModalUrl"></div>
+                </div>
+                <div>
+                    <div class="text-[11px] font-bold text-[var(--text-secondary)] mb-1"><%= bt.snippet %></div>
+                    <div class="code" id="linkModalSnippet"></div>
+                </div>
+                <div class="flex justify-end gap-2">
+                    <button type="button" class="btn" onclick="copyModalUrl()"><%= bt.copy %></button>
+                    <button type="button" class="btn btn-primary" onclick="copyModalSnippet()"><%= bt.copyEmbed %></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="tenantToast"></div>
+
+    <% } %>
+
+    <div class="modal-backdrop" id="customerModal">
+        <div class="modal">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-black" id="customerModalTitle"><%= t.addCustomer %></h2>
+                <button type="button" class="btn" onclick="closeCustomer()">✕</button>
+            </div>
+            <form id="customerForm" class="space-y-3">
+                <input type="hidden" id="customerId">
+                <div class="field-grid">
+                    <div>
+                        <label class="text-[11px] font-bold text-[var(--text-secondary)]" for="customerName"><%= t.name %></label>
+                        <input id="customerName" class="config-input" required maxlength="160">
+                    </div>
+                    <div>
+                        <label class="text-[11px] font-bold text-[var(--text-secondary)]" for="customerPhone"><%= t.phone %></label>
+                        <input id="customerPhone" class="config-input" maxlength="40">
+                    </div>
+                </div>
+                <div>
+                    <label class="text-[11px] font-bold text-[var(--text-secondary)]" for="customerEmail"><%= t.email %></label>
+                    <input id="customerEmail" type="email" class="config-input" maxlength="255">
+                </div>
+                <div id="dynamicFields" class="space-y-3"></div>
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" class="btn" onclick="closeCustomer()"><%= t.cancel %></button>
+                    <button type="submit" class="btn btn-primary" id="saveCustomerBtn"><%= t.save %></button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="modal-backdrop" id="fieldsModal">
+        <div class="modal">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-black"><%= t.fieldsTitle %></h2>
+                <button type="button" class="btn" onclick="closeFields()">✕</button>
+            </div>
+            <div id="fieldRows"></div>
+            <div class="flex justify-between items-center pt-2">
+                <button type="button" class="btn" onclick="addFieldRow()">+ <%= t.addField %></button>
+                <div class="flex gap-2">
+                    <button type="button" class="btn" onclick="closeFields()"><%= t.cancel %></button>
+                    <button type="button" class="btn btn-primary" id="saveFieldsBtn" onclick="saveFields()"><%= t.save %></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <div class="modal-backdrop" id="brandingModal">
+        <div class="modal">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-black"><%= t.brandingTitle %></h2>
+                <button type="button" class="btn" onclick="closeBranding()">✕</button>
+            </div>
+            <div class="space-y-3">
+                <div class="field-row">
+                    <div class="text-[11px] font-bold text-[var(--text-secondary)] mb-2"><%= t.logo %></div>
+                    <div class="flex items-center gap-3 flex-wrap">
+                        <img id="brandLogoPreview" alt="" style="max-height:64px;max-width:180px;display:none;background:#fff;padding:4px;border-radius:8px;">
+                        <input id="brandLogoFile" type="file" accept="image/png" class="config-input max-w-[240px]">
+                        <button type="button" class="btn" onclick="uploadBrandingLogo()"><%= t.uploadLogo %></button>
+                        <button type="button" class="btn" onclick="removeBrandingLogo()"><%= t.removeLogo %></button>
+                    </div>
+                    <p class="muted mt-1">PNG · max 2 MB</p>
+                </div>
+                <div class="field-grid">
+                    <div><label class="text-[10px] text-[var(--text-muted)]"><%= t.primaryColor %></label><input id="brandPrimary" type="color" class="config-input" value="#e11d48"></div>
+                    <div><label class="text-[10px] text-[var(--text-muted)]"><%= t.secondaryColor %></label><input id="brandSecondary" type="color" class="config-input" value="#7c3aed"></div>
+                    <div><label class="text-[10px] text-[var(--text-muted)]"><%= t.backgroundColor %></label><input id="brandBackground" type="color" class="config-input" value="#050507"></div>
+                    <div><label class="text-[10px] text-[var(--text-muted)]"><%= t.textColor %></label><input id="brandText" type="color" class="config-input" value="#f8fafc"></div>
+                    <div><label class="text-[10px] text-[var(--text-muted)]"><%= t.mutedColor %></label><input id="brandMuted" type="color" class="config-input" value="#a1a1aa"></div>
+                    <div><label class="text-[10px] text-[var(--text-muted)]"><%= t.buttonTextColor %></label><input id="brandButtonTextColor" type="color" class="config-input" value="#ffffff"></div>
+                </div>
+                <div>
+                    <label class="text-[10px] text-[var(--text-muted)]"><%= t.buttonText %></label>
+                    <input id="brandButtonText" class="config-input" maxlength="40" placeholder="Call us">
+                </div>
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" class="btn" onclick="closeBranding()"><%= t.cancel %></button>
+                    <button type="button" class="btn btn-primary" id="saveBrandingBtn" onclick="saveBranding()"><%= t.save %></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        const T = <%- JSON.stringify(t) %>;
+        const BOOT = {
+            isRoot: <%- isRootUser ? 'true' : 'false' %>,
+            tenantId: <%- tenantId == null ? 'null' : Number(tenantId) %>,
+            tenantName: <%- JSON.stringify(tenantName || '') %>
+        };
+        const TYPES = [
+            ['text', T.typeText], ['textarea', T.typeTextarea], ['number', T.typeNumber],
+            ['date', T.typeDate], ['select', T.typeSelect], ['checkbox', T.typeCheckbox]
+        ];
+        const state = { tenantId: BOOT.tenantId, tenantName: BOOT.tenantName, branding: {}, fields: [], customers: [], editingId: null, fieldRows: [] };
+
+        function escapeHtml(value) {
+            return String(value == null ? '' : value).replace(/[&<>"']/g, ch => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[ch]));
+        }
+        function toast(message) {
+            const el = document.getElementById('toast');
+            el.textContent = message;
+            el.classList.add('show');
+            setTimeout(() => el.classList.remove('show'), 2400);
+        }
+        async function api(url, options) {
+            const response = await fetch(url, Object.assign({
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' }
+            }, options || {}));
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok || data.success === false) {
+                throw new Error(data.error || T.failed);
+            }
+            return data;
+        }
+        function withTenant(url) {
+            if (!BOOT.isRoot) return url;
+            if (!state.tenantId) return url;
+            return url + (url.includes('?') ? '&' : '?') + 'tenant_id=' + encodeURIComponent(state.tenantId);
+        }
+        function scopeHint() {
+            const hint = document.getElementById('scopeHint');
+            if (!hint) return;
+            hint.textContent = state.tenantId ? (state.tenantName || '') : T.selectBusiness;
+            ['addCustomerBtn', 'brandingBtn', 'fieldsBtn'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.disabled = !state.tenantId;
+            });
+        }
+
+        function brandColor(id, fallback) {
+            const el = document.getElementById(id);
+            return el && /^#[0-9a-fA-F]{6}$/.test(el.value) ? el.value : fallback;
+        }
+        function setBrandColor(id, value, fallback) {
+            const el = document.getElementById(id);
+            if (el) el.value = /^#[0-9a-fA-F]{6}$/.test(String(value || '')) ? value : fallback;
+        }
+        function renderBrandLogo(url) {
+            const preview = document.getElementById('brandLogoPreview');
+            if (!preview) return;
+            if (url) {
+                preview.src = url;
+                preview.style.display = 'block';
+            } else {
+                preview.removeAttribute('src');
+                preview.style.display = 'none';
+            }
+        }
+        async function openBranding() {
+            if (!state.tenantId) { toast(T.selectBusiness); return; }
+            try {
+                const data = await api(withTenant('/api/tenant/branding'));
+                const branding = data.branding || {};
+                state.branding = branding;
+                setBrandColor('brandPrimary', branding.primary_color, '#e11d48');
+                setBrandColor('brandSecondary', branding.secondary_color, '#7c3aed');
+                setBrandColor('brandBackground', branding.background_color, '#050507');
+                setBrandColor('brandText', branding.text_color, '#f8fafc');
+                setBrandColor('brandMuted', branding.muted_color, '#a1a1aa');
+                setBrandColor('brandButtonTextColor', branding.button_text_color, '#ffffff');
+                document.getElementById('brandButtonText').value = branding.button_text || '';
+                renderBrandLogo(branding.logo_url || '');
+                document.getElementById('brandingModal').classList.add('open');
+            } catch (error) {
+                toast(error.message);
+            }
+        }
+        function closeBranding() { document.getElementById('brandingModal').classList.remove('open'); }
+        async function saveBranding() {
+            if (!state.tenantId) { toast(T.selectBusiness); return; }
+            const branding = {
+                primary_color: brandColor('brandPrimary', '#e11d48'),
+                secondary_color: brandColor('brandSecondary', '#7c3aed'),
+                background_color: brandColor('brandBackground', '#050507'),
+                text_color: brandColor('brandText', '#f8fafc'),
+                muted_color: brandColor('brandMuted', '#a1a1aa'),
+                button_text_color: brandColor('brandButtonTextColor', '#ffffff'),
+                button_text: document.getElementById('brandButtonText').value.trim()
+            };
+            const payload = { branding };
+            if (BOOT.isRoot) payload.tenant_id = state.tenantId;
+            const button = document.getElementById('saveBrandingBtn');
+            button.disabled = true;
+            try {
+                const data = await api('/api/tenant/branding', { method: 'PUT', body: JSON.stringify(payload) });
+                state.branding = data.branding || branding;
+                toast(T.brandingSaved);
+                closeBranding();
+            } catch (error) {
+                toast(error.message);
+            } finally {
+                button.disabled = false;
+            }
+        }
+        async function uploadBrandingLogo() {
+            if (!state.tenantId) { toast(T.selectBusiness); return; }
+            const input = document.getElementById('brandLogoFile');
+            const file = input && input.files && input.files[0];
+            if (!file) return;
+            if (!/^image\/png$/i.test(file.type) || file.size > 2 * 1024 * 1024) {
+                toast(T.logoInvalid);
+                return;
+            }
+            const form = new FormData();
+            form.append('logo', file);
+            if (BOOT.isRoot) form.append('tenant_id', String(state.tenantId));
+            try {
+                const response = await fetch('/api/tenant/branding/logo', { method: 'POST', credentials: 'same-origin', body: form });
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok || data.success === false) throw new Error(data.error || T.failed);
+                state.branding = data.branding || state.branding;
+                renderBrandLogo(data.logo_url || '');
+                input.value = '';
+                toast(T.brandingSaved);
+            } catch (error) {
+                toast(error.message);
+            }
+        }
+        async function removeBrandingLogo() {
+            if (!state.tenantId) { toast(T.selectBusiness); return; }
+            try {
+                await api(withTenant('/api/tenant/branding/logo'), { method: 'DELETE' });
+                state.branding = Object.assign({}, state.branding, { logo_url: '' });
+                renderBrandLogo('');
+                toast(T.brandingSaved);
+            } catch (error) {
+                toast(error.message);
+            }
+        }
+
+        function switchView(view) {
+            const businesses = document.getElementById('businessesView');
+            const customers = document.getElementById('customersView');
+            if (!businesses || !customers) return;
+            const showingBusinesses = view === 'businesses';
+            businesses.classList.toggle('hidden', !showingBusinesses);
+            customers.classList.toggle('hidden', showingBusinesses);
+            const bizTab = document.getElementById('tabBusinesses');
+            const custTab = document.getElementById('tabCustomers');
+            if (bizTab) {
+                bizTab.classList.toggle('btn-primary', showingBusinesses);
+                bizTab.setAttribute('aria-selected', showingBusinesses ? 'true' : 'false');
+            }
+            if (custTab) {
+                custTab.classList.toggle('btn-primary', !showingBusinesses);
+                custTab.setAttribute('aria-selected', showingBusinesses ? 'false' : 'true');
+            }
+            try {
+                const url = new URL(window.location.href);
+                url.searchParams.set('view', showingBusinesses ? 'businesses' : 'customers');
+                window.history.replaceState(null, '', url);
+            } catch (_) {}
+        }
+        function openCustomerScope(tenantId, tenantName) {
+            const select = document.getElementById('tenantSelect');
+            if (select) select.value = String(tenantId);
+            state.tenantId = Number(tenantId) || null;
+            state.tenantName = tenantName || (select && select.options[select.selectedIndex] ? select.options[select.selectedIndex].textContent : '');
+            switchView('customers');
+            scopeHint();
+            load();
+        }
+        function syncCustomerTenantOptions(list) {
+            if (!BOOT.isRoot) return;
+            const select = document.getElementById('tenantSelect');
+            if (!select) return;
+            const current = state.tenantId;
+            const options = (list || []).filter(tenant => tenant.status === 'active' || Number(tenant.id) === Number(current));
+            select.innerHTML = '<option value="">' + escapeHtml(T.selectBusiness) + '</option>' +
+                options.map(tenant => '<option value="' + escapeHtml(tenant.id) + '">' + escapeHtml(tenant.name) + '</option>').join('');
+            if (current) select.value = String(current);
+        }
+        window.openCustomerScope = openCustomerScope;
+        window.syncCustomerTenantOptions = syncCustomerTenantOptions;
+
+        async function load() {
+            scopeHint();
+            if (!state.tenantId) {
+                state.fields = [];
+                state.customers = [];
+                renderCustomers();
+                return;
+            }
+            try {
+                const [fieldsData, customersData] = await Promise.all([
+                    api(withTenant('/api/customers/fields')),
+                    api(withTenant('/api/customers?limit=200'))
+                ]);
+                state.fields = fieldsData.fields || [];
+                state.customers = customersData.customers || [];
+                renderCustomers();
+            } catch (error) {
+                toast(error.message);
+            }
+        }
+
+        function renderCustomers() {
+            const body = document.getElementById('customersBody');
+            if (!state.customers.length) {
+                body.innerHTML = '<tr><td colspan="' + (BOOT.isRoot ? 6 : 5) + '" class="muted" style="text-align:center;padding:24px;">' + T.noCustomers + '</td></tr>';
+                return;
+            }
+            body.innerHTML = state.customers.map(customer => {
+                const owner = BOOT.isRoot ? '<td>' + escapeHtml(customer.owner_username || customer.owner_user_id || '') + '</td>' : '';
+                const updated = customer.updated_at ? escapeHtml(String(customer.updated_at).replace('T', ' ').slice(0, 19)) : '';
+                return '<tr>' +
+                    '<td><strong>' + escapeHtml(customer.name) + '</strong></td>' +
+                    '<td>' + escapeHtml(customer.phone || '—') + '</td>' +
+                    '<td>' + escapeHtml(customer.email || '—') + '</td>' +
+                    owner +
+                    '<td>' + updated + '</td>' +
+                    '<td><div class="flex flex-wrap gap-2">' +
+                        '<button class="btn" onclick="openCustomer(' + customer.id + ')">' + T.edit + '</button>' +
+                        '<button class="btn" onclick="deleteCustomer(' + customer.id + ')">' + T.delete + '</button>' +
+                    '</div></td>' +
+                '</tr>';
+            }).join('');
+        }
+
+        function openCustomer(id) {
+            const customer = id ? state.customers.find(item => Number(item.id) === Number(id)) : null;
+            state.editingId = customer ? customer.id : null;
+            document.getElementById('customerModalTitle').textContent = customer ? T.edit : T.addCustomer;
+            document.getElementById('customerId').value = customer ? customer.id : '';
+            document.getElementById('customerName').value = customer ? customer.name : '';
+            document.getElementById('customerPhone').value = customer ? customer.phone : '';
+            document.getElementById('customerEmail').value = customer ? customer.email : '';
+            renderDynamicFields(customer ? customer.data : {});
+            document.getElementById('customerModal').classList.add('open');
+        }
+        function closeCustomer() { document.getElementById('customerModal').classList.remove('open'); }
+
+        function renderDynamicFields(data) {
+            const wrap = document.getElementById('dynamicFields');
+            wrap.innerHTML = '';
+            if (!state.fields.length) {
+                const p = document.createElement('p');
+                p.className = 'muted';
+                p.textContent = T.noFields;
+                wrap.appendChild(p);
+                return;
+            }
+            state.fields.forEach(field => {
+                const label = document.createElement('label');
+                label.className = 'block text-[11px] font-bold text-[var(--text-secondary)] mb-1';
+                label.textContent = (field.label_en || field.label_ar || field.key) + (field.required ? ' *' : '');
+                const value = data && data[field.key] != null ? String(data[field.key]) : '';
+                const holder = document.createElement('div');
+                let input;
+                if (field.field_type === 'textarea') {
+                    input = document.createElement('textarea');
+                    input.rows = 3;
+                    input.value = value;
+                } else if (field.field_type === 'select') {
+                    input = document.createElement('select');
+                    const blank = document.createElement('option');
+                    blank.value = '';
+                    blank.textContent = '—';
+                    input.appendChild(blank);
+                    (field.options || []).forEach(option => {
+                        const opt = document.createElement('option');
+                        opt.value = option.value;
+                        opt.textContent = option.label_en || option.value;
+                        input.appendChild(opt);
+                    });
+                    input.value = value;
+                } else if (field.field_type === 'checkbox') {
+                    input = document.createElement('input');
+                    input.type = 'checkbox';
+                    input.checked = value === '1' || value === 'true';
+                } else {
+                    input = document.createElement('input');
+                    input.type = field.field_type === 'number' ? 'number' : field.field_type === 'date' ? 'date' : 'text';
+                    input.value = value;
+                }
+                input.className = 'config-input';
+                input.setAttribute('data-field-key', field.key);
+                if (field.field_type !== 'textarea') input.classList.add('h-10');
+                holder.appendChild(label);
+                holder.appendChild(input);
+                wrap.appendChild(holder);
+            });
+        }
+
+        function collectData() {
+            const data = {};
+            document.querySelectorAll('#dynamicFields [data-field-key]').forEach(input => {
+                const key = input.getAttribute('data-field-key');
+                data[key] = input.type === 'checkbox' ? (input.checked ? '1' : '') : input.value;
+            });
+            return data;
+        }
+
+        async function saveCustomer(event) {
+            event.preventDefault();
+            const name = document.getElementById('customerName').value.trim();
+            if (!name) { toast(T.failed); return; }
+            const button = document.getElementById('saveCustomerBtn');
+            button.disabled = true;
+            const payload = {
+                name,
+                phone: document.getElementById('customerPhone').value.trim(),
+                email: document.getElementById('customerEmail').value.trim(),
+                data: collectData()
+            };
+            if (BOOT.isRoot) payload.tenant_id = state.tenantId;
+            try {
+                if (state.editingId) {
+                    await api('/api/customers/' + state.editingId, { method: 'PUT', body: JSON.stringify(payload) });
+                } else {
+                    await api('/api/customers', { method: 'POST', body: JSON.stringify(payload) });
+                }
+                closeCustomer();
+                toast(T.saved);
+                await load();
+            } catch (error) {
+                toast(error.message);
+            } finally {
+                button.disabled = false;
+            }
+        }
+
+        async function deleteCustomer(id) {
+            if (!window.confirm(T.confirmDelete)) return;
+            try {
+                await api(withTenant('/api/customers/' + id), { method: 'DELETE' });
+                toast(T.saved);
+                await load();
+            } catch (error) {
+                toast(error.message);
+            }
+        }
+
+        function selectedType(fieldType) { return TYPES.some(item => item[0] === fieldType) ? fieldType : 'text'; }
+
+        async function openFields() {
+            if (!state.tenantId) { toast(T.selectBusiness); return; }
+            try {
+                const data = await api(withTenant('/api/customers/fields?all=1'));
+                state.fieldRows = data.fields || [];
+                renderFieldRows();
+                document.getElementById('fieldsModal').classList.add('open');
+            } catch (error) {
+                toast(error.message);
+            }
+        }
+        function closeFields() { document.getElementById('fieldsModal').classList.remove('open'); }
+
+        function renderFieldRows() {
+            const wrap = document.getElementById('fieldRows');
+            wrap.innerHTML = '';
+            state.fieldRows.forEach((field, index) => {
+                const row = document.createElement('div');
+                row.className = 'field-row';
+                const options = (field.options || []).map(option => [option.value, option.label_en || option.value].join('|')).join('\n');
+                row.innerHTML =
+                    '<div class="field-grid">' +
+                    '<div><label class="text-[10px] text-[var(--text-muted)]">' + T.fieldLabel + '</label><input class="config-input fr-label-en" value="' + escapeHtml(field.label_en || field.label_ar || '') + '" maxlength="100"></div>' +
+                    '<div><label class="text-[10px] text-[var(--text-muted)]">' + T.fieldKey + '</label><input class="config-input fr-key" value="' + escapeHtml(field.key || '') + '" maxlength="50" ' + (field.key ? 'readonly' : '') + '></div>' +
+                    '<div><label class="text-[10px] text-[var(--text-muted)]">' + T.fieldType + '</label><select class="config-input fr-type">' + TYPES.map(type => '<option value="' + type[0] + '" ' + (selectedType(field.field_type) === type[0] ? 'selected' : '') + '>' + escapeHtml(type[1]) + '</option>').join('') + '</select></div>' +
+                    '<div><label class="text-[10px] text-[var(--text-muted)]">' + T.fieldOrder + '</label><input class="config-input fr-order" type="number" value="' + Number(field.sort_order || index) + '"></div>' +
+                    '<div class="flex items-end gap-3"><label class="text-[11px] flex items-center gap-1"><input class="fr-required" type="checkbox" ' + (field.required ? 'checked' : '') + '>' + T.fieldRequired + '</label>' +
+                    '<label class="text-[11px] flex items-center gap-1"><input class="fr-active" type="checkbox" ' + (field.active !== false ? 'checked' : '') + '>' + T.fieldActive + '</label>' +
+                    '<button type="button" class="btn" onclick="removeFieldRow(' + index + ')">' + T.remove + '</button></div>' +
+                    '</div>' +
+                    '<div class="mt-2"><label class="text-[10px] text-[var(--text-muted)]">' + T.fieldOptions + '</label><textarea class="config-input fr-options" rows="3">' + escapeHtml(options) + '</textarea></div>';
+                wrap.appendChild(row);
+            });
+        }
+
+        function addFieldRow() {
+            state.fieldRows.push({ key: '', label_en: '', label_ar: '', field_type: 'text', options: [], required: false, active: true, sort_order: state.fieldRows.length });
+            renderFieldRows();
+        }
+        function removeFieldRow(index) {
+            state.fieldRows.splice(index, 1);
+            renderFieldRows();
+        }
+        function parseOptionsText(value) {
+            return String(value || '').split(/\r?\n/).map(line => line.trim()).filter(Boolean).map(line => {
+                const parts = line.split('|').map(part => part.trim());
+                const optionValue = parts[0] || '';
+                const optionLabel = parts[1] || optionValue;
+                return { value: optionValue, label_en: optionLabel, label_ar: optionLabel };
+            }).filter(option => option.value);
+        }
+        async function saveFields() {
+            const rows = Array.from(document.querySelectorAll('#fieldRows .field-row'));
+            const fields = rows.map((row, index) => ({
+                key: row.querySelector('.fr-key').value.trim(),
+                label_en: row.querySelector('.fr-label-en').value.trim(),
+                label_ar: '',
+                field_type: row.querySelector('.fr-type').value,
+                sort_order: Number(row.querySelector('.fr-order').value) || index,
+                required: row.querySelector('.fr-required').checked,
+                active: row.querySelector('.fr-active').checked,
+                options: parseOptionsText(row.querySelector('.fr-options').value)
+            }));
+            const button = document.getElementById('saveFieldsBtn');
+            button.disabled = true;
+            try {
+                await api('/api/customers/fields', {
+                    method: 'PUT',
+                    body: JSON.stringify({ tenant_id: BOOT.isRoot ? state.tenantId : undefined, fields })
+                });
+                closeFields();
+                toast(T.saved);
+                await load();
+            } catch (error) {
+                toast(error.message);
+            } finally {
+                button.disabled = false;
+            }
+        }
+
+        document.getElementById('customerForm').addEventListener('submit', saveCustomer);
+        document.getElementById('searchInput').addEventListener('input', event => {
+            const term = event.target.value.toLowerCase();
+            document.querySelectorAll('#customersBody tr').forEach(row => {
+                row.style.display = row.textContent.toLowerCase().includes(term) ? '' : 'none';
+            });
+        });
+        const tenantSelect = document.getElementById('tenantSelect');
+        if (tenantSelect) {
+            tenantSelect.addEventListener('change', () => {
+                state.tenantId = Number(tenantSelect.value) || null;
+                state.tenantName = tenantSelect.options[tenantSelect.selectedIndex] ? tenantSelect.options[tenantSelect.selectedIndex].textContent : '';
+                load();
+            });
+        }
+        document.querySelectorAll('.modal-backdrop').forEach(el => {
+            el.addEventListener('click', event => { if (event.target === el) el.classList.remove('open'); });
+        });
+        load();
+        if (BOOT.isRoot) switchView(<%- JSON.stringify(initialView || 'customers') %>);
+    </script>
+
+    <% if (isRootUser) { %>
+    <script>
+        const BT = <%- JSON.stringify(bt) %>;
+        const ROSTER = <%- JSON.stringify((typeof roster !== 'undefined' ? roster : []).map(e => ({ extension: String(e.extension), name: e.name || '' }))).replace(/</g, '\\u003c') %>;
+        let tenants = [];
+        let editingTenantId = null;
+        let modalLink = null;
+
+        function bizEscapeHtml(value) {
+            return String(value == null ? '' : value).replace(/[&<>"']/g, ch => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[ch]));
+        }
+        function bizToast(message) {
+            const el = document.getElementById('tenantToast');
+            el.textContent = message;
+            el.classList.add('show');
+            setTimeout(() => el.classList.remove('show'), 2200);
+        }
+        function updateTenantAgentSummary() {
+            const hidden = document.getElementById('tenantAgents');
+            const summary = document.getElementById('tenantAgentsSummary');
+            const checks = Array.from(document.querySelectorAll('.tenantAgentCheckbox:checked:not(:disabled)')).map(cb => cb.value.trim()).filter(Boolean);
+            if (hidden) hidden.value = checks.join(',');
+            if (!summary) return;
+            if (checks.length === 0) {
+                summary.textContent = BT.selectExtensions;
+                summary.className = 'truncate text-xs font-semibold text-[var(--text-muted)]';
+            } else {
+                summary.textContent = checks.join(', ');
+                summary.className = 'truncate text-xs font-bold text-[var(--text-primary)] font-mono';
+            }
+        }
+        function toggleTenantAgentsMenu(force) {
+            const menu = document.getElementById('tenantAgentsMenu');
+            const btn = document.getElementById('tenantAgentsBtn');
+            if (!menu || !btn) return;
+            const open = typeof force === 'boolean' ? force : menu.classList.contains('hidden');
+            menu.classList.toggle('hidden', !open);
+            btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        }
+        function selectAllTenantAgents(checked) {
+            document.querySelectorAll('.tenantAgentCheckbox').forEach(cb => { if (!cb.disabled) cb.checked = Boolean(checked); });
+            updateTenantAgentSummary();
+        }
+
+        function fillAgentCheckList(containerId, current, otherAssigned, checkboxClass) {
+            const list = document.getElementById(containerId);
+            if (!list) return;
+            list.innerHTML = '';
+            if (!ROSTER.length) {
+                const empty = document.createElement('p');
+                empty.className = 'py-3 text-center text-[10px] text-[var(--text-muted)]';
+                empty.textContent = BT.noExtensions;
+                list.appendChild(empty);
+                return;
+            }
+            ROSTER.forEach(emp => {
+                const ext = String(emp.extension);
+                const blocked = otherAssigned.has(ext);
+                const label = document.createElement('label');
+                label.className = 'multi-option';
+                if (blocked) {
+                    label.style.opacity = '.45';
+                    label.style.cursor = 'not-allowed';
+                }
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.className = checkboxClass;
+                cb.value = ext;
+                cb.disabled = blocked;
+                cb.checked = current.has(ext);
+                const code = document.createElement('span');
+                code.className = 'font-mono font-bold text-[var(--text-primary)]';
+                code.textContent = ext;
+                const name = document.createElement('span');
+                name.className = 'truncate text-[var(--text-muted)]';
+                name.textContent = emp.name;
+                label.appendChild(cb);
+                label.appendChild(code);
+                label.appendChild(name);
+                if (blocked) {
+                    const tag = document.createElement('span');
+                    tag.className = 'ms-auto text-[9px] font-bold text-[var(--text-muted)]';
+                    tag.textContent = BT.assigned;
+                    label.appendChild(tag);
+                }
+                list.appendChild(label);
+            });
+        }
+        function selectAgentCheckboxes(className, checked) {
+            document.querySelectorAll('.' + className).forEach(cb => {
+                if (!cb.disabled) cb.checked = Boolean(checked);
+            });
+        }
+
+        function openEditTenant(tenantId) {
+            const tenant = tenants.find(item => Number(item.id) === Number(tenantId));
+            if (!tenant) return;
+            editingTenantId = tenant.id;
+            document.getElementById('editTenantId').value = tenant.id;
+            document.getElementById('editTenantHeadingName').textContent = tenant.name || '';
+            document.getElementById('editTenantName').value = tenant.name || '';
+            const concInput = document.getElementById('editTenantConcurrency');
+            const maxConc = Math.max(1, Math.min(50, Number(tenant.pool_total) || 50));
+            concInput.max = String(maxConc);
+            concInput.value = Math.min(Number(tenant.max_concurrency || 5), maxConc);
+            document.getElementById('editTenantRecording').checked = Boolean(tenant.recording_enabled);
+            const current = new Set((tenant.agents || []).map(String));
+            const otherAssigned = new Set();
+            tenants.forEach(item => {
+                if (Number(item.id) !== Number(tenant.id)) {
+                    (item.agents || []).forEach(ext => otherAssigned.add(String(ext)));
+                }
+            });
+            fillAgentCheckList('editTenantAgentsList', current, otherAssigned, 'editTenantAgentCheckbox');
+            document.getElementById('editTenantModal').classList.add('open');
+        }
+        function closeEditTenant() {
+            document.getElementById('editTenantModal').classList.remove('open');
+            editingTenantId = null;
+        }
+        async function saveEditTenant(event) {
+            event.preventDefault();
+            if (!editingTenantId) return;
+            const name = document.getElementById('editTenantName').value.trim();
+            if (name.length < 2) {
+                bizToast(BT.failed);
+                return;
+            }
+            const selected = Array.from(document.querySelectorAll('.editTenantAgentCheckbox:checked:not(:disabled)')).map(cb => cb.value);
+            if (selected.length === 0) {
+                bizToast(BT.selectAtLeastOneAgent);
+                return;
+            }
+            const button = document.getElementById('saveEditTenantBtn');
+            button.disabled = true;
+            try {
+                const response = await fetch('/api/admin/tenants/' + editingTenantId, {
+                    method: 'PUT',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name,
+                        agent_extensions: selected.join(','),
+                        max_concurrency: Number(document.getElementById('editTenantConcurrency').value || 5),
+                        recording_enabled: document.getElementById('editTenantRecording').checked
+                    })
+                });
+                const data = await response.json();
+                if (!response.ok || !data.success) throw new Error(data.error || BT.failed);
+                closeEditTenant();
+                bizToast(BT.updated);
+                await loadTenants();
+            } catch (error) {
+                bizToast(error.message);
+            } finally {
+                button.disabled = false;
+            }
+        }
+
+        function snippetFor(tenant, link) {
+            return '<' + 'script src="' + window.location.origin + '/js/sokrat-call-widget.js" data-tenant="' +
+                tenant.public_id + '" data-link="' + link.slug + '" data-label="Call us"><' + '/script>';
+        }
+        async function loadTenants() {
+            const body = document.getElementById('tenantsBody');
+            try {
+                const response = await fetch('/api/admin/tenants', { credentials: 'same-origin' });
+                const data = await response.json();
+                if (!response.ok || !data.success) throw new Error(data.error || 'Failed to load tenants');
+                tenants = data.tenants || [];
+                renderTenants();
+                if (typeof window.syncCustomerTenantOptions === 'function') window.syncCustomerTenantOptions(tenants);
+            } catch (error) {
+                body.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-red-400">' + bizEscapeHtml(error.message) + '</td></tr>';
+            }
+        }
+        function renderTenants() {
+            const body = document.getElementById('tenantsBody');
+            if (!tenants.length) {
+                body.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-[var(--text-muted)]">' + BT.empty + '</td></tr>';
+                return;
+            }
+            body.innerHTML = tenants.map(tenant => {
+                const link = (tenant.links || [])[0];
+                const statusClass = tenant.status === 'active' ? 'badge-active' : 'badge-suspended';
+                const linkCell = link
+                    ? '<button class="btn" onclick="showLink(' + tenant.id + ')">' + BT.copy + '</button>'
+                    : '<span class="text-[var(--text-muted)]">—</span>';
+                const toggle = tenant.status === 'active'
+                    ? '<button class="btn" onclick="toggleTenant(' + tenant.id + ', \'suspended\')">' + BT.suspend + '</button>'
+                    : '<button class="btn" onclick="toggleTenant(' + tenant.id + ', \'active\')">' + BT.activate + '</button>';
+                const agents = Array.isArray(tenant.agents) ? tenant.agents : [];
+                const agentInfo = agents.length
+                    ? '<div class="text-[10px] text-[var(--text-muted)] mt-1">' + bizEscapeHtml(agents.join(', ')) + '</div>'
+                    : '<div class="text-[10px] font-bold text-amber-400 mt-1">⚠ ' + BT.noAgents + '</div>';
+                return '<tr class="border-b border-[var(--border-primary)]/60">' +
+                    '<td class="p-3 font-bold">' + bizEscapeHtml(tenant.name) + '<div class="text-[10px] text-[var(--text-muted)]">' + bizEscapeHtml(tenant.public_id) + '</div>' + agentInfo + '</td>' +
+                    '<td class="p-3"><span class="badge ' + statusClass + '">' + bizEscapeHtml(tenant.status) + '</span></td>' +
+                    '<td class="p-3 font-mono">' + bizEscapeHtml(tenant.ring_group) + '</td>' +
+                    '<td class="p-3 font-mono">' + (tenant.pool_free ?? '—') + ' / ' + (tenant.pool_total ?? '—') + '</td>' +
+                    '<td class="p-3 font-mono">' + (tenant.active_sessions ?? 0) + '</td>' +
+                    '<td class="p-3">' + linkCell + '</td>' +
+                    '<td class="p-3"><div class="flex flex-wrap gap-2"><button class="btn" onclick="openBusinessCustomers(' + tenant.id + ')">' + BT.openCustomers + '</button><button class="btn" onclick="openBusinessBranding(' + tenant.id + ')">' + BT.branding + '</button><button class="btn" onclick="openEditTenant(' + tenant.id + ')">' + BT.edit + '</button>' + toggle + '</div></td>' +
+                    '</tr>';
+            }).join('');
+        }
+        function openBusinessCustomers(tenantId) {
+            const tenant = tenants.find(item => Number(item.id) === Number(tenantId));
+            if (!tenant) return;
+            if (typeof window.openCustomerScope === 'function') window.openCustomerScope(tenant.id, tenant.name);
+        }
+        function openBusinessBranding(tenantId) {
+            const tenant = tenants.find(item => Number(item.id) === Number(tenantId));
+            if (!tenant) return;
+            if (typeof window.openCustomerScope === 'function') window.openCustomerScope(tenant.id, tenant.name);
+            if (typeof window.openBranding === 'function') window.openBranding();
+        }
+        function showLink(tenantId) {
+            const tenant = tenants.find(item => Number(item.id) === Number(tenantId));
+            const link = tenant && tenant.links && tenant.links[0];
+            if (!link) return;
+            modalLink = { tenant, link };
+            document.getElementById('linkModalUrl').textContent = link.public_url || '';
+            document.getElementById('linkModalSnippet').textContent = snippetFor(tenant, link);
+            document.getElementById('linkModal').classList.add('open');
+        }
+        function closeLinkModal() {
+            document.getElementById('linkModal').classList.remove('open');
+        }
+        async function copyText(text) {
+            try {
+                await navigator.clipboard.writeText(text);
+                bizToast(BT.copied);
+            } catch (_) {
+                window.prompt(BT.copy, text);
+            }
+        }
+        function copyModalUrl() {
+            if (modalLink) copyText(document.getElementById('linkModalUrl').textContent);
+        }
+        function copyModalSnippet() {
+            if (modalLink) copyText(document.getElementById('linkModalSnippet').textContent);
+        }
+        function openCreateModal() {
+            document.getElementById('createModal').classList.add('open');
+        }
+        function closeCreateModal() {
+            document.getElementById('createModal').classList.remove('open');
+        }
+        async function toggleTenant(tenantId, status) {
+            const response = await fetch('/api/admin/tenants/' + tenantId, {
+                method: 'PUT',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status })
+            });
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                bizToast(data.error || BT.failed);
+                return;
+            }
+            await loadTenants();
+        }
+        document.getElementById('createTenantForm').addEventListener('submit', async function (event) {
+            event.preventDefault();
+            const form = event.currentTarget;
+            const button = document.getElementById('createTenantBtn');
+            button.disabled = true;
+            const formData = new FormData(form);
+            if (!formData.get('agent_extensions')) {
+                bizToast(BT.selectAtLeastOneAgent);
+                button.disabled = false;
+                return;
+            }
+            const payload = {
+                name: formData.get('name'),
+                agent_extensions: formData.get('agent_extensions'),
+                ring_group: formData.get('ring_group') || undefined,
+                max_concurrency: Number(formData.get('max_concurrency') || 5),
+                pool_size: Number(formData.get('pool_size') || 5),
+                recording_enabled: formData.get('recording_enabled') === 'on',
+                link: {
+                    label: 'Website',
+                    allowed_origins: formData.get('allowed_origins') || ''
+                }
+            };
+            try {
+                const response = await fetch('/api/admin/tenants', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await response.json();
+                if (!response.ok || !data.success) throw new Error(data.error || BT.failed);
+                closeCreateModal();
+                form.reset();
+                updateTenantAgentSummary();
+                bizToast(BT.created);
+                await loadTenants();
+                if (data.tenant && data.link) {
+                    modalLink = { tenant: data.tenant, link: data.link };
+                    document.getElementById('linkModalUrl').textContent = data.link.public_url || '';
+                    document.getElementById('linkModalSnippet').textContent = snippetFor(data.tenant, data.link);
+                    document.getElementById('linkModal').classList.add('open');
+                }
+            } catch (error) {
+                bizToast(error.message);
+            } finally {
+                button.disabled = false;
+            }
+        });
+        document.getElementById('editTenantForm').addEventListener('submit', saveEditTenant);
+        document.querySelectorAll('.modal-backdrop').forEach(el => {
+            el.addEventListener('click', event => { if (event.target === el) el.classList.remove('open'); });
+        });
+        const tenantAgentsBtn = document.getElementById('tenantAgentsBtn');
+        if (tenantAgentsBtn) {
+            tenantAgentsBtn.addEventListener('click', event => {
+                event.stopPropagation();
+                toggleTenantAgentsMenu();
+            });
+        }
+        document.querySelectorAll('.tenantAgentCheckbox').forEach(cb => {
+            cb.addEventListener('change', updateTenantAgentSummary);
+        });
+        document.addEventListener('click', event => {
+            const wrap = document.getElementById('tenantAgentsWrap');
+            if (wrap && !wrap.contains(event.target)) toggleTenantAgentsMenu(false);
+        });
+        updateTenantAgentSummary();
+        loadTenants();
+    </script>
+    <% } %>
+</body>
+</html>

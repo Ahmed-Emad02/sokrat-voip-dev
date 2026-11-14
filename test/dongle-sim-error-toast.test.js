@@ -63,15 +63,41 @@ describe('Dongle SIM IMSI Error Toast Notification', () => {
         assert.strictEqual(emittedCount, 2, 'Alert after 30s window should emit');
     });
 
-    test('verifies server.js and views/gsm-dongles.ejs contain dongleSimError handlers', () => {
+    test('verifies server.js gates SIM alerts on live dongle state and emits recovery', () => {
         const serverCode = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
-        assert.ok(serverCode.includes('dongleSimError'), 'server.js must emit dongleSimError');
-        assert.ok(serverCode.includes('imsi_failed'), 'server.js must specify error: imsi_failed');
+        assert.ok(serverCode.includes('getDevicesOutputCached'), 'server.js must load live dongle state before alerting');
+        assert.ok(serverCode.includes('buildImsiFailureEvent'), 'server.js must use the shared IMSI classification');
+        assert.ok(serverCode.includes("io.emit(failure.event"), 'server.js must emit the classified event');
+        const healthCode = fs.readFileSync(path.join(__dirname, '../lib/dongle-health.js'), 'utf8');
+        assert.ok(healthCode.includes("event: 'dongleOffline'"), 'the classifier must distinguish offline dongles');
+        assert.ok(serverCode.includes("io.emit('dongleRecovered'"), 'server.js must clear alerts on initialization');
+        assert.ok(serverCode.includes('DONGLE_IMSI_ESCALATION_THRESHOLD'), 'server.js must escalate repeated IMSI failures');
+        assert.ok(serverCode.includes('DONGLE_RESTART_AUDIT_FILE'), 'server.js must audit restart attempts');
+        assert.ok(serverCode.includes('scheduleDongleHealthCheck'), 'server.js must verify health after restart');
+        assert.ok(serverCode.includes('restart_cooldown'), 'server.js must pause restarts after a failed health check');
+        assert.ok(!serverCode.includes('SIM card is not connected properly on'), 'server.js must not assert SIM removal from an IMSI log line');
+    });
 
+    test('verifies views/gsm-dongles.ejs replaces and clears alerts by dongle', () => {
         const donglesCode = fs.readFileSync(path.join(__dirname, '../views/gsm-dongles.ejs'), 'utf8');
         assert.ok(donglesCode.includes('dongleSimError'), 'views/gsm-dongles.ejs must listen to dongleSimError');
-        assert.ok(donglesCode.includes('top-alert-container'), 'views/gsm-dongles.ejs must have top center alert container');
-        assert.ok(donglesCode.includes('بطاقة SIM غير متصلة بشكل صحيح'), 'views/gsm-dongles.ejs must have Arabic translation');
-        assert.ok(donglesCode.includes('SIM card is not connected properly'), 'views/gsm-dongles.ejs must have English translation');
+        assert.ok(donglesCode.includes('dongleOffline'), 'views/gsm-dongles.ejs must listen to dongleOffline');
+        assert.ok(donglesCode.includes('dongleRecovered'), 'views/gsm-dongles.ejs must listen to dongleRecovered');
+        assert.ok(donglesCode.includes('dongleEscalated'), 'views/gsm-dongles.ejs must listen to dongleEscalated');
+        assert.ok(donglesCode.includes('removeDongleAlerts'), 'views/gsm-dongles.ejs must remove stale alerts by dongle');
+        assert.ok(donglesCode.includes('data.messageEn'), 'views/gsm-dongles.ejs must use the server-provided message');
+        assert.ok(donglesCode.includes('IMSI Read Alert'), 'views/gsm-dongles.ejs must label the alert as an IMSI read issue');
+        assert.ok(donglesCode.includes('فشلت قراءة IMSI'), 'views/gsm-dongles.ejs must have the corrected Arabic message');
+        assert.ok(!donglesCode.includes('SIM card is not connected properly'), 'views/gsm-dongles.ejs must not claim the SIM is unplugged');
+    });
+
+    test('verifies disconnected SIM/DID/IMSI render as an em dash', () => {
+        const donglesCode = fs.readFileSync(path.join(__dirname, '../views/gsm-dongles.ejs'), 'utf8');
+        assert.ok(donglesCode.includes('deviceSimLabel'), 'server-rendered options must use the SIM label helper');
+        assert.ok(donglesCode.includes('displayDongleNumber'), 'client render must use the SIM number helper');
+        assert.ok(donglesCode.includes('displayDongleImsi'), 'client render must use the IMSI helper');
+        assert.ok(donglesCode.includes("return '—'"), 'disconnected values must render as an em dash');
+        assert.ok(!donglesCode.includes("'No SIM'"), 'disconnected dongles must not be labeled No SIM');
+        assert.ok(!donglesCode.includes("'Unknown SIM'"), 'disconnected dongles must not be labeled Unknown SIM');
     });
 });

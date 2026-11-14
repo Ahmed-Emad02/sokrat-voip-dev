@@ -233,6 +233,8 @@ The upgrader refreshes active, explicitly managed media units using their
 existing unit/configuration and keys. Run upgrades
 without active calls; this is not a live, interruption-free media migration.
 Legacy media remains TCP through FRP; explicit plain/direct media stays UDP.
+WebRTC `rtp_timeout` remains 360 seconds in extension and guest configuration;
+the mainline integration retains that value rather than reducing it to 60.
 
 Destinations that call `Dial(PJSIP/...)` directly and bypass both `macro-dial`
 and the normal FreePBX queue `Local/<ext>@from-queue/n` path remain outside this
