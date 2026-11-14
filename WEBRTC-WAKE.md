@@ -101,6 +101,24 @@ are invalidated on AMI close/reconnect; there are no retries, UserEvent messages
 caches or telemetry. Caller-hangup cancellation still uses the hangup handler's
 callee loop. Audio, RTP and outbound dialplan are untouched.
 
+## Extension identity and policy visibility
+
+Roster and overview technology use device/endpoint metadata, not special
+extension numbers. Agent reporting retains its existing WebRTC and historical
+state fallbacks. Policy listing keeps its existing technology/WebRTC conditions;
+a SIP account is not included solely because of its number.
+
+The internal-CDR predicate no longer has a fixed extension allowlist. Its
+existing number-length, channel, DID and context classification rules remain.
+
+Both installers' local push subroutines also require a numeric target whose
+AstDB `DEVICE/<target>/tech` is `pjsip`; no extension number bypasses that check.
+The duplicate-push guard and downstream hook remain unchanged.
+`test/wake-routing-harness.py --installer-hooks` exercises the emitted guard
+priorities on an isolated Asterisk, stopping before UUID/provider operations.
+The test-only `WAKE_ASTERISK_MODULE_DIR` and
+`WAKE_ASTERISK_DOCUMENTATION_DIR` variables allow a rootless extracted runtime.
+
 ## Installation and lifecycle
 
 ```sh

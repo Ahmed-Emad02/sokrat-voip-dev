@@ -83,3 +83,75 @@ test('listDefinitions keeps static statuses and filters group-specific statuses'
         'available', 'meeting', 'training', 'offline',
     ]);
 });
+
+function reportPool(metadata = {}) {
+    return {
+        async query(sql) {
+            if (sql.includes('`devices`')) {
+                return [metadata.tech ? [{ tech: metadata.tech }] : []];
+            }
+            if (sql.includes('`ps_endpoints`')) {
+                return [metadata.endpoint ? [{ id: 'configured-endpoint' }] : []];
+            }
+            if (sql.includes('`sip`')) {
+                return [metadata.webrtcFlag ? [{ found: 1 }] : []];
+            }
+            if (sql.includes('synq_agent_status_log')) {
+                return [metadata.history ? [{
+                    id: 1, status: 'available',
+                    start_time: '2026-01-01T06:00:00Z',
+                    end_time: '2026-01-01T06:10:00Z',
+                    duration_seconds: 600,
+                }] : []];
+            }
+            if (sql.includes('synq_agent_status_definitions') || sql.includes('employee_extras')) {
+                return [[]];
+            }
+            if (sql.includes('synq_agent_status')) {
+                return [metadata.history ? [{ status: 'available', last_update: null }] : []];
+            }
+            throw new Error('Unexpected report fixture query');
+        },
+    };
+}
+
+function reportFor(extension, metadata) {
+    return agentStatus.getAgentStatusReport(
+        reportPool(metadata), extension, '2026-01-01T00:00:00Z', '2026-01-02T00:00:00Z',
+    );
+}
+
+test('SIP accounts do not gain agent reports from their extension number', async () => {
+    for (const extension of ['150', '151', '2401']) {
+        const report = await reportFor(extension, { tech: 'sip' });
+        assert.deepEqual(report, { isWebRTC: false, totals: [], history: [], currentStatus: null });
+    }
+});
+
+test('unknown accounts do not gain agent reports from their extension number', async () => {
+    assert.deepEqual(await reportFor('150'), await reportFor('2401'));
+    assert.equal((await reportFor('2401')).isWebRTC, false);
+});
+
+test('configured PJSIP accounts retain agent reports after renumbering', async () => {
+    const original = await reportFor('150', { tech: 'pjsip' });
+    const renumbered = await reportFor('5072', { tech: 'pjsip' });
+    assert.equal(original.isWebRTC, true);
+    assert.deepEqual(renumbered, original);
+});
+
+test('WebRTC metadata and endpoint fallbacks remain number-independent', async () => {
+    for (const metadata of [{ tech: 'webrtc' }, { endpoint: true }, { webrtcFlag: true }]) {
+        assert.equal((await reportFor('150', metadata)).isWebRTC, true);
+        assert.equal((await reportFor('2401', metadata)).isWebRTC, true);
+    }
+});
+
+test('historical agent records remain readable after renumbering', async () => {
+    const original = await reportFor('150', { history: true });
+    const renumbered = await reportFor('2401', { history: true });
+    assert.equal(original.isWebRTC, true);
+    assert.deepEqual(renumbered, original);
+    assert.equal(renumbered.history[0].durationSeconds, 600);
+    assert.equal(renumbered.totalTrackedSeconds, 600);
+});

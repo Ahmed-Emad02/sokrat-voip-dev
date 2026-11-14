@@ -78,7 +78,7 @@ def build_root(root):
     etc = root / 'etc/asterisk'
     dirs = {
         'astetcdir': etc,
-        'astmoddir': '/usr/lib64/asterisk/modules',
+        'astmoddir': os.environ.get('WAKE_ASTERISK_MODULE_DIR', '/usr/lib64/asterisk/modules'),
         'astvarlibdir': root / 'var/lib/asterisk',
         'astdbdir': root / 'var/lib/asterisk',
         'astkeydir': root / 'var/lib/asterisk',
@@ -92,7 +92,8 @@ def build_root(root):
     for directory in dirs.values():
         if isinstance(directory, Path):
             directory.mkdir(parents=True, exist_ok=True)
-    shutil.copytree('/var/lib/asterisk/documentation',
+    shutil.copytree(os.environ.get('WAKE_ASTERISK_DOCUMENTATION_DIR',
+                                  '/var/lib/asterisk/documentation'),
                     dirs['astdatadir'] / 'documentation')
     conf = '[directories]\n' + ''.join(f'{key} => {value}\n' for key, value in dirs.items())
     conf += f'\n[options]\nsystemname = {root.name}\n'
@@ -101,6 +102,7 @@ def build_root(root):
 autoload=no
 load => pbx_config.so
 load => app_stack.so
+load => app_exec.so
 load => app_system.so
 load => res_clioriginate.so
 load => app_ringing.so
@@ -219,10 +221,75 @@ def clear_db(asterisk, conf):
         run_cli(asterisk, conf, f'database del {family} {entry}', 5).check_returncode()
 
 
+def build_installer_hook_fixture(root):
+    contexts = []
+    cases = []
+    matrix = [
+        ('sip-special', '150', 'sip', False, False),
+        ('pjsip-special', '150', 'pjsip', True, False),
+        ('pjsip-other-special', '151', 'pjsip', True, False),
+        ('pjsip-ordinary', '2401', 'pjsip', True, False),
+        ('pjsip-renumbered', '5072', 'pjsip', True, False),
+        ('pjsip-leading-zero', '0150', 'pjsip', True, False),
+        ('sip-ordinary', '2401', 'sip', False, False),
+        ('missing-metadata', '9999', None, False, False),
+        ('empty-target', '', None, False, False),
+        ('nonnumeric-target', 'agent', 'pjsip', False, False),
+        ('duplicate', '5072', 'pjsip', False, True),
+    ]
+    for index, installer in enumerate(('install.sh', 'installer-bundle/install-sokrat.sh')):
+        source = (ROOT / installer).read_text()
+        # Execute the emitted priorities before UUID generation or provider I/O.
+        prefix = source.split('\n[sub-sokrat-push-hook]\n', 1)[1].split(
+            '\nsame => n,Set(SOKRAT_LINKEDID=', 1)[0]
+        hook = f'installer-hook-{index}'
+        contexts.extend([f'[{hook}]', prefix,
+                         'same => n,Set(HOOK_ELIGIBLE=1)',
+                         'same => n(done),Return()'])
+        for name, target, tech, expected, duplicate in matrix:
+            case_id = f'installer-{index}-{name}'
+            result = root / (case_id + '.result')
+            contexts.extend([f'[{case_id}]',
+                             'exten => s,1,Set(HOOK_ELIGIBLE=0)',
+                             f'same => n,Set(SOKRAT_PUSH_SENT={1 if duplicate else ""})'])
+            if tech:
+                contexts.append(f'same => n,Set(DB(DEVICE/{target}/tech)={tech})')
+            contexts.extend([
+                f'same => n,Gosub({hook},s,1({target}))',
+                f'same => n,System(printf "%s\\n" "${{HOOK_ELIGIBLE}}" > {result})',
+                'same => n,Hangup()',
+            ])
+            cases.append((installer, case_id, result, expected))
+    write_text(root / 'etc/asterisk/extensions.conf', '\n'.join(contexts) + '\n')
+    return cases
+
+
+def check_installer_hooks(asterisk, conf, cases):
+    failures = []
+    for installer, case_id, result, expected in cases:
+        run_cli(asterisk, conf, 'database deltree DEVICE', 5).check_returncode()
+        run_cli(asterisk, conf,
+                f'channel originate Local/s@{case_id} application Wait 1', 5).check_returncode()
+        deadline = time.monotonic() + 5
+        while not result.exists():
+            if time.monotonic() >= deadline:
+                raise RuntimeError(f'{case_id}: isolated hook fixture did not complete')
+            time.sleep(0.02)
+        actual = result.read_text().strip()
+        if actual != str(int(expected)):
+            failures.append(f'{installer} {case_id}: eligible={actual}, expected={int(expected)}')
+    if failures:
+        print('\n'.join(failures))
+        return 1
+    print(f'PASS ({len(cases)} installer eligibility cases)')
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--asterisk', default='/usr/sbin/asterisk')
     parser.add_argument('--keep', action='store_true')
+    parser.add_argument('--installer-hooks', action='store_true')
     args = parser.parse_args()
     if not Path(args.asterisk).exists():
         raise SystemExit('asterisk executable not found: ' + args.asterisk)
@@ -231,7 +298,10 @@ def main():
     failures = []
     try:
         build_root(root)
+        installer_cases = build_installer_hook_fixture(root) if args.installer_hooks else None
         process, conf = start_asterisk(args.asterisk, root)
+        if installer_cases is not None:
+            return check_installer_hooks(args.asterisk, conf, installer_cases)
         for case in CASES:
             clear_db(args.asterisk, conf)
             for name in (CALLS, HASHES):

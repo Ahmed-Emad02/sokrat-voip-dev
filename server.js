@@ -318,7 +318,7 @@ const CDR_CALL_SCOPE_CASE = `
 
         WHEN (c.channel LIKE 'SIP/%' OR c.channel LIKE 'PJSIP/%' OR c.channel LIKE 'IAX2/%' OR c.dcontext = 'from-internal' OR c.dcontext LIKE 'from-internal%' OR c.dcontext LIKE 'from-intercom%')
              AND (c.dstchannel NOT LIKE 'Dongle/%' AND c.dstchannel NOT LIKE 'DAHDI/%' AND c.lastdata NOT LIKE 'dongle/%' AND c.lastdata NOT LIKE 'DAHDI/%')
-             AND (NOT ${CDR_EXTERNAL_DST_SQL} OR c.dst IN ('101','102','111','200','600','300'))
+             AND NOT ${CDR_EXTERNAL_DST_SQL}
              AND c.channel NOT LIKE 'Dongle/%' AND c.channel NOT LIKE 'DAHDI/%'
              AND (c.did = '' OR c.did IS NULL)
              AND c.dcontext NOT LIKE 'from-dongle%' AND c.dcontext NOT LIKE 'from-trunk%' AND c.dcontext NOT LIKE 'from-pstn%'
@@ -4746,8 +4746,8 @@ app.use(async (req, res, next) => {
             users.forEach(u => {
                 if (u.extension && /^\d+$/.test(u.extension)) {
                     const extStr = String(u.extension);
-                    const tech = deviceTechMap.get(extStr) || (extStr === '150' ? 'pjsip' : 'sip');
-                    const isPjsip = (tech === 'pjsip');
+                    const tech = deviceTechMap.get(extStr) || 'sip';
+                    const isPjsip = agentStatusService.isPjsipTech(tech);
                     extMap.set(u.extension, {
                         extension: u.extension,
                         name: u.name || u.extension,
@@ -4764,8 +4764,8 @@ app.use(async (req, res, next) => {
             devices.forEach(d => {
                 if (d.extension && /^\d+$/.test(d.extension) && !extMap.has(d.extension)) {
                     const extStr = String(d.extension);
-                    const tech = deviceTechMap.get(extStr) || (extStr === '150' ? 'pjsip' : 'sip');
-                    const isPjsip = (tech === 'pjsip');
+                    const tech = deviceTechMap.get(extStr) || 'sip';
+                    const isPjsip = agentStatusService.isPjsipTech(tech);
                     extMap.set(d.extension, { extension: d.extension, name: d.name || d.extension, photo: null, title: null, emp_group: null, tech: tech, isPjsip: isPjsip });
                 }
             });
@@ -4879,7 +4879,7 @@ app.use(async (req, res, next) => {
         res.locals.agentStatusDefinitions = customStatusDefinitions;
         res.locals.employeeGroups = cachedEmployeeGroupNames;
         res.locals.roster = roster.map(emp => {
-            const isPjsip = Boolean(emp.isPjsip || (emp.tech === 'pjsip') || (emp.extension === '150'));
+            const isPjsip = Boolean(emp.isPjsip || agentStatusService.isPjsipTech(emp.tech));
             return {
                 ...emp,
                 online: onlineMap[emp.extension] || false,
@@ -9422,7 +9422,7 @@ app.get('/api/ext-overview', async (req, res) => {
 
         const employeeMetrics = {};
         res.locals.roster.forEach(emp => {
-            const isPjsip = Boolean(emp.isPjsip || (emp.tech === 'pjsip') || (emp.extension === '150'));
+            const isPjsip = Boolean(emp.isPjsip || agentStatusService.isPjsipTech(emp.tech));
             employeeMetrics[emp.extension] = {
                 extension: emp.extension,
                 name: emp.name,
@@ -9578,7 +9578,7 @@ app.get('/api/ext-overview', async (req, res) => {
             const totalTrackedSec = emp.onlineSec + emp.offlineSec;
             emp.availabilityRate = totalTrackedSec > 0 ? Math.round((emp.onlineSec / totalTrackedSec) * 100) : (emp.online ? 100 : 0);
 
-            const isPjsip = Boolean(emp.isPjsip || (emp.tech === 'pjsip') || (emp.extension === '150'));
+            const isPjsip = Boolean(emp.isPjsip || agentStatusService.isPjsipTech(emp.tech));
             emp.isWebRTC = isPjsip;
             emp.agentStatus = emp.agentStatus || (isPjsip ? 'available' : null);
             emp.agentStatusTime = emp.agentStatusTime || null;
@@ -16041,7 +16041,7 @@ app.get('/api/extension-policies', requireAuth, async (req, res) => {
             LEFT JOIN \`asterisk\`.\`sip\` s ON s.id = u.extension AND s.keyword = 'webrtc'
             LEFT JOIN \`asterisk\`.\`sip\` s_tr ON s_tr.id = u.extension AND s_tr.keyword = 'transport'
             LEFT JOIN \`asterisk\`.\`extension_policies\` ep ON ep.extension = u.extension
-            WHERE d.tech IN ('pjsip', 'webrtc') OR s.data = 'yes' OR s_tr.data LIKE '%ws%' OR d.tech LIKE '%webrtc%' OR u.extension IN ('150', '151')
+            WHERE d.tech IN ('pjsip', 'webrtc') OR s.data = 'yes' OR s_tr.data LIKE '%ws%' OR d.tech LIKE '%webrtc%'
             ORDER BY CAST(u.extension AS UNSIGNED) ASC
         `);
         res.json({ success: true, policies: rows });
