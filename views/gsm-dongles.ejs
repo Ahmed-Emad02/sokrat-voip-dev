@@ -2613,6 +2613,8 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                         <button type="button" onclick="executeAtDiag('AT+COPS?')" class="at-shortcut-chip px-2.5 py-1 rounded-lg text-xs font-mono font-semibold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-zinc-500 text-zinc-300 hover:text-white transition cursor-pointer">AT+COPS?</button>
                         <button type="button" onclick="executeAtDiag('AT^SYSCFG?')" class="at-shortcut-chip px-2.5 py-1 rounded-lg text-xs font-mono font-semibold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-zinc-500 text-zinc-300 hover:text-white transition cursor-pointer">AT^SYSCFG?</button>
                         <button type="button" onclick="executeAtDiag('AT+CPIN?')" class="at-shortcut-chip px-2.5 py-1 rounded-lg text-xs font-mono font-semibold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-zinc-500 text-zinc-300 hover:text-white transition cursor-pointer">AT+CPIN?</button>
+                        <button type="button" onclick="executeAtDiag('AT^CVOICE?')" class="at-shortcut-chip px-2.5 py-1 rounded-lg text-xs font-mono font-semibold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-zinc-500 text-zinc-300 hover:text-white transition cursor-pointer" title="Check E173 voice PCM state">AT^CVOICE?</button>
+                        <button type="button" onclick="executeAtDiag('AT^CVOICE=0')" class="at-shortcut-chip px-2.5 py-1 rounded-lg text-xs font-mono font-semibold bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 hover:border-amber-400/60 text-amber-300 hover:text-amber-200 transition cursor-pointer" title="Enable E173 voice PCM (E173 only)">AT^CVOICE=0</button>
                         <div class="flex items-center justify-center gap-1.5 w-full pt-2 border-t border-[var(--border-primary)]/50 mt-1 flex-wrap">
                             <button type="button" onclick="executeAtDiag('AT^SYSCFG=14,2,3FFFFFFF,2,4')" class="at-shortcut-chip px-3 py-1 rounded-lg text-xs font-mono font-semibold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-zinc-300 hover:text-white border border-[var(--border-primary)] hover:border-zinc-500 transition cursor-pointer" title="Lock modem to 3G Only (WCDMA / UMTS)">Lock 3G Only</button>
                             <button type="button" onclick="executeAtDiag('AT^SYSCFG=13,1,3FFFFFFF,2,4')" class="at-shortcut-chip px-3 py-1 rounded-lg text-xs font-mono font-semibold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-zinc-300 hover:text-white border border-[var(--border-primary)] hover:border-zinc-500 transition cursor-pointer" title="Lock modem to 2G Only (GSM / GPRS)">Lock 2G Only</button>
@@ -3431,6 +3433,21 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                 }
             }
 
+            function renderDongleVoiceWarning(dev, dongleKey) {
+                const warning = dev && dev.voiceEnableWarning;
+                if (!warning) return '';
+                const message = isRtl ? (warning.messageAr || warning.messageEn) : (warning.messageEn || warning.messageAr);
+                return `
+                    <div class="mx-3.5 sm:mx-4 mt-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[10px] text-amber-200 flex items-start gap-2">
+                        <svg class="shrink-0 mt-0.5" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                        <div class="flex-1 min-w-0">
+                            <div class="font-bold">${isRtl ? 'تحذير صوت E173' : 'E173 Voice Warning'}</div>
+                            <div class="opacity-90 leading-relaxed">${escapeHtml(message || '')}</div>
+                        </div>
+                        ${isRootUser ? `<button type="button" onclick="runAtDiag('${escapeHtml(dongleKey)}', 'AT^CVOICE=0')" class="shrink-0 px-2 py-1 rounded-lg border border-amber-400/40 bg-amber-400/10 hover:bg-amber-400/20 font-mono font-bold cursor-pointer">AT^CVOICE=0</button>` : ''}
+                    </div>`;
+            }
+
             function renderDongleCards() {
                 if (!donglesGrid) return;
 
@@ -3643,6 +3660,8 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                                         <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 w-full">
                                             <button type="button" onclick="runAtDiag('${escapeHtml(id)}', 'AT^CARDLOCK?')" class="w-full text-center py-1.5 px-1 rounded-lg text-[10px] font-mono font-semibold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-zinc-500 text-zinc-300 hover:text-white transition cursor-pointer truncate" title="Check SIM Lock & remaining attempts counter">^CARDLOCK?</button>
                                             <button type="button" onclick="runAtDiag('${escapeHtml(id)}', 'AT^SYSINFO')" class="w-full text-center py-1.5 px-1 rounded-lg text-[10px] font-mono font-semibold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-zinc-500 text-zinc-300 hover:text-white transition cursor-pointer truncate" title="Check network service state, domain & roaming">^SYSINFO</button>
+                                            <button type="button" onclick="runAtDiag('${escapeHtml(id)}', 'AT^CVOICE?')" class="w-full text-center py-1.5 px-1 rounded-lg text-[10px] font-mono font-semibold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-zinc-500 text-zinc-300 hover:text-white transition cursor-pointer truncate" title="Check E173 voice PCM state">^CVOICE?</button>
+                                            <button type="button" onclick="runAtDiag('${escapeHtml(id)}', 'AT^CVOICE=0')" class="w-full text-center py-1.5 px-1 rounded-lg text-[10px] font-mono font-semibold bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 hover:text-amber-200 transition cursor-pointer truncate" title="Enable E173 voice PCM">Voice ON</button>
                                             <button type="button" onclick="runAtDiag('${escapeHtml(id)}', 'AT+CSQ')" class="w-full text-center py-1.5 px-1 rounded-lg text-[10px] font-mono font-semibold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-zinc-500 text-zinc-300 hover:text-white transition cursor-pointer truncate" title="Check signal quality RSSI / dBm">+CSQ</button>
                                             <button type="button" onclick="runAtDiag('${escapeHtml(id)}', 'AT+COPS?')" class="w-full text-center py-1.5 px-1 rounded-lg text-[10px] font-mono font-semibold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-zinc-500 text-zinc-300 hover:text-white transition cursor-pointer truncate" title="Check current cellular operator">+COPS?</button>
                                         </div>
@@ -3788,6 +3807,8 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                                 </div>
                             </div>`;
                     }
+                    const voiceWarningHtml = renderDongleVoiceWarning(dev, rawId);
+                    if (voiceWarningHtml) card.insertAdjacentHTML('afterbegin', voiceWarningHtml);
                     donglesGrid.appendChild(card);
                 });
             }

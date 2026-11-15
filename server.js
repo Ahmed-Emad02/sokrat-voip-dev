@@ -45,7 +45,8 @@ const {
     buildImsiEscalationEvent,
     buildRestartFailedEvent,
     buildRestartHealthyEvent,
-    formatRestartAuditEntry
+    formatRestartAuditEntry,
+    parseE173VoiceWarningState
 } = require('./lib/dongle-health');
 const { dbToAsteriskVolume } = require('./lib/call-volume');
 const { createWakeAnswerCancel } = require('./lib/webrtc-wake-answer');
@@ -12142,6 +12143,42 @@ let cachedEnrichedDevices = null;
 let lastEnrichedDevicesTime = 0;
 const ENRICHED_DEVICES_CACHE_TTL = 1500;
 
+function readAsteriskFullLogTail(maxBytes = 512 * 1024) {
+    const logPath = '/var/log/asterisk/full';
+    try {
+        const stat = fs.statSync(logPath);
+        const start = Math.max(0, stat.size - maxBytes);
+        const length = stat.size - start;
+        if (length <= 0) return '';
+        const fd = fs.openSync(logPath, 'r');
+        try {
+            const buffer = Buffer.alloc(length);
+            fs.readSync(fd, buffer, 0, length, start);
+            return buffer.toString('utf8');
+        } finally {
+            fs.closeSync(fd);
+        }
+    } catch (_) {
+        return '';
+    }
+}
+
+function annotateE173VoiceWarnings(devices) {
+    const warnings = parseE173VoiceWarningState(readAsteriskFullLogTail());
+    if (Object.keys(warnings).length === 0) return devices;
+    for (const device of devices) {
+        const warning = warnings[device && device.ID];
+        if (warning) {
+            device.voiceEnableWarning = {
+                attempts: warning.attempts,
+                messageEn: `E173 voice activation failed after ${warning.attempts} attempts. Audio may be missing on this dongle; retry AT^CVOICE=0 or restart the modem.`,
+                messageAr: `فشل تفعيل صوت E173 بعد ${warning.attempts} محاولات. قد يكون الصوت مفقوداً على هذا الدونجل؛ أعد محاولة AT^CVOICE=0 أو أعد تشغيل المودم.`
+            };
+        }
+    }
+    return devices;
+}
+
 function getEnrichedDevices() {
     const now = Date.now();
     if (cachedEnrichedDevices && (now - lastEnrichedDevicesTime) < ENRICHED_DEVICES_CACHE_TTL) {
@@ -12155,10 +12192,10 @@ function getEnrichedDevices() {
                     devices = parseDevicesOutput(stdout, false, astDbMappings);
                 }
                 enrichDongleRouting(devices).then(enriched => {
-                    cachedEnrichedDevices = enriched;
+                    cachedEnrichedDevices = annotateE173VoiceWarnings(enriched);
                     lastEnrichedDevicesTime = Date.now();
-                    resolve(enriched);
-                }).catch(() => resolve(devices));
+                    resolve(cachedEnrichedDevices);
+                }).catch(() => resolve(annotateE173VoiceWarnings(devices)));
             });
         });
     });
