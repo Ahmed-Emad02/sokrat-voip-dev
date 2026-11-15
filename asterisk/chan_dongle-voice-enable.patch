@@ -57,7 +57,7 @@
 +{
 +	if (pvt->e173_voice_attempts >= E173_VOICE_MAX_ATTEMPTS)
 +	{
-+		ast_log (LOG_WARNING, "[%s] Voice enable exhausted %u attempts\n", PVT_ID(pvt), pvt->e173_voice_attempts);
++		ast_log (LOG_WARNING, "[%s] NONFATAL: voice enable exhausted %u attempts; calls remain enabled\n", PVT_ID(pvt), pvt->e173_voice_attempts);
 +		return;
 +	}
 +	pvt->e173_voice_attempts++;
@@ -89,24 +89,68 @@
  				}
  				break;
  
-@@ -395,6 +417,17 @@
+@@ -342,13 +364,15 @@
+ 			case CMD_AT_CSCLK:
+ 			case CMD_AT_CURC:
+ 			case CMD_AT_SYSCFG:
+-			case CMD_AT_CCWA_SET:
+-			case CMD_AT_CCWA_STATUS:
+ 			case CMD_AT_CNUM:
+ 			case CMD_AT_CSCA:
+ 				log_cmd_response_error(pvt, ecmd, "[%s] Command '%s' failed\n", PVT_ID(pvt), at_cmd2str (ecmd->cmd));
+ 				/* mean ignore error */
+ 				break;
++			case CMD_AT_CCWA_SET:
++			case CMD_AT_CCWA_STATUS:
++				log_cmd_response_error(pvt, ecmd, "[%s] NONFATAL: call waiting unavailable; calls remain enabled\n", PVT_ID(pvt));
++				break;
+ 
+ 			case CMD_AT_CGMI:
+ 				log_cmd_response_error(pvt, ecmd, "[%s] Getting manufacturer info failed\n", PVT_ID(pvt));
+@@ -395,6 +419,17 @@
  				ast_debug(1, "[%s] Dongle has NO (CVOICE) voice support\n", PVT_ID(pvt));
  				pvt->has_voice = 0;
  				break;
 +			case CMD_AT_CVOICE_ENABLE:
 +				if (pvt->e173_voice_attempts < E173_VOICE_MAX_ATTEMPTS)
 +				{
-+					ast_log(LOG_WARNING, "[%s] AT^CVOICE=0 failed; retrying (%u/%u)\n", PVT_ID(pvt), pvt->e173_voice_attempts + 1, E173_VOICE_MAX_ATTEMPTS);
++					ast_log(LOG_WARNING, "[%s] NONFATAL: AT^CVOICE=0 failed; retrying (%u/%u)\n", PVT_ID(pvt), pvt->e173_voice_attempts + 1, E173_VOICE_MAX_ATTEMPTS);
 +					maybe_enable_e173_voice(pvt);
 +				}
 +				else
 +				{
-+					ast_log(LOG_WARNING, "[%s] AT^CVOICE=0 failed after %u attempts; voice may remain disabled\n", PVT_ID(pvt), pvt->e173_voice_attempts);
++					ast_log(LOG_WARNING, "[%s] NONFATAL: AT^CVOICE=0 failed after %u attempts; voice may remain disabled, calls remain enabled\n", PVT_ID(pvt), pvt->e173_voice_attempts);
 +				}
 +				break;
  			case CMD_AT_QPCMV:
  				ast_debug(1, "[%s] Dongle has NO (QPCMV) voice support\n", PVT_ID(pvt));
  				pvt->has_voice_quectel = 0;
+@@ -409,13 +444,14 @@
+ 				goto e_return;
+ */
+ 			case CMD_AT_CSSN:
+-				log_cmd_response_error(pvt, ecmd, "[%s] Error Supplementary Service Notification activation failed\n", PVT_ID(pvt));
+-				goto e_return;
++				log_cmd_response_error(pvt, ecmd, "[%s] NONFATAL: supplementary services unavailable; calls remain enabled\n", PVT_ID(pvt));
++				break;
+ 
+ 			case CMD_AT_CMGF:
+ 			case CMD_AT_CPMS:
+ 			case CMD_AT_CNMI:
+ 				ast_debug (1, "[%s] Command '%s' failed\n", PVT_ID(pvt), at_cmd2str (ecmd->cmd));
++				ast_log (LOG_WARNING, "[%s] NONFATAL: SMS unavailable; calls remain enabled\n", PVT_ID(pvt));
+ 				ast_debug (1, "[%s] No SMS support\n", PVT_ID(pvt));
+ 
+ 				pvt->has_sms = 0;
+@@ -548,7 +584,7 @@
+ 
+ 			case CMD_AT_CUSD:
+ 				ast_verb (3, "[%s] Error sending USSD %p\n", PVT_ID(pvt), task);
+-				log_cmd_response_error(pvt, ecmd, "[%s] Error sending USSD %p\n", PVT_ID(pvt), task);
++				log_cmd_response_error(pvt, ecmd, "[%s] NONFATAL: USSD failed; calls remain enabled\n", PVT_ID(pvt), task);
+ 				break;
+ 
+ 			default:
 --- a/chan_dongle.h
 +++ b/chan_dongle.h
 @@ -183,6 +183,7 @@

@@ -434,7 +434,7 @@ test('voice activation and bounded retry are packaged for all install paths', ()
 
     const helper = fs.readFileSync(path.join(rootDir, 'scripts', 'dongle-module.sh'), 'utf8');
     assert.match(helper, /chan_dongle-voice-enable\.patch/, 'shared dongle helper must apply the voice enable patch');
-    assert.match(helper, /2d11c69815d424ff3d8a90d25c079c59d02bb2a87f180be7f4ea28142fa5e844/, 'bundle hash must pin the generic voice module');
+    assert.match(helper, /745e9dbf5bbcb815c04d5fa11a1e83c5eb110dfeb204534436a2054f6ed019dd/, 'bundle hash must pin the generic voice module');
 
     const binary = fs.readFileSync(path.join(rootDir, 'installer-bundle', 'binaries', 'chan_dongle.so'));
     assert.ok(binary.includes(Buffer.from('Enabling voice with AT^CVOICE=0')), 'bundle binary must include generic voice activation');

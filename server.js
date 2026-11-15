@@ -46,7 +46,8 @@ const {
     buildRestartFailedEvent,
     buildRestartHealthyEvent,
     formatRestartAuditEntry,
-    parseE173VoiceWarningState
+    parseE173VoiceWarningState,
+    parseNonFatalWarningState
 } = require('./lib/dongle-health');
 const { dbToAsteriskVolume } = require('./lib/call-volume');
 const { createWakeAnswerCancel } = require('./lib/webrtc-wake-answer');
@@ -12164,8 +12165,10 @@ function readAsteriskFullLogTail(maxBytes = 512 * 1024) {
 }
 
 function annotateE173VoiceWarnings(devices) {
-    const warnings = parseE173VoiceWarningState(readAsteriskFullLogTail());
-    if (Object.keys(warnings).length === 0) return devices;
+    const logTail = readAsteriskFullLogTail();
+    const warnings = parseE173VoiceWarningState(logTail);
+    const nonFatalWarnings = parseNonFatalWarningState(logTail);
+    if (Object.keys(warnings).length === 0 && Object.keys(nonFatalWarnings).length === 0) return devices;
     for (const device of devices) {
         const warning = warnings[device && device.ID];
         if (warning) {
@@ -12173,6 +12176,13 @@ function annotateE173VoiceWarnings(devices) {
                 attempts: warning.attempts,
                 messageEn: `Voice activation failed after ${warning.attempts} attempts. Audio may be missing on this dongle; retry AT^CVOICE=0 or restart the modem.`,
                 messageAr: `فشل تفعيل الصوت بعد ${warning.attempts} محاولات. قد يكون الصوت مفقوداً على هذا الدونجل؛ أعد محاولة AT^CVOICE=0 أو أعد تشغيل المودم.`
+            };
+        }
+        const nonFatal = nonFatalWarnings[device && device.ID];
+        if (nonFatal) {
+            device.nonFatalWarning = {
+                messageEn: `Non-fatal: ${nonFatal} Calls remain enabled.`,
+                messageAr: `تحذير غير قاتل: ${nonFatal}. تظل المكالمات متاحة.`
             };
         }
     }

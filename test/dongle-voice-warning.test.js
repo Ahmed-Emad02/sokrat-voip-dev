@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { parseE173VoiceWarningState } = require('../lib/dongle-health');
+const { parseE173VoiceWarningState, parseNonFatalWarningState } = require('../lib/dongle-health');
 const { explainAtCommandOutput } = require('../lib/dongle-diagnostics');
 
 test('E173 voice warning tracks failure after three attempts and clears on init', () => {
@@ -30,6 +30,15 @@ test('E173 voice warning clears on a successful voice-enable log', () => {
     assert.deepEqual(parseE173VoiceWarningState(log), {});
 });
 
+test('non-fatal feature failures are surfaced but do not affect the dongle state', () => {
+    const log = [
+        '[2026-11-15 19:00:00] WARNING[x] at_response.c: [dongle0] NONFATAL: SMS unavailable; calls remain enabled',
+        '[2026-11-15 19:01:00] VERBOSE[x] at_response.c: [dongle1] Dongle initialized and ready'
+    ].join('\n');
+    assert.deepEqual(parseNonFatalWarningState(log), { dongle0: 'SMS unavailable; calls remain enabled' });
+    assert.deepEqual(parseE173VoiceWarningState(log), {});
+});
+
 test('AT^CVOICE diagnostics distinguishes enabled and disabled voice PCM', () => {
     const enabled = explainAtCommandOutput('AT^CVOICE?', '^CVOICE: 0, 8000, 16, 20');
     assert.equal(enabled.severity, 'success');
@@ -45,4 +54,7 @@ test('GSM dongle view exposes CVOICE shortcuts and the retry warning', () => {
     assert.match(view, /executeAtDiag\('AT\^CVOICE\?'\)/);
     assert.match(view, /executeAtDiag\('AT\^CVOICE=0'\)/);
     assert.match(view, /voiceEnableWarning/);
+    assert.match(view, /nonFatalWarning/);
+    assert.match(view, /renderDongleWarnings/);
+    assert.match(view, /Dongle Warnings/);
 });
