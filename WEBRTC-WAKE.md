@@ -248,6 +248,10 @@ reload while channels are active, and fail if `chan_dongle.so` is not Running
 after the restart. Existing dongle gains, SIM accounts, call-waiting and AOR
 settings are not rewritten. The install/reload behavior is covered by
 `node --test test/dongle-module-install.test.js`.
+For `Type=simple` Asterisk services, a successful service restart can precede
+control-socket readiness. Module verification waits within its existing timeout
+for the CLI to become queryable and report `Running`; a permanently unavailable
+CLI still fails the upgrade. This check does not establish gateway media readiness.
 Bundled installs, including the offline Issabel bootstrap, verify the
 release-pinned SHA-256 before copying a module. A stale valid ELF is refused;
 source builds remain governed by the pinned commit, patch and header rather

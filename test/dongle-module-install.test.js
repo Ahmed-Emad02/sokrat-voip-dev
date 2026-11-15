@@ -270,3 +270,26 @@ test('reload verification reports the running module and fails for a stopped one
     assert.notEqual(stillLoaded.status, 0);
     assert.match(stillLoaded.stderr, /still running/);
 });
+
+test('reload verification waits for the CLI socket and fails closed if it never becomes ready', t => {
+    const directory = sandbox(t);
+    const bin = path.join(directory, 'bin');
+    fs.mkdirSync(bin);
+    fs.writeFileSync(path.join(bin, 'pgrep'), '#!/bin/bash\nexit 0\n', { mode: 0o755 });
+    fs.writeFileSync(path.join(bin, 'sleep'), '#!/bin/bash\nexit 0\n', { mode: 0o755 });
+    fs.writeFileSync(path.join(bin, 'asterisk'), [
+        '#!/bin/bash',
+        '[ "${NEVER_READY:-0}" = 1 ] && exit 1',
+        'if [ ! -f "$READY_FILE" ]; then touch "$READY_FILE"; exit 1; fi',
+        'printf "chan_dongle.so Huawei 3G Dongle Channel Driver 0 Running extended\\n"',
+        '',
+    ].join('\n'), { mode: 0o755 });
+    const script = '. "$1"; dongle_module_wait_running 1';
+    const env = { PATH: `${bin}:${process.env.PATH}`, READY_FILE: path.join(directory, 'cli-ready') };
+
+    const starting = runHelper(script, [helper], env);
+    assert.equal(starting.status, 0, starting.stderr);
+
+    const unavailable = runHelper(script, [helper], { ...env, NEVER_READY: '1' });
+    assert.notEqual(unavailable.status, 0);
+});

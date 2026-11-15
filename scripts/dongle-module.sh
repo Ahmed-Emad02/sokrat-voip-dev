@@ -392,8 +392,8 @@ dongle_module_wait_running() {
 
     while :; do
         if ! status=$(_dongle_module_status "$ast"); then
-            echo "  ERROR: cannot query chan_dongle module state" >&2
-            return 1
+            # A Type=simple service can start before its CLI socket is ready.
+            status="CLI unavailable"
         fi
         if [ "$status" = "Running" ]; then
             echo "  chan_dongle.so is running"
