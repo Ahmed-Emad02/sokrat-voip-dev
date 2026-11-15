@@ -37,6 +37,7 @@ test('AI evaluation schema is applied by the in-place upgrader', () => {
     assert.match(upgrade, /CREATE TABLE IF NOT EXISTS \\`asterisk\\`\.\\`ai_evaluation_settings\\`/);
     assert.match(upgrade, /CREATE TABLE IF NOT EXISTS \\`asteriskcdrdb\\`\.\\`evaluation_jobs\\`/);
     assert.match(upgrade, /ALTER TABLE \\`cdr_transcriptions\\` ADD \\`\$col\\` \$def/);
+    assert.match(upgrade, /ALTER TABLE \\`evaluation_jobs\\` ADD \\`profile_snapshot_json\\`/);
 });
 
 test('server initializes AI tables and mounts the AI router', () => {

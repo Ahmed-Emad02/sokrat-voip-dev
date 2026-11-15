@@ -607,7 +607,7 @@ CREATE TABLE IF NOT EXISTS \`asteriskcdrdb\`.\`evaluation_scores\` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 " 2>/dev/null || true
 
-mysql "${MYSQL_AUTH[@]}" asteriskcdrdb -e "ALTER TABLE `evaluation_jobs` ADD `profile_snapshot_json` LONGTEXT DEFAULT NULL" 2>/dev/null || true
+mysql "${MYSQL_AUTH[@]}" asteriskcdrdb -e "ALTER TABLE \`evaluation_jobs\` ADD \`profile_snapshot_json\` LONGTEXT DEFAULT NULL" 2>/dev/null || true
 
 mysql "${MYSQL_AUTH[@]}" asterisk -e "
 CREATE TABLE IF NOT EXISTS \`asterisk\`.\`ai_agents\` (
