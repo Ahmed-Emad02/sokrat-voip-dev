@@ -1,0 +1,46 @@
+--- a/channel.c
++++ b/channel.c
+@@ -317,6 +317,9 @@
+ 	if(cpvt->channel && CPVT_TEST_FLAG(cpvt, CALL_FLAG_ACTIVATED))
+ 	{
+ 		mixb_detach(&cpvt->pvt->a_write_mixb, &cpvt->mixstream);
++		/* Drop PCM left in the shared TX ring when this was the last stream. */
++		if (mixb_streams(&cpvt->pvt->a_write_mixb) == 0 && mixb_used(&cpvt->pvt->a_write_mixb) > 0)
++			mixb_read_upd(&cpvt->pvt->a_write_mixb, mixb_used(&cpvt->pvt->a_write_mixb));
+ 		ast_channel_set_fd (cpvt->channel, 1, -1);
+ 		ast_channel_set_fd (cpvt->channel, 0, -1);
+ 		CPVT_RESET_FLAGS(cpvt, CALL_FLAG_ACTIVATED | CALL_FLAG_MASTER);
+@@ -362,6 +365,23 @@
+ 	/* setup call local write possition */
+ 	if(!CPVT_TEST_FLAG(cpvt, CALL_FLAG_ACTIVATED))
+ 	{
++		struct cpvt *other;
++		int other_active = 0;
++		AST_LIST_TRAVERSE(&pvt->chans, other, entry)
++		{
++			if (other != cpvt && CPVT_IS_ACTIVE(other) && other->channel)
++			{
++				other_active = 1;
++				break;
++			}
++		}
++
++		/* If this dongle has no other active call, reset the whole shared
++		 * TX ring. A leaked mixstream can otherwise keep attached != 0 and
++		 * cause the old PCM to be transmitted ahead of the new call. */
++		if (!other_active)
++			mixb_init(&pvt->a_write_mixb, pvt->a_write_buf, sizeof(pvt->a_write_buf));
++
+ 		// FIXME: reset possition?
+ 		mixb_attach(&pvt->a_write_mixb, &cpvt->mixstream);
+ //		rb_init (&cpvt->a_write_rb, cpvt->a_write_buf, sizeof (cpvt->a_write_buf));
+@@ -372,7 +392,9 @@
+ 	if (pvt->audio_fd >= 0)
+ 	{
+ 		tcflush (pvt->audio_fd, TCIFLUSH);
++		tcflush (pvt->audio_fd, TCOFLUSH);
+ 		cpvt->odd_byte = -1;
++		cpvt->a_read_buf_used = 0;
+ 
+ 		/* Discard stale pre-answer audio queued in the USB serial pipe.
+ 		 * tcflush() only drops the tty layer; the usbserial driver may still
