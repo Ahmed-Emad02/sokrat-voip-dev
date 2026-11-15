@@ -274,6 +274,20 @@ dongle_module_build_source() {
             exit 1
         fi
 
+        # Apply the separate CLCC answer-polling fix after the main patch.
+        # The patch is optional for older bundles but mandatory for source
+        # builds; keep it separate so the large audio patch remains unchanged.
+        clcc_patch="${patch_file%/*}/chan_dongle-clcc-poll.patch"
+        if [ -f "$clcc_patch" ] && ! grep -q "Huawei firmware does not reliably emit" chan_dongle.c 2>/dev/null; then
+            if command -v patch >/dev/null 2>&1; then
+                patch -p1 -N < "$clcc_patch" >/dev/null 2>&1 || \
+                    echo "  WARNING: chan_dongle CLCC polling patch did not apply" >&2
+            elif git apply --check "$clcc_patch" >/dev/null 2>&1; then
+                git apply "$clcc_patch" >/dev/null 2>&1 || \
+                    echo "  WARNING: chan_dongle CLCC polling patch did not apply" >&2
+            fi
+        fi
+
         cp "$header_file" ./dongle_rx_condition.h || exit 1
 
         if [ ! -x ./configure ] && [ -x ./bootstrap ]; then

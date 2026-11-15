@@ -1,0 +1,370 @@
+<% const isRtl = currentLang === 'ar'; const t2 = isRtl ? {
+  back:'رجوع', title:'استوديو الاتصال', subtitle:'الهوية والحقول — معاينة حية', branding:'هوية النشاط', fields:'حقول العملاء', live:'معاينة مباشرة', save:'حفظ', cancel:'إلغاء', close:'إغلاق'
+} : { back:'Back', title:'Call Studio', subtitle:'Branding and custom fields — live preview', branding:'Branding', fields:'Customer Fields', live:'Live preview', save:'Save', cancel:'Cancel', close:'Close' };
+const T2 = isRtl ? {
+  selectBusiness:'اختر النشاط التجاري', primaryColor:'اللون الأساسي', secondaryColor:'اللون الثانوي',
+  backgroundColor:'لون الخلفية', textColor:'لون النص', mutedColor:'لون النص الثانوي', buttonTextColor:'لون نص الزر',
+  buttonText:'نص زر الاتصال', uploadLogo:'رفع شعار PNG', removeLogo:'إزالة الشعار', headerImage:'صورة الغلاف', uploadHeader:'رفع صورة الغلاف', removeHeader:'إزالة صورة الغلاف', addField:'إضافة حقل'
+} : {
+  selectBusiness:'Select business', primaryColor:'Primary color', secondaryColor:'Secondary color',
+  backgroundColor:'Background color', textColor:'Text color', mutedColor:'Muted text color', buttonTextColor:'Button text color',
+  buttonText:'Call button text', uploadLogo:'Upload PNG logo', removeLogo:'Remove logo', headerImage:'Header image', uploadHeader:'Upload header image', removeHeader:'Remove header image', addField:'Add Field'
+}; %>
+<!DOCTYPE html>
+<html lang="<%= isRtl ? 'ar' : 'en' %>" dir="<%= isRtl ? 'rtl' : 'ltr' %>">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sokrat VOIP — <%= t2.title %></title>
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600;800&display=swap" rel="stylesheet">
+    <script src="/js/tailwindcss-browser.js"></script>
+    <style>
+        :root { --bg-primary:#000; --bg-secondary:#121212; --bg-card:#18181b; --bg-hover:#27272a; --border-primary:#27272a; --text-primary:#fff; --text-secondary:#a1a1aa; --text-muted:#71717a; --accent-color:#e11d48; }
+        body { background:var(--bg-primary); color:var(--text-primary); font-family:'Cairo','Segoe UI',sans-serif; min-height:100vh; }
+        .panel-surface { background:var(--bg-secondary); border:1px solid var(--border-primary); border-radius:1rem; }
+        .config-input { width:100%; background:var(--bg-primary); border:1px solid var(--border-primary); border-radius:.7rem; padding:.6rem .75rem; color:var(--text-primary); font-size:.8rem; outline:none; }
+        .config-input:focus { border-color:var(--accent-color); }
+        .btn { border-radius:.65rem; padding:.55rem .8rem; font-size:.72rem; font-weight:800; cursor:pointer; border:1px solid var(--border-primary); background:var(--bg-hover); color:var(--text-primary); display:inline-flex; align-items:center; justify-content:center; text-decoration:none; }
+        .btn-primary { background:var(--accent-color); border-color:var(--accent-color); color:#fff; }
+        .btn:hover { filter:brightness(1.08); }
+        .badge { display:inline-flex; padding:.2rem .5rem; border-radius:999px; font-size:.62rem; font-weight:800; background:var(--bg-hover); color:var(--text-secondary); }
+        .muted { color:var(--text-muted); font-size:.72rem; }
+        #sbHeaderPreview { width:100%; aspect-ratio:16/9; object-fit:cover; border:1px solid var(--border-primary); border-radius:.7rem; background:var(--bg-primary); display:none; }
+    </style>
+</head>
+<body class="flex flex-col md:flex-row min-h-screen m-0 p-0">
+<%- include('sidebar') %>
+<div class="flex-1 min-w-0 p-4 md:p-6 relative flex flex-col min-h-screen w-full">
+<div class="w-full min-h-screen flex flex-col gap-4">
+  <div class="flex items-center justify-between gap-3">
+    <div class="flex items-center gap-2">
+      <a href="/customers<%= isRootUser ? '' : '' %>" class="btn" onclick="event.preventDefault(); history.back();"><%= t2.back %></a>
+      <div>
+        <h1 class="text-xl md:text-2xl font-black tracking-tight"><%= t2.title %></h1>
+        <p class="text-xs text-[var(--text-muted)] mt-0.5"><%= t2.subtitle %> — <span id="studioTenantName"><%= tenantName || '' %></span></p>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      <select id="studioTenantSelect" class="config-input max-w-[220px] <%= isRootUser ? '' : 'hidden' %>">
+        <option value=""><%= T2.selectBusiness %></option>
+        <% (tenants || []).forEach(x=>{ %><option value="<%= x.id %>" <%= Number(x.id)===Number(tenantId)?'selected':'' %>><%= x.name %></option><% }) %>
+      </select>
+      <a id="studioOpenPreview" class="btn" target="_blank" rel="noopener" href="/preview/guest-call?lab=1&lang=<%= currentLang %>"><%= t2.live %> ↗</a>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1.05fr)_minmax(360px,440px)] gap-4 items-start">
+    <!-- Controls -->
+    <div class="space-y-4 min-w-0">
+      <section class="panel-surface p-4 space-y-3">
+        <div class="flex items-center justify-between">
+          <h2 class="text-sm font-black"><%= t2.branding %></h2>
+          <span class="muted text-[10px]"><%= isRtl?'يتحدث فورا':'updates as you type' %></span>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <label class="text-[10px] text-[var(--text-muted)]"><%= T2.primaryColor %><input id="sbPrimary" type="color" class="config-input" value="#cc090c"></label>
+          <label class="text-[10px] text-[var(--text-muted)]"><%= T2.secondaryColor %><input id="sbSecondary" type="color" class="config-input" value="#7b0002"></label>
+          <label class="text-[10px] text-[var(--text-muted)]"><%= T2.backgroundColor %><input id="sbBg" type="color" class="config-input" value="#000000"></label>
+          <label class="text-[10px] text-[var(--text-muted)]"><%= T2.textColor %><input id="sbText" type="color" class="config-input" value="#f4f4f5"></label>
+          <label class="text-[10px] text-[var(--text-muted)]"><%= T2.mutedColor %><input id="sbMuted" type="color" class="config-input" value="#a1a1aa"></label>
+          <label class="text-[10px] text-[var(--text-muted)]"><%= T2.buttonTextColor %><input id="sbBtnTextColor" type="color" class="config-input" value="#ffffff"></label>
+        </div>
+        <label class="text-[10px] text-[var(--text-muted)] block"><%= T2.buttonText %><input id="sbBtnText" class="config-input mt-1" maxlength="40" placeholder="<%= isRtl?'اتصل الآن':'Call now' %>"></label>
+        <div class="flex items-center gap-2 flex-wrap">
+          <img id="sbLogoPreview" alt="" style="max-height:48px;max-width:160px;display:none;background:#fff;padding:4px;border-radius:8px;">
+          <label class="btn text-xs"><input id="sbLogoFile" type="file" accept="image/png" class="hidden"><span><%= T2.uploadLogo %></span></label>
+          <button type="button" class="btn text-xs" id="sbLogoRemove"><%= T2.removeLogo %></button>
+        </div>
+        <div class="border-t border-[var(--border-primary)] pt-3 space-y-2">
+          <div class="text-[10px] text-[var(--text-muted)] font-bold"><%= T2.headerImage %></div>
+          <img id="sbHeaderPreview" alt="">
+          <div class="flex items-center gap-2 flex-wrap">
+            <label class="btn text-xs"><input id="sbHeaderFile" type="file" accept="image/png,image/jpeg,image/webp" class="hidden"><span><%= T2.uploadHeader %></span></label>
+            <button type="button" class="btn text-xs" id="sbHeaderRemove"><%= T2.removeHeader %></button>
+          </div>
+          <p class="muted text-[10px]">PNG / JPEG / WebP · max 6 MB · 16:9 recommended</p>
+        </div>
+        <div class="flex justify-end gap-2 pt-1">
+          <button type="button" class="btn" onclick="history.back()"><%= t2.cancel %></button>
+          <button type="button" class="btn btn-primary" id="sbSaveBranding">حفظ / Save</button>
+        </div>
+      </section>
+
+      <section class="panel-surface p-4">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-sm font-black"><%= t2.fields %></h2>
+          <button type="button" class="btn btn-primary text-xs" id="sbAddField">+ <%= T2.addField %></button>
+        </div>
+        <div id="sbFieldRows" class="space-y-3"></div>
+        <div class="flex justify-end gap-2 mt-3">
+          <button type="button" class="btn btn-primary" id="sbSaveFields"><%= t2.save %></button>
+        </div>
+      </section>
+    </div>
+
+    <!-- Preview -->
+    <div class="lg:sticky lg:top-4">
+      <div class="panel-surface p-2">
+        <div class="flex items-center justify-between px-2 py-1 text-[10px] text-[var(--text-muted)]">
+          <span><%= t2.live %></span>
+          <span id="sbPreviewState" class="badge">/preview/guest-call?lab=1</span>
+        </div>
+        <div class="rounded-xl overflow-hidden border border-[var(--border-primary)] bg-black" style="aspect-ratio: 9/16; max-height: 760px;">
+          <iframe id="sbPreview" title="e-hotline preview" class="w-full h-full border-0" src="about:blank" loading="lazy"></iframe>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const STUDIO_IS_RTL = <%= isRtl ? 'true' : 'false' %>;
+const STUDIO_LANG = <%- JSON.stringify(currentLang || 'en') %>;
+(() => {
+  const BOOT_TENANT = Number(<%= tenantId == null ? '0' : Number(tenantId) %>) || null;
+  let tenantId = BOOT_TENANT;
+  let fieldsCache = [];
+  let brandingCache = null;
+  let tenantNameCache = <%- JSON.stringify(tenantName || '') %>;
+
+  const byId = (id) => document.getElementById(id);
+  const preview = byId('sbPreview');
+  if (preview) {
+    preview.addEventListener('load', () => { preview.dataset.loaded = '1'; syncPreview(); });
+    preview.src = '/preview/guest-call?lab=1&lang=' + encodeURIComponent(STUDIO_LANG);
+  }
+  const tenantSel = byId('studioTenantSelect');
+  if (tenantSel) tenantSel.addEventListener('change', () => {
+    const v = Number(tenantSel.value) || null;
+    tenantId = v;
+    tenantNameCache = tenantSel.options[tenantSel.selectedIndex]?.textContent || '';
+    const u = new URL(window.location.href);
+    if (v) u.searchParams.set('tenant_id', String(v)); else u.searchParams.delete('tenant_id');
+    history.replaceState(null,'',u);
+    loadAll();
+  });
+
+  function tenantParam(qs) {
+    const p = new URLSearchParams(qs || '');
+    if (tenantId) p.set('tenant_id', String(tenantId));
+    return p.toString() ? ('?'+p.toString()) : '';
+  }
+
+  function previewUrl() {
+    const lang = (STUDIO_LANG);
+    return '/preview/guest-call?lab=1&lang=' + encodeURIComponent(lang);
+  }
+
+  function escapeHtml(value) {
+    return String(value == null ? '' : value).replace(/[&<>"']/g, ch => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[ch]));
+  }
+
+  function syncPreview() {
+    if (!preview || !preview.contentDocument || !preview.contentDocument.documentElement) return;
+    const doc = preview.contentDocument;
+    const root = doc.documentElement;
+    const color = (id) => byId(id)?.value || '';
+    root.style.setProperty('--brand', color('sbPrimary'));
+    root.style.setProperty('--brand-2', color('sbSecondary'));
+    root.style.setProperty('--bg', color('sbBg'));
+    root.style.setProperty('--text', color('sbText'));
+    root.style.setProperty('--muted', color('sbMuted'));
+    root.style.setProperty('--on-brand', color('sbBtnTextColor'));
+    // logo
+    const wrap = doc.querySelector('.avatar-wrap');
+    if (wrap) {
+      const url = byId('sbLogoPreview')?.getAttribute('src') || '';
+      let img = wrap.querySelector('img');
+      const initial = wrap.querySelector('.avatar-initial');
+      if (url) {
+        if (!img) { img = doc.createElement('img'); wrap.appendChild(img); }
+        img.src = url;
+        if (initial) initial.style.display = 'none';
+      } else {
+        if (img) img.remove();
+        if (initial) initial.style.display = '';
+      }
+    }
+    // Header image — extends behind the call stage, stops at the actions
+    const card = doc.querySelector('.call-panel');
+    const shell = doc.querySelector('.hotline-shell');
+    const headerUrl = byId('sbHeaderPreview')?.getAttribute('src') || '';
+    if (shell) shell.classList.toggle('has-header-image', Boolean(headerUrl));
+    if (card) {
+      if (headerUrl) {
+        card.classList.add('has-header-image');
+        card.style.setProperty('--header-image', 'url("' + headerUrl.replace(/"/g, '') + '")');
+      } else {
+        card.classList.remove('has-header-image');
+        card.style.removeProperty('--header-image');
+      }
+    }
+    // CTA text
+    const cta = doc.querySelector('#guestCallBtn');
+    if (cta) cta.textContent = (byId('sbBtnText')?.value || '').trim() || (doc.documentElement.lang === 'ar' ? 'اتصل الآن' : 'Call now');
+    // fields preview — one of every configured type plus file
+    const grid = doc.querySelector('.preview-field-grid');
+    if (grid) {
+      const fields = (fieldsCache || []).filter(f => f.active !== false);
+      const list = fields.slice();
+      grid.innerHTML = list.map((field) => {
+        const label = STUDIO_IS_RTL ? (field.label_ar || field.label_en || field.key || '') : (field.label_en || field.label_ar || field.key || '');
+        if (field.field_type === 'textarea') {
+          return '<div class="preview-field full"><label class="preview-field-label">' + escapeHtml(label) + ' <small>textarea</small></label><textarea class="preview-input" placeholder="' + escapeHtml(STUDIO_IS_RTL ? 'اكتب ملاحظاتك هنا...' : 'Write your notes here...') + '"></textarea></div>';
+        }
+        if (field.field_type === 'checkbox') {
+          return '<div class="preview-field"><label class="preview-field-label">' + escapeHtml(label) + ' <small>checkbox</small></label><label class="preview-check"><input type="checkbox" checked><span>' + escapeHtml(STUDIO_IS_RTL ? 'أوافق' : 'I agree') + '</span></label></div>';
+        }
+        if (field.field_type === 'select') {
+          const opts = (field.options || []).map(o => '<option>' + escapeHtml(STUDIO_IS_RTL ? (o.label_ar || o.label_en || o.value) : (o.label_en || o.value)) + '</option>').join('');
+          return '<div class="preview-field"><label class="preview-field-label">' + escapeHtml(label) + ' <small>select</small></label><select class="preview-input">' + opts + '</select></div>';
+        }
+        if (field.field_type === 'file') {
+          return '<div class="preview-field"><label class="preview-field-label">' + escapeHtml(label) + ' <small>file / PNG</small></label><input class="preview-input" type="file" accept="image/png"></div>';
+        }
+        const type = field.field_type === 'number' ? 'number' : field.field_type === 'date' ? 'date' : field.field_type === 'email' ? 'email' : 'text';
+        return '<div class="preview-field"><label class="preview-field-label">' + escapeHtml(label) + ' <small>' + escapeHtml(type) + '</small></label><input class="preview-input" type="' + type + '"></div>';
+      }).join('');
+      const panel = grid.closest('.preview-fields');
+      if (panel) panel.style.display = list.length ? '' : 'none';
+    }
+    const badge = byId('sbPreviewState');
+    if (badge) badge.textContent = '/preview/guest-call?lab=1';
+  }
+
+  function refreshPreview() {
+    if (!preview) return;
+    if (!preview.dataset.loaded) {
+      preview.src = previewUrl();
+      return;
+    }
+    syncPreview();
+    const a = byId('studioOpenPreview');
+    if (a) a.href = previewUrl();
+    const badge = byId('sbPreviewState');
+    if (badge) badge.textContent = previewUrl();
+  }
+
+  function brandColor(id, fallback){ const el=byId(id); return el && /^#[0-9a-fA-F]{6}$/.test(el.value) ? el.value : fallback; }
+  function renderLogo(url){
+    const img=byId('sbLogoPreview');
+    if(!img) return;
+    if(url){ img.src=url; img.style.display='block'; } else { img.removeAttribute('src'); img.style.display='none'; }
+  }
+
+  async function api(url, opts){
+    const r=await fetch(url, Object.assign({credentials:'same-origin', headers:{'Content-Type':'application/json'}}, opts||{}));
+    const d=await r.json().catch(()=>({})); if(!r.ok||d.success===false) throw new Error(d.error||'failed'); return d;
+  }
+
+  function renderHeader(url){
+    const img=byId('sbHeaderPreview');
+    if(!img) return;
+    if(url){ img.src=url; img.style.display='block'; } else { img.removeAttribute('src'); img.style.display='none'; }
+  }
+
+  async function loadBranding(){
+    if(!tenantId){ brandingCache={}; renderLogo(''); return; }
+    try{
+      const data=await api('/api/tenant/branding?tenant_id='+encodeURIComponent(tenantId));
+      const b=data.branding||{}; brandingCache=b;
+      byId('sbPrimary').value = /^#[0-9a-fA-F]{6}$/.test(b.primary_color||'')?b.primary_color:'#cc090c';
+      byId('sbSecondary').value = /^#[0-9a-fA-F]{6}$/.test(b.secondary_color||'')?b.secondary_color:'#7b0002';
+      byId('sbBg').value = /^#[0-9a-fA-F]{6}$/.test(b.background_color||'')?b.background_color:'#000000';
+      byId('sbText').value = /^#[0-9a-fA-F]{6}$/.test(b.text_color||'')?b.text_color:'#f4f4f5';
+      byId('sbMuted').value = /^#[0-9a-fA-F]{6}$/.test(b.muted_color||'')?b.muted_color:'#a1a1aa';
+      byId('sbBtnTextColor').value = /^#[0-9a-fA-F]{6}$/.test(b.button_text_color||'')?b.button_text_color:'#ffffff';
+      byId('sbBtnText').value = b.button_text||'';
+      renderLogo(b.logo_url||'');
+      renderHeader(b.header_image_url||'');
+    }catch(e){ brandingCache={}; }
+  }
+
+  // Fields — reuse customers.ejs TYPES
+  const TYPES=[['text','Text'],['textarea','Long text'],['number','Number'],['date','Date'],['select','Dropdown'],['checkbox','Checkbox']];
+  function selType(v){ return TYPES.some(x=>x[0]===v)?v:'text'; }
+  async function loadFields(){
+    if(!tenantId){ fieldsCache=[]; renderFieldRows(); return; }
+    try{ const d=await api('/api/customers/fields?all=1&tenant_id='+encodeURIComponent(tenantId)); fieldsCache=d.fields||[]; }catch(e){ fieldsCache=[]; }
+    renderFieldRows();
+  }
+  function renderFieldRows(){
+    const wrap=byId('sbFieldRows'); if(!wrap) return; wrap.innerHTML='';
+    fieldsCache.forEach((field, idx)=>{
+      const row=document.createElement('div');
+      row.className='panel-surface p-3 space-y-2';
+      const opts=(field.options||[]).map(o=>[o.value,o.label_en||o.value].join('|')).join('\n');
+      const safeLabel=String(field.label_en||'').replace(/"/g,'&quot;');
+      const safeKey=String(field.key||'').replace(/"/g,'&quot;');
+      row.innerHTML='<div class="space-y-2">'
+        + '<div><label class="text-[10px] text-[var(--text-muted)]">Label / Key</label><input class="config-input fr-label" value="'+safeLabel+'" maxlength="100" placeholder="Field label"><input class="fr-key" type="hidden" value="'+safeKey+'"><div class="mt-1 text-[10px] text-[var(--text-muted)]">key: <span class="fr-key-display font-mono text-[var(--text-secondary)]">'+(safeKey||'auto')+'</span></div></div>'
+        + '<div class="grid grid-cols-2 gap-2"><div><label class="text-[10px] text-[var(--text-muted)]">Type</label><select class="config-input fr-type">'+TYPES.map(t=>'<option value="'+t[0]+'" '+(selType(field.field_type)===t[0]?'selected':'')+'>'+t[1]+'</option>').join('')+'</select></div>'
+        + '<div><label class="text-[10px] text-[var(--text-muted)]">Order</label><input class="config-input fr-order" type="number" value="'+Number(field.sort_order||idx)+'"></div></div>'
+        + '</div><div class="flex gap-3 text-[11px]"><label><input class="fr-req" type="checkbox" '+(field.required?'checked':'')+'> required</label><label><input class="fr-act" type="checkbox" '+(field.active!==false?'checked':'')+'> active</label><button type="button" class="btn text-xs ml-auto">Remove</button></div>'
+        + '<div><label class="text-[10px] text-[var(--text-muted)]">Options (value|Label per line)</label><textarea class="config-input fr-opts" rows="2">'+opts.replace(/</g,'&lt;')+'</textarea></div>';
+      row.querySelector('button').addEventListener('click',()=>{ fieldsCache.splice(idx,1); renderFieldRows(); });
+      // live: patch cache on input and refresh preview throttled
+      row.querySelectorAll('input,select,textarea').forEach(el=> el.addEventListener('input', ()=>{ persistRow(row, idx); refreshPreview(); }));
+      wrap.appendChild(row);
+    });
+  }
+  function slugKey(label){
+    return String(label||'').trim().toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'') || 'field';
+  }
+  function persistRow(row, idx){
+    const f=fieldsCache[idx]; if(!f) return;
+    f.label_en = row.querySelector('.fr-label').value.trim();
+    const keyEl = row.querySelector('.fr-key');
+    if (!keyEl.value.trim()) keyEl.value = slugKey(f.label_en) + (idx ? '_' + idx : '');
+    f.key = keyEl.value.trim();
+    const keyDisplay = row.querySelector('.fr-key-display');
+    if (keyDisplay) keyDisplay.textContent = f.key;
+    f.field_type = row.querySelector('.fr-type').value;
+    f.sort_order = Number(row.querySelector('.fr-order').value)||idx;
+    f.required = row.querySelector('.fr-req').checked;
+    f.active = row.querySelector('.fr-act').checked;
+    const raw=row.querySelector('.fr-opts').value;
+    f.options = raw.split(/\r?\n/).map(l=>l.trim()).filter(Boolean).map(l=>{ const p=l.split('|'); return {value:p[0].trim(), label_en:(p[1]||p[0]).trim(), label_ar:(p[1]||p[0]).trim()}; }).filter(o=>o.value);
+  }
+
+  byId('sbAddField')?.addEventListener('click',()=>{ fieldsCache.push({key:'',label_en:'',field_type:'text',options:[],required:false,active:true,sort_order:fieldsCache.length}); renderFieldRows(); refreshPreview(); });
+  byId('sbSaveFields')?.addEventListener('click', async()=>{
+    const rows=[...document.querySelectorAll('#sbFieldRows > div')];
+    const fields=rows.map((row,i)=>({ key: (row.querySelector('.fr-key').value.trim() || slugKey(row.querySelector('.fr-label').value.trim()) + (i? '_'+i : '')), label_en: row.querySelector('.fr-label').value.trim(), label_ar:'', field_type: row.querySelector('.fr-type').value, sort_order: Number(row.querySelector('.fr-order').value)||i, required: row.querySelector('.fr-req').checked, active: row.querySelector('.fr-act').checked, options: row.querySelector('.fr-opts').value.split(/\r?\n/).map(l=>l.trim()).filter(Boolean).map(l=>{const p=l.split('|');return {value:p[0].trim(),label_en:(p[1]||p[0]).trim(),label_ar:(p[1]||p[0]).trim()};}).filter(o=>o.value) }));
+    const btn=byId('sbSaveFields'); btn.disabled=true;
+    try{ await api('/api/customers/fields',{method:'PUT', body: JSON.stringify({ tenant_id: tenantId, fields })}); }catch(e){ alert(e.message); } finally{ btn.disabled=false; refreshPreview(); }
+  });
+
+  // Branding live
+  ['sbPrimary','sbSecondary','sbBg','sbText','sbMuted','sbBtnTextColor','sbBtnText'].forEach(id=> byId(id)?.addEventListener('input', refreshPreview));
+  byId('sbSaveBranding')?.addEventListener('click', async()=>{
+    const branding={ primary_color: brandColor('sbPrimary','#cc090c'), secondary_color: brandColor('sbSecondary','#7b0002'), background_color: brandColor('sbBg','#000000'), text_color: brandColor('sbText','#f4f4f5'), muted_color: brandColor('sbMuted','#a1a1aa'), button_text_color: brandColor('sbBtnTextColor','#ffffff'), button_text: byId('sbBtnText').value.trim() };
+    const btn=byId('sbSaveBranding'); btn.disabled=true;
+    try{ const d=await api('/api/tenant/branding',{method:'PUT', body: JSON.stringify({ branding, tenant_id: tenantId })}); brandingCache=d.branding||branding; refreshPreview(); }catch(e){ alert(e.message);} finally{ btn.disabled=false; }
+  });
+  byId('sbLogoFile')?.addEventListener('change', async(e)=>{
+    const f=e.target.files && e.target.files[0]; if(!f) return;
+    const fd=new FormData(); fd.append('logo', f); if(tenantId) fd.append('tenant_id', String(tenantId));
+    try{ const r=await fetch('/api/tenant/branding/logo',{method:'POST', credentials:'same-origin', body:fd}); const d=await r.json().catch(()=>({})); if(!r.ok||d.success===false) throw new Error(d.error||'failed'); brandingCache=d.branding; renderLogo(d.logo_url||''); refreshPreview(); }catch(err){ alert(err.message); }
+  });
+  byId('sbLogoRemove')?.addEventListener('click', async()=>{
+    try{ await api('/api/tenant/branding/logo?tenant_id='+encodeURIComponent(tenantId),{method:'DELETE'}); renderLogo(''); refreshPreview(); }catch(e){ alert(e.message); }
+  });
+
+  byId('sbHeaderFile')?.addEventListener('change', async(e)=>{
+    const f=e.target.files && e.target.files[0]; if(!f) return;
+    const fd=new FormData(); fd.append('header', f); if(tenantId) fd.append('tenant_id', String(tenantId));
+    try{ const r=await fetch('/api/tenant/branding/header',{method:'POST', credentials:'same-origin', body:fd}); const d=await r.json().catch(()=>({})); if(!r.ok||d.success===false) throw new Error(d.error||'failed'); brandingCache=d.branding; renderHeader(d.header_image_url||''); refreshPreview(); }catch(err){ alert(err.message); }
+  });
+  byId('sbHeaderRemove')?.addEventListener('click', async()=>{
+    try{ await api('/api/tenant/branding/header?tenant_id='+encodeURIComponent(tenantId),{method:'DELETE'}); renderHeader(''); refreshPreview(); }catch(e){ alert(e.message); }
+  });
+
+  async function loadAll(){ await Promise.all([loadBranding(), loadFields()]); refreshPreview(); }
+  loadAll();
+})();
+</script>
+</div>
+</body>
+</html>

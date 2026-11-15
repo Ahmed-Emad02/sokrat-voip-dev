@@ -49,6 +49,8 @@ const {
 } = require('./lib/dongle-health');
 const { dbToAsteriskVolume } = require('./lib/call-volume');
 const { createWakeAnswerCancel } = require('./lib/webrtc-wake-answer');
+const { resolveDongleMappingState } = require('./lib/dongle-mapping');
+const { parseSmsPartLog, parseSmsFullLog, smsPartKey, collectSmsIndices } = require('./lib/sms-index');
 const { DEFAULT_OUTBOUND_DIAL_PATTERNS, resolveOutboundDialPatterns } = require('./lib/outbound-routes');
 const createExtensionChatRouter = require('./routes/extension-chat');
 const createExtensionVideoRouter = require('./routes/extension-video');
@@ -1093,8 +1095,19 @@ async function initAuthDb() {
             phone_number VARCHAR(30) DEFAULT NULL,
             updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             dynamic_enabled TINYINT(1) NOT NULL DEFAULT 0,
+            mapping_override ENUM('auto','disabled') NOT NULL DEFAULT 'auto',
             KEY idx_imsi (imsi),
             KEY idx_imei (imei)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+    await conn.execute(`
+        CREATE TABLE IF NOT EXISTS sim_inventory (
+            imsi VARCHAR(30) NOT NULL PRIMARY KEY,
+            did VARCHAR(30) NOT NULL,
+            label VARCHAR(100) DEFAULT NULL,
+            enabled TINYINT(1) NOT NULL DEFAULT 1,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
     await conn.execute(`
@@ -1114,7 +1127,19 @@ async function initAuthDb() {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
     await ensureDbColumn(conn, 'gsm_dongles', 'dynamic_enabled', 'TINYINT(1) NOT NULL DEFAULT 0');
+    await ensureDbColumn(conn, 'gsm_dongles', 'mapping_override', "ENUM('auto','disabled') NOT NULL DEFAULT 'auto'");
     try { await conn.execute('UPDATE gsm_dongles SET dynamic_enabled = 0 WHERE dynamic_enabled IS NULL'); } catch (_) {}
+    try {
+        await conn.execute(`
+            INSERT IGNORE INTO sim_inventory (imsi, did)
+            SELECT imsi, phone_number
+            FROM gsm_dongles
+            WHERE imsi IS NOT NULL AND imsi REGEXP '^[0-9]{5,30}$'
+              AND phone_number IS NOT NULL AND phone_number REGEXP '^[+]?[0-9]{3,30}$'
+        `);
+    } catch (backfillError) {
+        console.error('DONGLE-MAPPING: inventory seed failed:', backfillError.message);
+    }
     try {
         const [dRows] = await conn.execute('SELECT dongle_name, dynamic_enabled FROM gsm_dongles');
         const { execFile: execFileCb } = require('child_process');
@@ -2335,187 +2360,208 @@ async function deleteAstDbKey(family, key) {
     await execFileAsync(ASTERISK_BIN, ['-rx', `database del ${family} ${safeKey}`]);
 }
 
-async function clearDongleMappingAliases(dongleName, imsi, imei) {
-    const aliases = [
-        ['dongle_map', normalizeDongleMappingKey(dongleName)],
-        ['sim_map', normalizeDongleIdentity(imsi)],
-        ['DONGLE_NUMBERS', normalizeDongleIdentity(imsi)],
-        ['DONGLE_NUMBERS', normalizeDongleIdentity(imei)]
-    ];
-    const seen = new Set();
-    for (const [family, key] of aliases) {
-        if (!key || seen.has(`${family}/${key}`)) continue;
-        seen.add(`${family}/${key}`);
-        await deleteAstDbKey(family, key);
-    }
-}
-
-async function syncDongleMappingAliases({ dongleName, imsi, imei, phoneNumber }) {
-    const safeDongleName = normalizeDongleMappingKey(dongleName);
-    const safeImsi = normalizeDongleIdentity(imsi);
-    const safeImei = normalizeDongleIdentity(imei);
-    const safeDid = normalizeConfiguredDid(phoneNumber);
-    if (!safeDid || (!safeDongleName && !safeImsi && !safeImei)) return false;
-
-    if (safeDongleName) {
-        await execFileAsync(ASTERISK_BIN, ['-rx', `database put dongle_map ${safeDongleName} ${safeDid}`]);
-    }
-    if (safeImsi) {
-        await execFileAsync(ASTERISK_BIN, ['-rx', `database put sim_map ${safeImsi} ${safeDid}`]);
-        await execFileAsync(ASTERISK_BIN, ['-rx', `database put DONGLE_NUMBERS ${safeImsi} ${safeDid}`]);
-    }
-    if (safeImei) {
-        await execFileAsync(ASTERISK_BIN, ['-rx', `database put DONGLE_NUMBERS ${safeImei} ${safeDid}`]);
-    }
-    return true;
-}
-
 async function syncDongleDynamicSetting(dongleName, enabled) {
     const safeDongleName = normalizeDongleMappingKey(dongleName);
     if (!safeDongleName) return;
     await execFileAsync(ASTERISK_BIN, ['-rx', `database put DONGLE_SETTINGS ${safeDongleName} ${enabled ? '1' : '0'}`]);
 }
 
-async function reconcileDongleMappings() {
+async function setDongleMappingOverride(dongleName, override) {
+    const safeDongleName = normalizeDongleMappingKey(dongleName);
+    if (!safeDongleName) return false;
+    const value = override === 'disabled' ? 'disabled' : 'auto';
+    await pool.query(`
+        INSERT INTO \`asterisk\`.\`gsm_dongles\` (dongle_name, mapping_override)
+        VALUES (?, ?)
+        ON DUPLICATE KEY UPDATE mapping_override = VALUES(mapping_override)
+    `, [safeDongleName, value]);
+    return true;
+}
+
+async function upsertSimInventory(imsi, did, label = null, enabled = true) {
+    const safeImsi = normalizeDongleIdentity(imsi);
+    const safeDid = normalizeConfiguredDid(did);
+    if (!safeImsi || !safeDid) return false;
+    await pool.query(`
+        INSERT INTO \`asterisk\`.\`sim_inventory\` (imsi, did, label, enabled)
+        VALUES (?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+            did = VALUES(did),
+            label = COALESCE(VALUES(label), label),
+            enabled = VALUES(enabled)
+    `, [safeImsi, safeDid, label, enabled ? 1 : 0]);
+    return true;
+}
+
+function buildAstDbAction(action, verb) {
+    const family = String(action && action.family || '').trim();
+    const key = String(action && action.key || '').trim();
+    if (!/^[A-Za-z0-9_]+$/.test(family) || !/^[A-Za-z0-9_:+.-]+$/.test(key)) return null;
+    if (verb === 'del') {
+        return `database del ${family} ${key}`;
+    }
+    const value = String(action && action.value || '').trim();
+    if (!/^[A-Za-z0-9_:+.-]+$/.test(value)) return null;
+    return `database put ${family} ${key} ${value}`;
+}
+
+async function applyDongleMappingPlan(plan) {
+    const conn = await pool.getConnection();
     try {
-        const devicesOutput = await execFileAsync(ASTERISK_BIN, ['-rx', 'dongle show devices']);
-        const parsed = parseDevicesOutput(devicesOutput || '', true);
-        const observedDongles = new Map();
-
-        for (const device of parsed) {
-            const name = normalizeDongleMappingKey(device.ID);
-            if (!name || !name.startsWith('dongle')) continue;
-            observedDongles.set(name, {
-                name,
-                imsi: normalizeDongleIdentity(device.IMSI),
-                imei: normalizeDongleIdentity(device.IMEI)
-            });
-        }
-
-        const [dbRows] = await pool.query(
-            'SELECT dongle_name, imsi, imei, phone_number, dynamic_enabled FROM `asterisk`.`gsm_dongles`'
-        );
-        const confDongles = parseDongleConfGain().dongles;
-        const validSlotNames = new Set([...Object.keys(confDongles), ...observedDongles.keys()]);
-
-        for (const row of [...dbRows]) {
-            if (validSlotNames.has(row.dongle_name)) continue;
-            console.log(`DONGLE-RECONCILE: Removing stale dongle slot '${row.dongle_name}'`);
-            await clearDongleMappingAliases(row.dongle_name, row.imsi, row.imei);
-            await deleteAstDbKey('DONGLE_SETTINGS', row.dongle_name);
-            await pool.query('DELETE FROM `asterisk`.`gsm_dongles` WHERE dongle_name = ?', [row.dongle_name]);
-            dbRows.splice(dbRows.indexOf(row), 1);
-        }
-
-        for (const dongleName of [...validSlotNames].sort()) {
-            if (!dongleName.startsWith('dongle')) continue;
-
-            const observed = observedDongles.get(dongleName) || { imsi: '', imei: '' };
-            let slotRow = dbRows.find(row => row.dongle_name === dongleName);
-            const storedImsi = normalizeDongleIdentity(slotRow?.imsi);
-            const storedImei = normalizeDongleIdentity(slotRow?.imei);
-            const liveImsi = observed.imsi;
-            const liveImei = observed.imei;
-            const hadStoredIdentity = Boolean(storedImsi || storedImei);
-            const hasObservedIdentity = Boolean(liveImsi || liveImei);
-            const firstIdentity = hasObservedIdentity && !hadStoredIdentity;
-            const sameImsi = Boolean(storedImsi && liveImsi && storedImsi === liveImsi);
-            const imsiChanged = Boolean(storedImsi && liveImsi && storedImsi !== liveImsi);
-            const imeiChanged = Boolean(storedImei && liveImei && storedImei !== liveImei);
-            const identityChanged = imsiChanged || imeiChanged;
-            // If hardware identity moved to another active slot, release stale identity from this slot
-            const identityClaimedElsewhere = !hasObservedIdentity && [...observedDongles.entries()].some(([otherSlot, otherObs]) => {
-                if (otherSlot === dongleName) return false;
-                return (storedImsi && otherObs.imsi && otherObs.imsi === storedImsi) ||
-                       (storedImei && otherObs.imei && otherObs.imei === storedImei);
-            });
-
-            if (identityClaimedElsewhere) {
-                console.log(`DONGLE-RECONCILE: Hardware from ${dongleName} moved to another slot; releasing stale identity`);
-                await clearDongleMappingAliases(dongleName, storedImsi, storedImei);
-                await deleteAstDbKey('DONGLE_SETTINGS', dongleName);
-                await pool.query(`
-                    UPDATE \`asterisk\`.\`gsm_dongles\`
-                    SET imsi = NULL, imei = NULL, phone_number = NULL, dynamic_enabled = 0
-                    WHERE dongle_name = ?
-                `, [dongleName]);
-                if (slotRow) {
-                    Object.assign(slotRow, { imsi: null, imei: null, phone_number: null, dynamic_enabled: 0 });
-                }
-                continue;
-            }
-
-            const identityOwners = dbRows.filter(row => {
-                if (row.dongle_name === dongleName) return false;
-                const rowImsi = normalizeDongleIdentity(row.imsi);
-                const rowImei = normalizeDongleIdentity(row.imei);
-                return (liveImsi && rowImsi === liveImsi) || (liveImei && rowImei === liveImei);
-            });
-            const ownerNumbers = [...new Set(identityOwners
-                .map(row => normalizeConfiguredDid(row.phone_number))
-                .filter(Boolean))];
-            if (ownerNumbers.length > 1) {
-                console.error(`DONGLE-RECONCILE: Conflicting DIDs for hardware in ${dongleName}; refusing to copy an ambiguous number`);
-            }
-            const ownerNumber = ownerNumbers.length === 1 ? ownerNumbers[0] : '';
-            const slotNumber = normalizeConfiguredDid(slotRow?.phone_number);
-            const preserveSlotNumber = !identityChanged || firstIdentity || sameImsi;
-            const configuredNumber = (preserveSlotNumber ? slotNumber : '') || ownerNumber;
-            const newHardware = firstIdentity || identityChanged;
-            const dynamicEnabled = newHardware
-                ? false
-                : Boolean(slotRow && Number(slotRow.dynamic_enabled) === 1);
-            const nextImsi = liveImsi || storedImsi;
-            const nextImei = liveImei || storedImei;
-
-            if (identityChanged) {
-                await clearDongleMappingAliases(dongleName, storedImsi, storedImei);
-                console.log(`DONGLE-RECONCILE: Hardware identity changed in ${dongleName}; dynamic mapping reset to off`);
-            } else if (firstIdentity) {
-                console.log(`DONGLE-RECONCILE: New hardware detected in ${dongleName}; dynamic mapping defaults to off`);
-            }
-
-            await pool.query(`
+        await conn.beginTransaction();
+        for (const slot of plan.slots) {
+            await conn.execute(`
                 INSERT INTO \`asterisk\`.\`gsm_dongles\`
-                    (dongle_name, imsi, imei, phone_number, dynamic_enabled)
-                VALUES (?, ?, ?, ?, ?)
+                    (dongle_name, imsi, imei, phone_number, dynamic_enabled, mapping_override)
+                VALUES (?, ?, ?, ?, ?, ?)
                 ON DUPLICATE KEY UPDATE
                     imsi = VALUES(imsi),
                     imei = VALUES(imei),
                     phone_number = VALUES(phone_number),
-                    dynamic_enabled = VALUES(dynamic_enabled)
-            `, [dongleName, nextImsi || null, nextImei || null, configuredNumber || null, dynamicEnabled ? 1 : 0]);
+                    dynamic_enabled = VALUES(dynamic_enabled),
+                    mapping_override = VALUES(mapping_override)
+            `, [
+                slot.dongle_name,
+                slot.imsi || null,
+                slot.imei || null,
+                slot.phone_number || null,
+                slot.dynamic_enabled ? 1 : 0,
+                slot.mapping_override === 'disabled' ? 'disabled' : 'auto'
+            ]);
+        }
+        for (const dongleName of plan.deleteSlots || []) {
+            const safeName = normalizeDongleMappingKey(dongleName);
+            if (!safeName) continue;
+            await conn.execute('DELETE FROM `asterisk`.`gsm_dongles` WHERE dongle_name = ?', [safeName]);
+        }
+        await conn.commit();
+    } catch (error) {
+        try { await conn.rollback(); } catch (_) {}
+        throw error;
+    } finally {
+        conn.release();
+    }
 
-            const persistedRow = {
-                dongle_name: dongleName,
-                imsi: nextImsi,
-                imei: nextImei,
-                phone_number: configuredNumber,
-                dynamic_enabled: dynamicEnabled ? 1 : 0
-            };
-            if (slotRow) {
-                Object.assign(slotRow, persistedRow);
-            } else {
-                slotRow = persistedRow;
-                dbRows.push(slotRow);
-            }
+    const actionErrors = [];
+    const actions = [
+        ...(plan.astdbWrites || []).map(action => ({ action, verb: 'put' })),
+        ...(plan.astdbDeletes || []).map(action => ({ action, verb: 'del' }))
+    ];
+    for (const item of actions) {
+        const command = buildAstDbAction(item.action, item.verb);
+        if (!command) {
+            actionErrors.push(`invalid AstDB action ${item.verb} ${item.action?.family || '?'}/${item.action?.key || '?'}`);
+            continue;
+        }
+        try {
+            await execFileAsync(ASTERISK_BIN, ['-rx', command]);
+        } catch (error) {
+            actionErrors.push(`${command}: ${error.message}`);
+        }
+    }
 
-            await syncDongleDynamicSetting(dongleName, dynamicEnabled);
-            if (configuredNumber) {
-                await syncDongleMappingAliases({
-                    dongleName,
-                    imsi: nextImsi,
-                    imei: nextImei,
-                    phoneNumber: configuredNumber
-                });
-            } else {
-                await clearDongleMappingAliases(dongleName, nextImsi, nextImei);
-            }
+    for (const dongleName of plan.deleteSlots || []) {
+        const safeName = normalizeDongleMappingKey(dongleName);
+        if (!safeName) continue;
+        for (const family of ['DONGLE_SETTINGS', 'dongle_map']) {
+            try {
+                await execFileAsync(ASTERISK_BIN, ['-rx', `database del ${family} ${safeName}`]);
+            } catch (_) {}
+        }
+    }
+
+    return { errors: actionErrors };
+}
+
+let reconcileInFlight = null;
+let reconcileQueued = false;
+let legacySimMapImported = false;
+
+async function importLegacySimMapInventory() {
+    if (legacySimMapImported) return;
+    try {
+        const output = await execFileAsync(ASTERISK_BIN, ['-rx', 'database show sim_map']);
+        const inserts = [];
+        for (const line of String(output || '').split(/\r?\n/)) {
+            const match = /\/sim_map\/(\d{5,30})\s*:\s*(\+?\d{3,30})/.exec(line);
+            if (match) inserts.push([match[1], match[2]]);
+        }
+        for (const [imsi, did] of inserts) {
+            await pool.query(`
+                INSERT IGNORE INTO \`asterisk\`.\`sim_inventory\` (imsi, did, enabled)
+                VALUES (?, ?, 1)
+            `, [imsi, did]);
+        }
+        legacySimMapImported = true;
+        if (inserts.length > 0) {
+            console.log(`DONGLE-RECONCILE: imported ${inserts.length} legacy sim_map entries into sim_inventory`);
         }
     } catch (error) {
-        console.error('DONGLE-RECONCILE: Error syncing GSM mappings:', error.message);
+        console.error('DONGLE-RECONCILE: legacy sim_map import skipped:', error.message);
     }
 }
+
+async function reconcileDongleMappingsOnce(reason) {
+    try {
+        await importLegacySimMapInventory();
+        const devicesOutput = await execFileAsync(ASTERISK_BIN, ['-rx', 'dongle show devices']);
+        const observedDevices = parseDevicesOutput(devicesOutput || '', true);
+        const [slotRows] = await pool.query(
+            'SELECT dongle_name, imsi, imei, phone_number, dynamic_enabled, mapping_override FROM `asterisk`.`gsm_dongles`'
+        );
+        let inventoryRows = [];
+        try {
+            const [rows] = await pool.query('SELECT imsi, did, enabled FROM `asterisk`.`sim_inventory`');
+            inventoryRows = rows || [];
+        } catch (inventoryError) {
+            console.error('DONGLE-RECONCILE: sim_inventory read failed:', inventoryError.message);
+        }
+
+        const configuredSlots = Object.keys(parseDongleConfGain().dongles || {});
+        const plan = resolveDongleMappingState({
+            observedDevices,
+            slotRows,
+            inventory: inventoryRows,
+            configuredSlots
+        });
+
+        const applied = await applyDongleMappingPlan(plan);
+        const errorSuffix = applied.errors.length > 0 ? `; ${applied.errors.length} AstDB error(s)` : '';
+        console.log(
+            `DONGLE-RECONCILE: reason=${reason} observed=${plan.summary.observedSlots} mapped=${plan.summary.mappedSlots} ` +
+            `unknown=${plan.summary.unknownSims} missing=${plan.summary.missingSims} duplicate=${plan.summary.duplicateSims} ` +
+            `alerts=${plan.summary.alerts}${errorSuffix}`
+        );
+        if (applied.errors.length > 0) {
+            for (const error of applied.errors) console.error(`DONGLE-RECONCILE: ${error}`);
+        }
+        return plan;
+    } catch (error) {
+        console.error(`DONGLE-RECONCILE: reason=${reason} failed:`, error.message);
+        return null;
+    }
+}
+
+async function reconcileDongleMappings(reason = 'manual') {
+    if (reconcileInFlight) {
+        reconcileQueued = true;
+        return reconcileInFlight;
+    }
+
+    reconcileInFlight = (async () => {
+        do {
+            reconcileQueued = false;
+            await reconcileDongleMappingsOnce(reason);
+        } while (reconcileQueued);
+    })();
+
+    try {
+        return await reconcileInFlight;
+    } finally {
+        reconcileInFlight = null;
+    }
+}
+
 const TAB_ROUTE_MAP = {
     '/': 'dashboard',
     '/cdr': 'call_history',
@@ -3830,7 +3876,7 @@ let amiClient = null;
 // --- AUTO-DETECT DONGLE IMEI/SIM & CONFIGURE TRUNKS ---
 async function detectDonglesAndSetTrunkCID() {
     try {
-        await reconcileDongleMappings();
+        await reconcileDongleMappings('trunk-cid');
 
         const { execFile: execFileCb } = require('child_process');
         const execFileAsync = (cmd, args) => new Promise((resolve) => {
@@ -4584,7 +4630,7 @@ const dongleRestartedOnce = {};
 let donglePortPresence = null;
 let dongleHotplugCheckInFlight = false;
 
-async function applyDongleHotplugMappingDefaults() {
+async function checkDongleHotplugPresence() {
     if (dongleHotplugCheckInFlight) return;
     dongleHotplugCheckInFlight = true;
     try {
@@ -4605,36 +4651,40 @@ async function applyDongleHotplugMappingDefaults() {
 
         if (donglePortPresence === null) {
             donglePortPresence = currentPresence;
+            await reconcileDongleMappings('startup');
+            io.emit('usbDevicesUpdated');
             return;
         }
 
         const newlyPresent = [];
+        const disappeared = [];
+        let presenceChanged = false;
         for (const [dongleName, isPresent] of currentPresence) {
-            if (isPresent && donglePortPresence.get(dongleName) === false) {
+            const wasPresent = donglePortPresence.get(dongleName);
+            if (wasPresent !== isPresent) presenceChanged = true;
+            if (isPresent && wasPresent === false) {
                 newlyPresent.push(dongleName);
+            } else if (!isPresent && wasPresent === true) {
+                disappeared.push(dongleName);
             }
         }
         donglePortPresence = currentPresence;
-        if (newlyPresent.length === 0) return;
+        if (!presenceChanged) return;
 
         for (const dongleName of newlyPresent) {
-            await pool.query(`
-                INSERT INTO \`asterisk\`.\`gsm_dongles\` (dongle_name, dynamic_enabled)
-                VALUES (?, 0)
-                ON DUPLICATE KEY UPDATE dynamic_enabled = 0
-            `, [dongleName]);
-            await syncDongleDynamicSetting(dongleName, false);
-            await deleteAstDbKey('dongle_map', dongleName);
-            console.log(`DONGLE-HOTPLUG: ${dongleName} appeared on USB; dynamic DID mapping reset to off`);
+            console.log(`DONGLE-HOTPLUG: ${dongleName} appeared on USB; scheduling mapping reconciliation`);
+        }
+        for (const dongleName of disappeared) {
+            console.log(`DONGLE-HOTPLUG: ${dongleName} disappeared; scheduling mapping reconciliation`);
         }
 
         cachedDevicesOutput = null;
         lastDevicesOutputFetch = 0;
         cachedEnrichedDevices = null;
-        await reconcileDongleMappings();
+        await reconcileDongleMappings('hotplug');
         io.emit('usbDevicesUpdated');
     } catch (error) {
-        console.error('DONGLE-HOTPLUG: Failed to apply safe mapping defaults:', error.message);
+        console.error('DONGLE-HOTPLUG: Failed to reconcile mappings:', error.message);
     } finally {
         dongleHotplugCheckInFlight = false;
     }
@@ -4672,7 +4722,7 @@ async function recordDongleStateLog(dongleName, state, simNumber = null, imsi = 
 }
 
 function autoHealDongles() {
-    applyDongleHotplugMappingDefaults();
+    checkDongleHotplugPresence();
     getDevicesOutputCached((err, stdout) => {
         if (err || !stdout) return;
         const devices = parseDevicesOutput(stdout, true);
@@ -4708,7 +4758,7 @@ function autoHealDongles() {
     });
 }
 setInterval(autoHealDongles, 3000);
-applyDongleHotplugMappingDefaults();
+checkDongleHotplugPresence();
 
 // --- IN-MEMORY CACHES FOR FAST ZERO-DATABASE GLOBAL MIDDLEWARE ---
 let cachedBaseRoster = null;
@@ -5523,6 +5573,23 @@ app.get('/customers', requireAuth, async (req, res) => {
             tenantName = rows.length ? rows[0].name : null;
         }
     } catch (_) {}
+    if (String(req.query.view || '') === 'studio') {
+        return res.render('customers-studio', {
+            currentPage: '/customers',
+            currentLang,
+            isRtl: currentLang === 'ar',
+            isSuperAdmin: isSuperAdmin(req),
+            isRootUser: root,
+            tenantId,
+            tenantName,
+            tenants,
+            roster: res.locals.roster || [],
+            assignedExtensions,
+            currentUser: req.session ? req.session.username : '',
+            clientName: process.env.CLIENT_NAME || '',
+            allowedTabs: res.locals.allowedTabs || []
+        });
+    }
     res.render('customers', {
         currentPage: '/customers',
         currentLang,
@@ -5539,6 +5606,13 @@ app.get('/customers', requireAuth, async (req, res) => {
         clientName: process.env.CLIENT_NAME || '',
         allowedTabs: res.locals.allowedTabs || []
     });
+});
+
+// Direct studio URL alias (keeps old bookmarks working).
+app.get('/customers/studio', requireAuth, (req, res) => {
+    const qs = new URLSearchParams(req.query);
+    qs.set('view', 'studio');
+    return res.redirect('/customers?' + qs.toString());
 });
 
 // Legacy /tenants entry point; the combined businesses view lives on /customers.
@@ -6191,45 +6265,109 @@ async function loadWebhookConfigFromDb() {
  * "+201011719380" on another. Reconciling those forms is the receiver's job —
  * deliberately no normalization is applied here.
  */
-function fireInboundCallWebhook(callerNumber, calledNumber, dongleId) {
+async function resolveInboundRingExtensions(calledNumber) {
+    const raw = String(calledNumber || '').trim();
+    if (!raw) return [];
+    const variants = Array.from(new Set([
+        raw,
+        raw.replace(/^\+/, ''),
+        raw.replace(/^0+/, ''),
+        raw.startsWith('+') ? raw : '+' + raw,
+        '0' + raw.replace(/^\+/, '')
+    ].filter(Boolean)));
+    let destination = '';
+    try {
+        for (const value of variants) {
+            const [rows] = await asteriskPool.execute(
+                'SELECT destination FROM `asterisk`.`incoming` WHERE `extension` = ? LIMIT 1',
+                [value]
+            );
+            if (rows && rows.length) {
+                destination = String(rows[0].destination || '');
+                break;
+            }
+        }
+        if (!destination) return [];
+        const parts = destination.split(',');
+        const kind = String(parts[0] || '').trim();
+        const target = String(parts[1] || '').trim();
+        if (kind === 'ext-group' && target) {
+            const [groups] = await asteriskPool.execute(
+                'SELECT grplist FROM `asterisk`.`ringgroups` WHERE grpnum = ? LIMIT 1',
+                [target]
+            );
+            if (!groups || !groups.length) return [];
+            return String(groups[0].grplist || '')
+                .split(/[-#,\s]+/)
+                .map(value => value.trim())
+                .filter(Boolean);
+        }
+        if ((kind === 'from-did-direct' || kind === 'ext-local' || kind === 'from-internal') && target) {
+            return [target];
+        }
+    } catch (_) {}
+    return [];
+}
+
+/**
+ * Deliver an inbound GSM call notification to the configured external CRM.
+ *
+ * Number handling: `callerNumber` and `calledNumber` are forwarded verbatim as
+ * received from Asterisk. Callers are identified by whatever the GSM network
+ * delivered, so the same lead may arrive as "01011719380" on one carrier and
+ * "+201011719380" on another. Reconciling those forms is the receiver's job —
+ * deliberately no normalization is applied here.
+ *
+ * `ring_extensions` is resolved from the FreePBX inbound route for the called
+ * number. A direct DID route yields one extension; an `ext-group` route yields
+ * all members of that ring group. Routes that cannot be resolved statically
+ * (IVR, time condition, queue) produce an empty array.
+ */
+async function fireInboundCallWebhook(callerNumber, calledNumber, dongleId) {
     if (!cachedWebhookConfig.enabled || !cachedWebhookConfig.url) return;
-    const payload = JSON.stringify({
-        event: 'incoming_call',
-        caller_number: callerNumber || '',
-        called_number: calledNumber || '',
-        dongle: dongleId || '',
-        timestamp: new Date().toISOString()
-    });
-    const parsed = new URL(cachedWebhookConfig.url);
-    const isHttps = parsed.protocol === 'https:';
-    const reqOptions = {
-        hostname: parsed.hostname,
-        port: parsed.port || (isHttps ? 443 : 80),
-        path: parsed.pathname + parsed.search,
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Content-Length': Buffer.byteLength(payload),
-            'User-Agent': 'SokratVoIP-Webhook/1.0'
-        },
-        timeout: 10000
-    };
-    if (cachedWebhookConfig.secret) {
-        const hmac = require('crypto').createHmac('sha256', cachedWebhookConfig.secret).update(payload).digest('hex');
-        reqOptions.headers['X-Sokrat-Signature'] = hmac;
-    }
-    const transport = isHttps ? require('https') : require('http');
-    const req = transport.request(reqOptions, (resp) => {
-        resp.resume();
-    });
-    req.on('error', (err) => {
+    try {
+        const ringExtensions = await resolveInboundRingExtensions(calledNumber);
+        const payload = JSON.stringify({
+            event: 'incoming_call',
+            caller_number: callerNumber || '',
+            called_number: calledNumber || '',
+            dongle: dongleId || '',
+            ring_extensions: ringExtensions,
+            timestamp: new Date().toISOString()
+        });
+        const parsed = new URL(cachedWebhookConfig.url);
+        const isHttps = parsed.protocol === 'https:';
+        const reqOptions = {
+            hostname: parsed.hostname,
+            port: parsed.port || (isHttps ? 443 : 80),
+            path: parsed.pathname + parsed.search,
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(payload),
+                'User-Agent': 'SokratVoIP-Webhook/1.0'
+            },
+            timeout: 10000
+        };
+        if (cachedWebhookConfig.secret) {
+            const hmac = require('crypto').createHmac('sha256', cachedWebhookConfig.secret).update(payload).digest('hex');
+            reqOptions.headers['X-Sokrat-Signature'] = hmac;
+        }
+        const transport = isHttps ? require('https') : require('http');
+        const req = transport.request(reqOptions, (resp) => {
+            resp.resume();
+        });
+        req.on('error', (err) => {
+            console.error('Webhook delivery failed:', err.message);
+        });
+        req.on('timeout', () => {
+            req.destroy();
+        });
+        req.write(payload);
+        req.end();
+    } catch (err) {
         console.error('Webhook delivery failed:', err.message);
-    });
-    req.on('timeout', () => {
-        req.destroy();
-    });
-    req.write(payload);
-    req.end();
+    }
 }
 
 app.get('/api/settings/webhook', requireAuth, async (req, res) => {
@@ -6312,6 +6450,7 @@ app.post('/api/settings/webhook/test', requireAuth, async (req, res) => {
             caller_number: '+201234567890',
             called_number: '+201212424424',
             dongle: 'dongle0',
+            ring_extensions: ['101', '102'],
             timestamp: new Date().toISOString()
         });
 
@@ -11543,6 +11682,7 @@ function startUssdLogMonitor() {
     const imsiErrorPattern = /\[([^\]]+)\]\s+ERROR\[\d+\](?:\s*:\s*)?\s+at_response\.c(?::\d+)?(?::|\s+)?(?:\s*log_cmd_response_error:\s*)?\s*\[([^\]]+)\]\s+Getting IMSI number failed/i;
     const latestImsiFailAlerts = {};
     const pendingImsiLookups = new Map();
+    const smsPartIndices = new Map();
 
     function handleDongleRecovered(dongleId, logTime) {
         const id = String(dongleId || '').trim().toLowerCase();
@@ -11631,32 +11771,57 @@ function startUssdLogMonitor() {
             io.emit('dongleLog', statement.trim());
         }
 
-        // Parse SMS received log directly from chan_dongle at_response.c core to support multi-line and multi-part SMS reassembly
-        if (statement.includes('Got full SMS from')) {
-            const smsPattern = /\[([^\]]+)\] VERBOSE\[\d+\] at_response\.c:\s+\[([^\]]+)\] Got full SMS from ([^:]+):\s*'(.*)/s;
-            const smsMatch = smsPattern.exec(statement);
-            if (smsMatch) {
-                const dongleId = smsMatch[2].trim();
-                const sender = smsMatch[3].trim();
-                let content = smsMatch[4].trim();
-                // Trim trailing quote
-                content = content.replace(/'\s*$/, '').trim();
+        // Parse SMS part/full logs emitted by chan_dongle. The full log carries
+        // the modem storage index; the part log carries one index per multipart
+        // segment. The app deletes those indices only after the inbox write succeeds.
+        const smsPart = parseSmsPartLog(statement);
+        if (smsPart) {
+            const key = smsPartKey(smsPart.dongleId, smsPart.sender, smsPart.ref);
+            let entry = smsPartIndices.get(key);
+            if (!entry) {
+                entry = { indices: new Set() };
+                smsPartIndices.set(key, entry);
+            }
+            entry.indices.add(smsPart.index);
+            if (smsPartIndices.size > 500) {
+                const oldestKey = smsPartIndices.keys().next().value;
+                if (oldestKey) smsPartIndices.delete(oldestKey);
+            }
+        }
 
-                const cleanSender = String(sender || '').trim();
-                const newSms = {
-                    id: 'in-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
-                    dongleId,
-                    sender: cleanSender,
-                    recipient: '',
-                    endpoint: cleanSender,
-                    direction: 'incoming',
-                    content,
-                    timestamp: Date.now()
-                };
-                const inbox = readSmsInbox();
-                inbox.unshift(newSms);
-                if (inbox.length > 500) inbox.pop();
-                saveSmsInbox(inbox);
+        const smsFull = parseSmsFullLog(statement);
+        if (smsFull) {
+            const dongleId = smsFull.dongleId;
+            const cleanSender = smsFull.sender;
+            const content = smsFull.content;
+            const newSms = {
+                id: 'in-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
+                dongleId,
+                sender: cleanSender,
+                recipient: '',
+                endpoint: cleanSender,
+                direction: 'incoming',
+                content,
+                timestamp: Date.now()
+            };
+            const inbox = readSmsInbox();
+            inbox.unshift(newSms);
+            if (inbox.length > 500) inbox.pop();
+            const saved = saveSmsInbox(inbox);
+            const indices = collectSmsIndices(smsPartIndices, smsFull);
+            if (smsFull.ref !== null) {
+                smsPartIndices.delete(smsPartKey(dongleId, cleanSender, smsFull.ref));
+            }
+            if (!saved) {
+                console.error(`GSM MONITOR: SMS was not persisted; keeping modem storage on ${dongleId}`);
+            } else {
+                if (indices.length > 0) {
+                    for (const index of indices) {
+                        deleteModemSms(dongleId, index);
+                    }
+                } else {
+                    console.warn(`GSM MONITOR: no modem storage index in SMS log for ${dongleId}; leaving message in storage`);
+                }
                 io.emit('newSms', newSms);
                 console.log(`GSM MONITOR: Saved incoming SMS on ${dongleId} from ${cleanSender} -> ${content}`);
             }
@@ -11835,10 +12000,11 @@ app.post('/api/gsm-dongles/save-number', async (req, res) => {
         const rawDongleId = String(dongleId || '').trim();
         const rawImsi = String(imsi || '').trim();
         const rawNum = String(number || '').trim();
+        const safeNum = normalizeConfiguredDid(rawNum);
         const dId = normalizeDongleMappingKey(rawDongleId);
         const dImsi = normalizeDongleIdentity(rawImsi);
-        if (!rawNum) {
-            return res.status(400).json({ success: false, error: 'Phone number is required.' });
+        if (!safeNum) {
+            return res.status(400).json({ success: false, error: 'Valid phone number is required.' });
         }
         if ((rawDongleId && !dId) || (rawImsi && !dImsi)) {
             return res.status(400).json({ success: false, error: 'Invalid dongle ID or IMSI.' });
@@ -11868,30 +12034,20 @@ app.post('/api/gsm-dongles/save-number', async (req, res) => {
             }
         } catch (_) {}
 
-        if (dId || foundImsi) {
-            const mappingDongleName = dId || 'unknown';
+        if (foundImsi) {
+            await upsertSimInventory(foundImsi, safeNum);
+        }
+
+        if (dId) {
             await pool.query(`
-                INSERT INTO \`asterisk\`.\`gsm_dongles\` (dongle_name, imsi, imei, phone_number)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO \`asterisk\`.\`gsm_dongles\` (dongle_name, imsi, imei, phone_number, mapping_override)
+                VALUES (?, ?, ?, ?, 'auto')
                 ON DUPLICATE KEY UPDATE
                     imsi = COALESCE(NULLIF(VALUES(imsi), ''), imsi),
                     imei = COALESCE(NULLIF(VALUES(imei), ''), imei),
-                    phone_number = VALUES(phone_number)
-            `, [mappingDongleName, foundImsi || null, imei || null, rawNum]);
-
-            const [savedRows] = await pool.query(
-                'SELECT dongle_name, imsi, imei, phone_number FROM `asterisk`.`gsm_dongles` WHERE dongle_name = ?',
-                [mappingDongleName]
-            );
-            const savedMapping = savedRows[0];
-            if (savedMapping) {
-                await syncDongleMappingAliases({
-                    dongleName: savedMapping.dongle_name,
-                    imsi: savedMapping.imsi,
-                    imei: savedMapping.imei,
-                    phoneNumber: savedMapping.phone_number
-                });
-            }
+                    phone_number = VALUES(phone_number),
+                    mapping_override = 'auto'
+            `, [dId, foundImsi || null, imei || null, safeNum]);
         }
 
         try {
@@ -14843,9 +14999,60 @@ function readSmsInbox() {
 function saveSmsInbox(inbox) {
     try {
         fs.writeFileSync(SMS_INBOX_FILE, JSON.stringify(inbox, null, 2), 'utf8');
+        return true;
     } catch (e) {
         console.error("GSM MONITOR: Failed to save sms_inbox.json:", e);
+        return false;
     }
+}
+
+function isAutodeleteSmsEnabled(dongleId) {
+    const confPath = '/etc/asterisk/dongle.conf';
+    if (!fs.existsSync(confPath)) return false;
+    try {
+        let section = 'defaults';
+        const values = {};
+        for (const rawLine of fs.readFileSync(confPath, 'utf8').split(/\r?\n/)) {
+            const line = rawLine.trim();
+            if (!line || line.startsWith(';') || line.startsWith('#')) continue;
+            const sectionMatch = /^\[([^\]]+)\]/.exec(line);
+            if (sectionMatch) {
+                section = sectionMatch[1].trim().toLowerCase();
+                continue;
+            }
+            const eq = line.indexOf('=');
+            if (eq < 0) continue;
+            const key = line.slice(0, eq).trim().toLowerCase();
+            if (key !== 'autodeletesms') continue;
+            values[section] = line.slice(eq + 1).split(';')[0].trim().toLowerCase();
+        }
+        const safeDongle = String(dongleId || '').trim().toLowerCase();
+        const value = values[safeDongle] !== undefined ? values[safeDongle] : values.defaults;
+        return value === 'yes';
+    } catch (error) {
+        console.error('GSM MONITOR: failed to read autodeletesms setting:', error.message);
+        return false;
+    }
+}
+
+function deleteModemSms(dongleId, index) {
+    const safeDongle = String(dongleId || '').trim().toLowerCase();
+    const safeIndex = Number(index);
+    if (!/^dongle[0-9]+$/.test(safeDongle) || !Number.isInteger(safeIndex) || safeIndex < 0 || safeIndex > 9999) {
+        console.warn(`GSM MONITOR: refusing invalid SMS delete request (${dongleId}, ${index})`);
+        return;
+    }
+    if (isAutodeleteSmsEnabled(safeDongle)) {
+        console.log(`GSM MONITOR: autodeletesms=yes on ${safeDongle}; driver already removed index ${safeIndex}`);
+        return;
+    }
+    execFile(ASTERISK_BIN, ['-rx', `dongle cmd ${safeDongle} AT+CMGD=${safeIndex}`], (error, stdout, stderr) => {
+        if (error) {
+            console.error(`GSM MONITOR: failed to delete SMS index ${safeIndex} on ${safeDongle}:`, error.message);
+        } else {
+            console.log(`GSM MONITOR: queued deletion of SMS index ${safeIndex} on ${safeDongle} after persistence`);
+        }
+    });
 }
 
 // Endpoint to fetch SMS inbox
@@ -22419,7 +22626,7 @@ app.get('/api/config/dongle-mappings', requireAuth, async (req, res) => {
             execFileCb(cmd, args, (err, stdout) => resolve(err ? '' : stdout || ''));
         });
 
-        const [dbRows] = await pool.query('SELECT dongle_name, imsi, imei, phone_number, dynamic_enabled, updated_at FROM `asterisk`.`gsm_dongles`');
+        const [dbRows] = await pool.query('SELECT dongle_name, imsi, imei, phone_number, dynamic_enabled, mapping_override, updated_at FROM `asterisk`.`gsm_dongles`');
         const devicesOutput = await execFileAsync(ASTERISK_BIN, ['-rx', 'dongle show devices']);
         const liveDevices = parseDevicesOutput(devicesOutput || '', true);
         const liveMap = {};
@@ -22531,6 +22738,7 @@ app.get('/api/config/dongle-mappings', requireAuth, async (req, res) => {
                 rssi,
                 provider,
                 dynamicEnabled: Boolean(dbRow && Number(dbRow.dynamic_enabled) === 1),
+                mappingOverride: dbRow?.mapping_override || 'auto',
                 astdb: astdbStatus,
                 inboundRoute: routeInfo,
                 updatedAt: dbRow?.updated_at || null
@@ -22563,7 +22771,7 @@ app.post('/api/config/dongle-mappings/:dongleName/toggle', requireAuth, async (r
         }
 
         const [existing] = await pool.query(
-            'SELECT imsi, imei, phone_number, dynamic_enabled FROM `asterisk`.`gsm_dongles` WHERE dongle_name = ?',
+            'SELECT imsi, imei, phone_number, dynamic_enabled, mapping_override FROM `asterisk`.`gsm_dongles` WHERE dongle_name = ?',
             [dongleName]
         );
         const currentState = Boolean(existing[0] && Number(existing[0].dynamic_enabled) === 1);
@@ -22572,41 +22780,32 @@ app.post('/api/config/dongle-mappings/:dongleName/toggle', requireAuth, async (r
             : (req.body.enabled === 'false' || req.body.enabled === 0 || req.body.enabled === '0'
                 ? false
                 : !currentState);
-        const val = targetState ? 1 : 0;
 
-        await pool.query(`
-            INSERT INTO \`asterisk\`.\`gsm_dongles\` (dongle_name, dynamic_enabled)
-            VALUES (?, ?)
-            ON DUPLICATE KEY UPDATE dynamic_enabled = VALUES(dynamic_enabled)
-        `, [dongleName, val]);
-        await syncDongleDynamicSetting(dongleName, targetState);
+        await setDongleMappingOverride(dongleName, targetState ? 'auto' : 'disabled');
+        await reconcileDongleMappings('toggle');
 
         const [savedRows] = await pool.query(
-            'SELECT imsi, imei, phone_number FROM `asterisk`.`gsm_dongles` WHERE dongle_name = ?',
+            'SELECT imsi, imei, phone_number, dynamic_enabled, mapping_override FROM `asterisk`.`gsm_dongles` WHERE dongle_name = ?',
             [dongleName]
         );
         const savedMapping = savedRows[0] || {};
-        const aliasesSynced = targetState
-            ? await syncDongleMappingAliases({
-                dongleName,
-                imsi: savedMapping.imsi,
-                imei: savedMapping.imei,
-                phoneNumber: savedMapping.phone_number
-            })
-            : false;
+        const effectiveState = Boolean(savedMapping && Number(savedMapping.dynamic_enabled) === 1);
+        const aliasesSynced = Boolean(effectiveState && savedMapping.phone_number);
 
         await execFileAsync(ASTERISK_BIN, ['-rx', 'dialplan reload']);
 
         return res.json({
             success: true,
             dongleName,
-            enabled: targetState,
+            enabled: effectiveState,
+            requested: targetState,
+            mappingOverride: savedMapping.mapping_override || (targetState ? 'auto' : 'disabled'),
             aliasesSynced,
             message: targetState
-                ? (aliasesSynced
-                    ? `Dynamic DID mapping enabled for ${dongleName}; configured DID aliases are synchronized.`
-                    : `Dynamic DID mapping enabled for ${dongleName}; configure a DID before it can route calls.`)
-                : `Dynamic DID mapping disabled for ${dongleName}.`
+                ? (effectiveState
+                    ? `Dynamic SIM mapping enabled for ${dongleName}; DID aliases are synchronized.`
+                    : `Dynamic SIM mapping requested for ${dongleName}, but no known SIM/DID is available yet.`)
+                : `Dynamic SIM mapping disabled for ${dongleName}.`
         });
     } catch (error) {
         return res.status(500).json({ success: false, error: error.message });

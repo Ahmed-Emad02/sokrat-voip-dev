@@ -17,11 +17,25 @@ function createCustomersRouter({ service, isRootRequest, getTenantId }) {
     if (!service) throw new Error('createCustomersRouter requires a customer service');
     const router = express.Router();
     const LOGO_DIR = path.join(__dirname, '..', 'public', 'uploads', 'tenant-logos');
+    const HEADER_DIR = path.join(__dirname, '..', 'public', 'uploads', 'tenant-headers');
     const logoUpload = multer({
         storage: multer.memoryStorage(),
         limits: { fileSize: 2 * 1024 * 1024 },
         fileFilter: (req, file, cb) => cb(null, /^image\/png$/i.test(file.mimetype))
     });
+    const headerUpload = multer({
+        storage: multer.memoryStorage(),
+        limits: { fileSize: 6 * 1024 * 1024 },
+        fileFilter: (req, file, cb) => cb(null, /^image\/(?:png|jpe?g|webp)$/i.test(file.mimetype))
+    });
+
+    function headerImageExt(buffer) {
+        if (!Buffer.isBuffer(buffer) || buffer.length < 12) return '';
+        if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) return 'png';
+        if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return 'jpg';
+        if (buffer.subarray(0, 4).toString() === 'RIFF' && buffer.subarray(8, 12).toString() === 'WEBP') return 'webp';
+        return '';
+    }
 
     function parseBranding(raw) {
         if (!raw) return {};
@@ -50,6 +64,15 @@ function createCustomersRouter({ service, isRootRequest, getTenantId }) {
             await Promise.all(names
                 .filter(name => name.startsWith(`tenant-${tenantId}-`) && name.endsWith('.png') && name !== keep)
                 .map(name => fs.unlink(path.join(LOGO_DIR, name)).catch(() => {})));
+        } catch (_) {}
+    }
+
+    async function removeTenantHeaders(tenantId, keep) {
+        try {
+            const names = await fs.readdir(HEADER_DIR);
+            await Promise.all(names
+                .filter(name => name.startsWith(`tenant-${tenantId}-`) && name !== keep)
+                .map(name => fs.unlink(path.join(HEADER_DIR, name)).catch(() => {})));
         } catch (_) {}
     }
 
@@ -234,6 +257,10 @@ function createCustomersRouter({ service, isRootRequest, getTenantId }) {
             && !branding.logo_url.startsWith(`/uploads/tenant-logos/tenant-${scope.tenantId}-`)) {
             delete branding.logo_url;
         }
+        if (branding.header_image_url && branding.header_image_url.startsWith('/uploads/tenant-headers/')
+            && !branding.header_image_url.startsWith(`/uploads/tenant-headers/tenant-${scope.tenantId}-`)) {
+            delete branding.header_image_url;
+        }
         await writeBranding(scope.tenantId, branding);
         return res.json({ success: true, branding });
     }));
@@ -266,6 +293,39 @@ function createCustomersRouter({ service, isRootRequest, getTenantId }) {
         await removeTenantLogos(scope.tenantId);
         const current = await readBranding(scope.tenantId);
         const branding = normalizeBranding({ logo_url: '' }, current);
+        await writeBranding(scope.tenantId, branding);
+        return res.json({ success: true, branding });
+    }));
+
+    router.post('/tenant/branding/header', (req, res, next) => {
+        headerUpload.single('header')(req, res, (error) => {
+            if (error) {
+                return res.status(400).json({ success: false, code: 'INVALID_HEADER_IMAGE', error: 'Upload a PNG, JPEG, or WebP header image up to 6 MB.' });
+            }
+            next();
+        });
+    }, handle(async (req, res) => {
+        const scope = resolveScope(req, req.body && req.body.tenant_id);
+        const ext = req.file ? headerImageExt(req.file.buffer) : '';
+        if (!req.file || !ext) {
+            throw httpError(400, 'INVALID_HEADER_IMAGE', 'A valid PNG, JPEG, or WebP header image is required.');
+        }
+        const current = await readBranding(scope.tenantId);
+        await fs.mkdir(HEADER_DIR, { recursive: true });
+        const filename = `tenant-${scope.tenantId}-${Date.now()}.${ext}`;
+        await fs.writeFile(path.join(HEADER_DIR, filename), req.file.buffer, { mode: 0o644 });
+        await removeTenantHeaders(scope.tenantId, filename);
+        const headerUrl = `/uploads/tenant-headers/${filename}`;
+        const branding = normalizeBranding({ header_image_url: headerUrl }, current);
+        await writeBranding(scope.tenantId, branding);
+        return res.json({ success: true, branding, header_image_url: headerUrl });
+    }));
+
+    router.delete('/tenant/branding/header', handle(async (req, res) => {
+        const scope = resolveScope(req, req.query.tenant_id);
+        await removeTenantHeaders(scope.tenantId);
+        const current = await readBranding(scope.tenantId);
+        const branding = normalizeBranding({ header_image_url: '' }, current);
         await writeBranding(scope.tenantId, branding);
         return res.json({ success: true, branding });
     }));

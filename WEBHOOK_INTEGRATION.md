@@ -15,6 +15,7 @@ GSM dongle line, so you can look up the lead and pop their record on the call.
   - [Headers](#headers)
   - [JSON body](#json-body)
   - [Field reference](#field-reference)
+- [How `ring_extensions` is resolved](#how-ring_extensions-is-resolved)
 - [Number format — read this carefully](#number-format-read-this-carefully)
 - [Request signing](#request-signing)
 - [Your endpoint: requirements](#your-endpoint-requirements)
@@ -124,6 +125,7 @@ splits your URL and preserves both `pathname` and `search`, so
   "caller_number": "01011719380",
   "called_number": "+201156804841",
   "dongle": "dongle0",
+  "ring_extensions": ["101", "102"],
   "timestamp": "2026-09-29T10:45:56.931Z"
 }
 ```
@@ -136,11 +138,28 @@ splits your URL and preserves both `pathname` and `search`, so
 | `caller_number` | string | yes | The caller's number, exactly as the GSM network delivered it. May be empty if the carrier withheld CLI. |
 | `called_number` | string | yes | The SIM number that was dialed, as reported by Asterisk. |
 | `dongle` | string | yes | Receiving dongle, e.g. `dongle0`. Lets you attribute the call to a specific line/agent. |
+| `ring_extensions` | string[] | yes | Extensions resolved from the FreePBX inbound route for `called_number`. `[]` when the route is an IVR, time condition, queue, or otherwise not statically resolvable. |
 | `timestamp` | string | yes | ISO-8601 UTC, e.g. `2026-09-29T10:45:56.931Z`. |
 
 `caller_number` and `called_number` are always present as strings. They are **never**
 `null`; an unavailable value is an empty string `""`. Check for `""` before
 attempting a lookup.
+
+### How `ring_extensions` is resolved
+
+Sokrat looks up `asterisk.incoming` by the called SIM/DID number:
+
+1. A direct route (`from-did-direct,101,1`, `ext-local,101,1`, or
+   `from-internal,101,1`) returns `["101"]`.
+2. An `ext-group,600,1` route resolves the ring group’s `grplist`; a group
+   containing `101-102` returns `["101", "102"]`.
+3. IVR, time-condition, queue, and other dynamic destinations return `[]`
+   because the final ring set depends on runtime state.
+
+If the DID is not present in `incoming`, the array is empty. The array is
+always present; never assume it contains the caller or the dongle.
+
+---
 
 ---
 
@@ -244,7 +263,7 @@ Rotate the secret by saving a new value in Sokrat, then updating your CRM.
 
 | Requirement | Detail |
 | :--- | :--- |
-| **Respond `2xx`** | Any `2xx` counts as delivered. `404` or `500` is logged as a failure. |
+| **Respond `2xx`** | A `2xx` means success. The live fire-and-forget path drains the response without parsing it; only transport errors are logged. The test endpoint rejects non-`2xx`. |
 | **Respond fast** | You have 10 seconds. Return `2xx` immediately and process asynchronously. Do not block on a database round-trip, an email, or a slow lead-lookup service. |
 | **Read the body once** | You need the raw bytes for HMAC. Capture them before any JSON parsing. |
 | **Be idempotent** | Sokrat does not retry, so you should not need to. But if you add your own retry layer, dedupe on `(caller_number, called_number, dongle, timestamp)`. |
@@ -475,7 +494,7 @@ Note the `printf '%s'` (no trailing newline) — a trailing newline changes the 
 | Ordering | Not guaranteed across simultaneous calls |
 | Blocking | The PBX never waits — the call proceeds regardless |
 | Concurrency | One independent request per inbound call |
-| Response handling | Any `2xx` = success. Others are logged. |
+| Response handling | Live delivery drains the response body without parsing status; transport errors are logged. Test endpoint requires `2xx`. |
 
 ### Finding failures
 
@@ -589,6 +608,7 @@ curl -X POST http://<sokrat-host>:8080/api/settings/webhook/test -b cookie.txt \
   Build a fallback in your CRM — for example, reconcile against Sokrat's call history
   API on a schedule.
 - **Caller ID may be withheld** by the carrier, yielding an empty `caller_number`.
+- **Ring extensions are static routing hints.** IVR/time-condition/queue destinations return `[]`; the actual live ringing set may differ after a transfer or dynamic route.
 - **No hangup or answered events.** This webhook signals arrival only. If you need
   call outcome (answered, duration, hangup cause), use the CDR/call-history API
   instead.

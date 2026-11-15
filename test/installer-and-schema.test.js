@@ -23,6 +23,8 @@ test('backend/install_db.sql has full schema parity for extension scoping, dongl
     // gsm_dongles & dongle_state_logs table
     assert.match(sql, /CREATE TABLE IF NOT EXISTS `gsm_dongles`/, 'gsm_dongles table must be created');
     assert.match(sql, /`dynamic_enabled` TINYINT\(1\) NOT NULL DEFAULT 0/, 'gsm_dongles must define dynamic_enabled column');
+    assert.match(sql, /`mapping_override` ENUM\('auto','disabled'\) NOT NULL DEFAULT 'auto'/, 'gsm_dongles must define mapping_override');
+    assert.match(sql, /CREATE TABLE IF NOT EXISTS `sim_inventory`/, 'sim_inventory table must be created');
     assert.match(sql, /CREATE TABLE IF NOT EXISTS `dongle_state_logs`/, 'dongle_state_logs table must be created');
     assert.match(sql, /`dongle_name` VARCHAR\(50\) NOT NULL/, 'dongle_state_logs must define dongle_name column');
 
@@ -97,7 +99,13 @@ test('install.sh contains schema migrations, rnnoise builds, and inbound blackli
     assert.match(script, /CREATE TABLE IF NOT EXISTS \\`dashboard_user_preferences\\`/, 'install.sh must create dashboard_user_preferences table');
     assert.match(script, /ensure_db_column "dashboard_users" "extension"/, 'install.sh must migrate dashboard_users.extension');
     assert.match(script, /ensure_db_column "gsm_dongles" "dynamic_enabled"/, 'install.sh must migrate gsm_dongles.dynamic_enabled');
+    assert.match(script, /ensure_db_column "gsm_dongles" "mapping_override"/, 'install.sh must migrate gsm_dongles.mapping_override');
     assert.match(script, /ensure_db_column "storage_settings" "queue_provisioned"/, 'install.sh must migrate storage_settings.queue_provisioned');
+
+    // Inbound mapping must prefer the SIM inventory over the slot cache.
+    const simLookupIndex = script.indexOf('DB(sim_map/${DONGLEIMSI})');
+    const slotLookupIndex = script.indexOf('DB(dongle_map/${DONGLENAME})');
+    assert.ok(simLookupIndex > -1 && slotLookupIndex > simLookupIndex, 'install.sh dialplan must resolve sim_map before dongle_map');
 
     // Dialplan blacklist check
     assert.match(script, /CLEAN_CALLER=\$\{FILTER\(0123456789,\$\{CALLER_NUMBER\}\)\}/, 'install.sh must clean caller number');
@@ -197,9 +205,8 @@ test('installer-bundle/setup-issabel-asterisk.sh passes syntax validation and do
     const rpmAllMatches = script.match(/rpm -Uvh --replacepkgs --nodeps(?:\s+--[a-zA-Z0-9\/=_-]+)*\s+"?\$\{RPM_DIR\}"?\/(\*\.rpm|\*)/g);
     assert.strictEqual(rpmAllMatches ? rpmAllMatches.length : 0, 1, 'setup-issabel-asterisk.sh must not repeat the full RPM directory install');
 
-    // Verify chan_dongle copy is not duplicated
-    const chanDongleMatches = script.match(/cp "\$SCRIPT_DIR\/binaries\/chan_dongle\.so"/g);
-    assert.strictEqual(chanDongleMatches ? chanDongleMatches.length : 0, 1, 'setup-issabel-asterisk.sh must not repeat chan_dongle.so installation');
+    // Verify chan_dongle installation goes through the shared guarded helper.
+    assert.match(script, /dongle_module_install_bundle "\$SCRIPT_DIR\/binaries\/chan_dongle\.so"/, 'setup-issabel-asterisk.sh must install chan_dongle through the shared helper');
 
     // Verify core binary installation is not erroneously nested
     assert.match(script, /packages\/nodejs-\*\.rpm/, 'setup-issabel-asterisk.sh must check for offline nodejs RPM');
@@ -257,11 +264,13 @@ test('inbound call webhook is wired to the asterisk database and fires on dongle
     // Payload contract + signing
     const fire = server.match(/function fireInboundCallWebhook\([\s\S]*?\n\}/);
     assert.ok(fire, 'server.js must define fireInboundCallWebhook');
-    for (const field of ['event', 'caller_number', 'called_number', 'dongle', 'timestamp']) {
+    for (const field of ['event', 'caller_number', 'called_number', 'dongle', 'ring_extensions', 'timestamp']) {
         assert.match(fire[0], new RegExp(field), `webhook payload must include ${field}`);
     }
     assert.match(fire[0], /createHmac\('sha256'/, 'webhook must support HMAC-SHA256 signing');
     assert.match(fire[0], /X-Sokrat-Signature/, 'webhook must send the X-Sokrat-Signature header');
+    assert.match(server, /resolveInboundRingExtensions/, 'webhook must resolve ring extensions from the inbound route');
+    assert.match(server, /\`asterisk\`\.\`ringgroups\`/, 'ring extension resolution must read FreePBX ring groups');
 
     // Numbers must be forwarded verbatim: the receiving CRM owns normalization,
     // so no E.164/national reformatting may be introduced in the webhook path.
@@ -346,6 +355,7 @@ test('scripts/safe-upgrade.sh passes bash syntax validation and includes non-des
     assert.match(script, /backend\/install_db\.sql/, 'safe-upgrade.sh must apply install_db.sql schema');
     assert.match(script, /ensure_db_column/, 'safe-upgrade.sh must define ensure_db_column migration');
     assert.match(script, /ensure_db_column "gsm_dongles" "dynamic_enabled"/, 'safe-upgrade.sh must ensure gsm_dongles.dynamic_enabled');
+    assert.match(script, /ensure_db_column "gsm_dongles" "mapping_override"/, 'safe-upgrade.sh must ensure gsm_dongles.mapping_override');
     assert.match(script, /ensure_db_column "employee_extras" "is_group_admin"/, 'safe-upgrade.sh must ensure employee_extras.is_group_admin');
     assert.match(script, /chan_dongle\.patch/, 'safe-upgrade.sh must apply chan_dongle.patch');
     assert.match(script, /re\.sub\([^)]*dongle-hangup-cleanup[^)]*\)/, 'safe-upgrade.sh must sanitize dongle-hangup-cleanup');
@@ -371,4 +381,42 @@ test('scripts/retrieve-backups.sh passes bash syntax validation and supports sna
 
     const listOutput = execSync(`bash "${retrieveScriptPath}" --list`, { cwd: rootDir, encoding: 'utf8' });
     assert.match(listOutput, /Available Backup Snapshots/, 'retrieve-backups.sh --list should output snapshot table');
+});
+
+test('chan_dongle patch and bundle skip the CCWA status query and keep CCWA timeouts non-fatal', () => {
+    const rootDir = path.join(__dirname, '..');
+    const patch = fs.readFileSync(path.join(rootDir, 'asterisk', 'chan_dongle.patch'), 'utf8');
+    const binary = fs.readFileSync(path.join(rootDir, 'installer-bundle', 'binaries', 'chan_dongle.so'));
+
+    assert.match(patch, /skipping CCWA command to prevent disconnect/, 'patch must make CCWA timeout non-fatal');
+    assert.ok(binary.includes(Buffer.from('skipping CCWA command to prevent disconnect')), 'bundle binary must include the CCWA timeout guard');
+    assert.equal(binary.includes(Buffer.from('AT+CCWA=1,2,1')), false, 'bundle binary must not contain the removed CCWA status query');
+});
+
+test('SMS autodelete is disabled in the template and the driver exposes storage indices', () => {
+    const rootDir = path.join(__dirname, '..');
+    const conf = fs.readFileSync(path.join(rootDir, 'dongle.conf'), 'utf8');
+    const patch = fs.readFileSync(path.join(rootDir, 'asterisk', 'chan_dongle.patch'), 'utf8');
+    const binary = fs.readFileSync(path.join(rootDir, 'installer-bundle', 'binaries', 'chan_dongle.so'));
+
+    assert.match(conf, /^autodeletesms=no\b/m, 'template must keep SMS for app-side deletion');
+    assert.match(patch, /Got full SMS from %s: '%s'; \[ref=%d, index=%u\]/, 'patch must log the full SMS index');
+    assert.ok(binary.includes(Buffer.from('Got full SMS from %s: \'%s\'; [ref=%d, index=%u]')), 'bundle binary must include the indexed full-SMS log');
+});
+
+test('chan_dongle CLCC answer polling is packaged for every install path', () => {
+    const rootDir = path.join(__dirname, '..');
+    const patchPath = path.join(rootDir, 'asterisk', 'chan_dongle-clcc-poll.patch');
+    assert.ok(fs.existsSync(patchPath), 'standalone CLCC polling patch must exist');
+    const patch = fs.readFileSync(patchPath, 'utf8');
+    assert.match(patch, /AT\+CLCC/, 'patch must poll AT+CLCC');
+    assert.match(patch, /Huawei firmware does not reliably emit/, 'patch must document the missing ^CONN event');
+    assert.match(patch, /last_clcc_check/, 'patch must rate-limit the CLCC poll');
+
+    const helper = fs.readFileSync(path.join(rootDir, 'scripts', 'dongle-module.sh'), 'utf8');
+    assert.match(helper, /chan_dongle-clcc-poll\.patch/, 'shared dongle helper must apply the CLCC polling patch');
+
+    const binaryPath = path.join(rootDir, 'installer-bundle', 'binaries', 'chan_dongle.so');
+    const binary = fs.readFileSync(binaryPath);
+    assert.ok(binary.length > 200000, 'bundle binary must be present and non-empty');
 });

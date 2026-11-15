@@ -9074,7 +9074,7 @@ curl -X POST http://localhost:8080/api/settings/webhook -b cookie.txt \
 
 #### Outbound Payload
 
-Sokrat sends this JSON body to your URL. **Respond with any `2xx` status**; anything else is treated as a failed delivery.
+Sokrat sends this JSON body to your URL. **Respond with any `2xx` status**; the live fire-and-forget delivery does not parse the response status, while the test endpoint rejects non-`2xx`.
 
 ```json
 {
@@ -9082,6 +9082,7 @@ Sokrat sends this JSON body to your URL. **Respond with any `2xx` status**; anyt
   "caller_number": "01011719380",
   "called_number": "+201156804841",
   "dongle": "dongle0",
+  "ring_extensions": ["101", "102"],
   "timestamp": "2026-09-29T10:45:56.931Z"
 }
 ```
@@ -9092,6 +9093,7 @@ Sokrat sends this JSON body to your URL. **Respond with any `2xx` status**; anyt
 | `caller_number` | `string` | The caller's number **exactly as the GSM network delivered it** |
 | `called_number` | `string` | The dialed SIM number, as reported by Asterisk |
 | `dongle` | `string` | Receiving dongle identifier, e.g. `dongle0` |
+| `ring_extensions` | `string[]` | Extensions resolved from the FreePBX inbound route for `called_number`; `[]` for IVR/time-condition/queue or unresolved routes |
 | `timestamp` | `string` | ISO-8601 UTC timestamp of call arrival |
 
 > **Number formatting — important for CRM lookups.** Numbers are forwarded **verbatim**; Sokrat performs no normalization. The same subscriber can therefore appear as `01011719380` on one carrier and `+201011719380` on another, and the called SIM is usually in E.164 (`+201156804841`) while the caller may be in local form. Reconciling these forms is deliberately left to the receiving CRM — index or normalize leads on your side so a lookup succeeds regardless of which form arrives.

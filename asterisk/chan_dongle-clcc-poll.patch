@@ -1,0 +1,46 @@
+--- a/chan_dongle.c
++++ b/chan_dongle.c
+@@ -489,6 +489,7 @@
+ 
+ 
+ 	time_t last_expired_check = 0;
++	time_t last_clcc_check = 0;
+ 	while (1)
+ 	{
+ 		time_t now = time(NULL);
+@@ -500,6 +501,35 @@
+ 			last_expired_check = now;
+ 		}
+ 
++		/*
++		 * Huawei firmware does not reliably emit ^CONN when the remote
++		 * party answers an outgoing call. Without a periodic AT+CLCC the
++		 * driver can remain in Dialing forever, leaving the SIP leg
++		 * ringing and the media unbridged. Poll while a call is being
++		 * established so the answer is observed within a couple of
++		 * seconds.
++		 */
++		if (now - last_clcc_check >= 2)
++		{
++			struct cpvt *cpvt;
++			int clcc_needed = 0;
++
++			AST_LIST_TRAVERSE(&pvt->chans, cpvt, entry)
++			{
++				if (cpvt->channel &&
++				    (cpvt->state == CALL_STATE_DIALING ||
++				     cpvt->state == CALL_STATE_ALERTING ||
++				     cpvt->state == CALL_STATE_INCOMING))
++				{
++					clcc_needed = 1;
++					break;
++				}
++			}
++			if (clcc_needed && at_enqueue_clcc(&pvt->sys_chan))
++				ast_debug(1, "[%s] Error enqueue List Current Calls request\n", dev);
++			last_clcc_check = now;
++		}
++
+ 		if (port_status (pvt->data_fd) || port_status (pvt->audio_fd))
+ 		{
+ 			ast_log (LOG_ERROR, "[%s] Lost connection to Dongle\n", dev);

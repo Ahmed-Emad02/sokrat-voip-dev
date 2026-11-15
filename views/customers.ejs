@@ -310,8 +310,7 @@ const bt = isRtl ? {
                     <% } else { %>
                     <span class="badge"><%= tenantName || t.business %></span>
                     <% } %>
-                    <button type="button" class="btn" id="brandingBtn" onclick="openBranding()"><%= t.branding %></button>
-                    <button type="button" class="btn" id="fieldsBtn" onclick="openFields()"><%= t.configureFields %></button>
+                    <a id="studioLink" class="btn btn-primary" href="#"><%= t.branding %> / <%= t.configureFields %></a>
                     <button type="button" class="btn btn-primary" id="addCustomerBtn" onclick="openCustomer()" disabled><%= t.addCustomer %></button>
                 </div>
             </div>
@@ -613,10 +612,19 @@ const bt = isRtl ? {
             const hint = document.getElementById('scopeHint');
             if (!hint) return;
             hint.textContent = state.tenantId ? (state.tenantName || '') : T.selectBusiness;
-            ['addCustomerBtn', 'brandingBtn', 'fieldsBtn'].forEach(id => {
-                const el = document.getElementById(id);
-                if (el) el.disabled = !state.tenantId;
-            });
+            const addBtn = document.getElementById('addCustomerBtn');
+            if (addBtn) addBtn.disabled = !state.tenantId;
+            const studio = document.getElementById('studioLink');
+            if (studio) {
+                const dis = !state.tenantId;
+                studio.setAttribute('aria-disabled', dis ? 'true' : 'false');
+                studio.style.opacity = dis ? '.45' : '';
+                studio.style.pointerEvents = dis ? 'none' : '';
+                const base = '/customers';
+                const viewQS = 'view=studio';
+                const href = dis ? '#' : (state.tenantId ? base + '?' + viewQS + '&tenant_id=' + encodeURIComponent(state.tenantId) : base + '?' + viewQS);
+                studio.setAttribute('href', href);
+            }
         }
 
         function brandColor(id, fallback) {

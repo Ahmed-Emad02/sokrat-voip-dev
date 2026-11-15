@@ -323,6 +323,7 @@ CREATE TABLE IF NOT EXISTS \`sokrat_federation_remote_contacts\` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;" 2>/dev/null || true
 
 ensure_db_column "gsm_dongles" "dynamic_enabled" "TINYINT(1) NOT NULL DEFAULT 0"
+ensure_db_column "gsm_dongles" "mapping_override" "ENUM('auto','disabled') NOT NULL DEFAULT 'auto'"
 ensure_db_column "employee_extras" "is_group_admin" "TINYINT(1) NOT NULL DEFAULT 0"
 ensure_db_column "storage_settings" "auto_purge_days" "INT DEFAULT 90"
 ensure_db_column "storage_settings" "gdrive_enabled" "TINYINT(1) DEFAULT 0"
@@ -428,6 +429,23 @@ cat > /etc/NetworkManager/conf.d/99-unmanaged-wwan.conf << 'EOF'
 unmanaged-devices=interface-name:ww*
 EOF
 nmcli general reload 2>/dev/null || systemctl reload NetworkManager 2>/dev/null || true
+
+# chan_dongle needs write access to /var/lock for its tty lock files. The
+# group change takes effect after the Asterisk restart later in this script.
+if getent group lock >/dev/null 2>&1; then
+    usermod -a -G lock,dialout asterisk 2>/dev/null || true
+    chgrp lock /run/lock 2>/dev/null || true
+    chmod 775 /run/lock 2>/dev/null || true
+    if command -v setfacl >/dev/null 2>&1; then
+        setfacl -m u:asterisk:rwx /run/lock 2>/dev/null || true
+    fi
+    mkdir -p /etc/tmpfiles.d
+    cat > /etc/tmpfiles.d/sokrat-lock.conf << 'EOF_LOCK'
+d /run/lock 0775 root lock -
+L /var/lock - - - - ../run/lock
+EOF_LOCK
+    systemd-tmpfiles --create /etc/tmpfiles.d/sokrat-lock.conf 2>/dev/null || true
+fi
 
 # Ensure callwaiting=no and u2diag=-1 in /etc/asterisk/dongle.conf if present
 if [ -f /etc/asterisk/dongle.conf ]; then

@@ -30,6 +30,8 @@
     var muteBtn = document.getElementById('guestMuteBtn');
     var muteLabel = document.getElementById('guestMuteLabel');
     var endBtn = document.getElementById('guestEndBtn');
+    var inCallAudioBtn = document.getElementById('guestInCallAudioBtn');
+    var langSwitch = document.getElementById('guestLangSwitch');
     var audioSettingsBtn = document.getElementById('guestAudioSettingsBtn');
     var audioModal = document.getElementById('guestAudioModal');
     var audioCloseBtn = document.getElementById('guestAudioCloseBtn');
@@ -64,15 +66,50 @@
     audioEl.style.display = 'none';
     document.body.appendChild(audioEl);
 
+    var signalVisual = document.querySelector('.call-visual');
+    var signalBars = signalVisual ? Array.prototype.slice.call(signalVisual.querySelectorAll('.signal-bars span')) : [];
+    var visualizerContext = null;
+    var visualizerAnalyser = null;
+    var visualizerFrame = null;
+
     function setStatus(text, isError) {
         if (!statusEl) return;
         statusEl.textContent = text || '';
         statusEl.classList.toggle('error', Boolean(isError));
     }
 
+    function updateProgress(state) {
+        var steps = {
+            call: document.querySelector('[data-progress="call"]'),
+            connect: document.querySelector('[data-progress="connect"]'),
+            talk: document.querySelector('[data-progress="talk"]')
+        };
+        var arrows = {
+            1: document.querySelector('[data-progress-arrow="1"]'),
+            2: document.querySelector('[data-progress-arrow="2"]')
+        };
+        function mark(step, status) {
+            if (!step) return;
+            step.classList.remove('is-active', 'is-done');
+            if (status) step.classList.add(status);
+        }
+        function markArrow(arrow, done) {
+            if (!arrow) return;
+            arrow.classList.toggle('is-done', Boolean(done));
+        }
+        var establishing = state === 'connecting' || state === 'ringing';
+        var connected = state === 'connected';
+        mark(steps.call, connected || establishing ? 'is-done' : 'is-active');
+        mark(steps.connect, connected ? 'is-done' : (establishing ? 'is-active' : ''));
+        mark(steps.talk, connected ? 'is-active' : '');
+        markArrow(arrows[1], connected || establishing);
+        markArrow(arrows[2], connected);
+    }
+
     function setState(state, options) {
         options = options || {};
         cardEl.dataset.state = state;
+        updateProgress(state);
         var titles = {
             idle: labels.callPrompt || 'Call the team',
             connecting: labels.connecting || 'Connecting...',
@@ -148,6 +185,7 @@
         if (finished) return;
         finished = true;
         clearPreviewTimers();
+        stopVisualizer();
         var duration = startedAt ? (Date.now() - startedAt) / 1000 : 0;
         stopTimer();
         if (session) endSessionReport(state === 'ended' ? 'ended' : 'failed', duration);
@@ -194,6 +232,7 @@
     function cancelCall() {
         if (finished) return;
         clearPreviewTimers();
+        stopVisualizer();
         var duration = startedAt ? (Date.now() - startedAt) / 1000 : 0;
         stopTimer();
         if (abortController) {
@@ -227,6 +266,51 @@
         audioEl.setSinkId(selectedAudioOutput || '').catch(function () {});
     }
 
+    function stopVisualizer() {
+        if (visualizerFrame) cancelAnimationFrame(visualizerFrame);
+        visualizerFrame = null;
+        if (visualizerContext) {
+            try { visualizerContext.close(); } catch (_) {}
+        }
+        visualizerContext = null;
+        visualizerAnalyser = null;
+        if (signalVisual) signalVisual.classList.remove('is-live');
+        signalBars.forEach(function (bar) { bar.style.transform = ''; });
+    }
+
+    function startVisualizer(stream) {
+        stopVisualizer();
+        if (!stream || !signalBars.length) return;
+        var AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextCtor) return;
+        try {
+            visualizerContext = new AudioContextCtor();
+            var source = visualizerContext.createMediaStreamSource(stream);
+            visualizerAnalyser = visualizerContext.createAnalyser();
+            visualizerAnalyser.fftSize = 64;
+            visualizerAnalyser.smoothingTimeConstant = 0.78;
+            source.connect(visualizerAnalyser);
+            if (visualizerContext.state === 'suspended') {
+                visualizerContext.resume().catch(function () {});
+            }
+            if (signalVisual) signalVisual.classList.add('is-live');
+            var data = new Uint8Array(visualizerAnalyser.frequencyBinCount);
+            var draw = function () {
+                if (!visualizerAnalyser) return;
+                visualizerAnalyser.getByteFrequencyData(data);
+                signalBars.forEach(function (bar, i) {
+                    var idx = Math.min(data.length - 1, Math.floor((i + 1) * data.length / (signalBars.length + 1)));
+                    var level = Math.max(0.15, data[idx] / 255);
+                    bar.style.transform = 'scaleY(' + (0.35 + level * 1.9).toFixed(3) + ')';
+                });
+                visualizerFrame = requestAnimationFrame(draw);
+            };
+            draw();
+        } catch (_) {
+            stopVisualizer();
+        }
+    }
+
     function attachRemoteAudio(rtc) {
         rtc.on('peerconnection', function (data) {
             var pc = data && data.peerconnection;
@@ -237,6 +321,7 @@
                     : new MediaStream([event.track]);
                 audioEl.srcObject = stream;
                 applyAudioOutput();
+                startVisualizer(stream);
                 audioEl.play().then(function () {
                     if (audioBtn) audioBtn.classList.add('hidden');
                 }).catch(function () {
@@ -538,6 +623,9 @@
         var params = new URLSearchParams(window.location.search);
         if (params.get('lab') !== '1') return;
         labMount.appendChild(labTemplate.content.cloneNode(true));
+        // Hide the field panel until configured fields are supplied by the studio.
+        var emptyPanel = labMount.querySelector('.preview-fields');
+        if (emptyPanel) emptyPanel.style.display = 'none';
     }
 
     if (callBtn) callBtn.addEventListener('click', beginCall);
@@ -557,6 +645,14 @@
         } catch (_) {}
     });
     if (audioSettingsBtn) audioSettingsBtn.addEventListener('click', openAudioSettings);
+    if (inCallAudioBtn) inCallAudioBtn.addEventListener('click', openAudioSettings);
+    if (langSwitch) {
+        try {
+            var langUrl = new URL(window.location.href);
+            langUrl.searchParams.set('lang', lang === 'ar' ? 'en' : 'ar');
+            langSwitch.href = langUrl.pathname + langUrl.search;
+        } catch (_) {}
+    }
     if (audioCloseBtn) audioCloseBtn.addEventListener('click', closeAudioSettings);
     if (audioModal) {
         audioModal.addEventListener('click', function (event) { if (event.target === audioModal) closeAudioSettings(); });
