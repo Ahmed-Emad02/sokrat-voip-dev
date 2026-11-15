@@ -13,6 +13,7 @@ No secret is printed. Does not alter FRP, Asterisk, TURN or existing call paths.
 """
 import argparse
 import datetime
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -101,6 +102,11 @@ def link_daemon():
     return daemon
 
 
+def daemon_digest(daemon):
+    """Content digest of the trusted plain-udp renderer."""
+    return hashlib.sha256(daemon.read_bytes()).hexdigest()
+
+
 def validate_material(material, plan, role, transport=None):
     validate_plan(plan)
     if role not in ('gateway', 'pbx'):
@@ -187,7 +193,12 @@ def install(document, role, start=False):
     changed = write(directory / 'plan.json', json.dumps(plan, sort_keys=True) + '\n', 0o600) or changed
     changed = write(directory / 'transport.json', json.dumps(transport, sort_keys=True) + '\n', 0o600) or changed
     kind = 'plain UDP' if plain else ('direct UDP' if transport is not None else 'reverse TLS')
-    content = MARKER + f'''[Unit]
+    # The plain renderer is a host file, not unit content. Recording its digest
+    # here makes an upgrade that only replaces udp-media-link.py change
+    # generated state, so convergence restarts the running link instead of
+    # leaving stale code in place.
+    renderer = ('# renderer-sha256=' + daemon_digest(daemon) + '\n') if plain else ''
+    content = MARKER + renderer + f'''[Unit]
 Description=Sokrat isolated {kind} media {plan['pbxId']}
 After=network-online.target
 Wants=network-online.target

@@ -48,12 +48,20 @@ HEADER_SIZE = HEADER.size
 TAG_SIZE = 32
 MAX_PAYLOAD = 1400
 MAX_FRAME = HEADER_SIZE + TAG_SIZE + MAX_PAYLOAD
+# Keeps control frames clear of the 64-68 byte payload band the Sales path drops.
+CONTROL_PADDING = 48
 REPLAY_WINDOW = 128
 CANDIDATE_TTL = 5.0
 PENDING_TTL = 5.0
 RETRY_INTERVAL = 1.0
+# Ten seconds matches the long-standing default on paths that carry the
+# authenticated link; padded control frames are what keep the mapping alive, not
+# a shorter cadence.
 KEEPALIVE_INTERVAL = 10.0
 PEER_TIMEOUT = 45.0
+# A tuple that carried no authenticated frame for three keepalives is presumed
+# stalled on the path; the PBX escapes it by binding a fresh source port.
+CLIENT_REBIND_TIMEOUT = 3 * KEEPALIVE_INTERVAL
 CONFIG_KEYS = frozenset(("role", "plan", "transport", "keyFile", "up", "down"))
 KEY_RE = re.compile(r"\A[a-f0-9]{64}\n\Z")
 IFNAMSIZ = 16
@@ -101,6 +109,32 @@ def pack_frame(tx_key, frame_type, sequence, session, payload):
                          len(payload))
     body = header + payload
     return body + hmac.new(tx_key, body, hashlib.sha256).digest()
+
+
+def pad_control(payload):
+    """Pad a control frame payload with zeros.
+
+    The Sales path silently drops datagrams whose payload is 64-68 bytes once
+    a few have crossed in either direction, and every unpadded control frame
+    sits exactly in that band. Padding to CONTROL_PADDING keeps authenticated
+    control traffic flowing without changing any state machine.
+    """
+    missing = CONTROL_PADDING - len(payload)
+    if missing <= 0:
+        return payload
+    return payload + b"\x00" * missing
+
+
+def unpad_control(payload, expected):
+    """Return the semantic control payload, or None if padding is not zero.
+
+    Unpadded peers stay compatible: an absent tail is also valid padding.
+    """
+    if len(payload) < expected:
+        return None
+    if payload[expected:].strip(b"\x00"):
+        return None
+    return payload[:expected]
 
 
 def parse_frame(rx_key, data):
@@ -224,7 +258,7 @@ class GatewayLink(object):
         except ProtocolError:
             return
         if frame_type == HELLO:
-            if sequence != 0 or payload:
+            if sequence != 0 or unpad_control(payload, 0) is None:
                 return
             candidate = self.candidate
             if (candidate is None or now > candidate["expires"]
@@ -237,10 +271,14 @@ class GatewayLink(object):
                     "expires": now + CANDIDATE_TTL,
                 }
                 self.candidate = candidate
-            self._emit(CHALLENGE, 0, session, candidate["server_nonce"], address)
+            self._emit(CHALLENGE, 0, session,
+                       pad_control(candidate["server_nonce"]), address)
             return
         if frame_type == RESPONSE:
-            if sequence != 0 or len(payload) != 16:
+            if sequence != 0:
+                return
+            nonce = unpad_control(payload, 16)
+            if nonce is None:
                 return
             candidate = self.candidate
             if candidate is not None and now > candidate["expires"]:
@@ -248,22 +286,23 @@ class GatewayLink(object):
                 candidate = None
             if (candidate is not None and address == candidate["address"]
                     and session == candidate["client_nonce"]
-                    and payload == candidate["server_nonce"]):
-                sid = session_id(self.key, session, payload)
+                    and nonce == candidate["server_nonce"]):
+                sid = session_id(self.key, session, nonce)
                 self.active_address = address
                 self.active_session = sid
                 self.send_sequence = 0
                 self.replay.reset()
                 self.last_received = now
                 self.candidate = None
-                self._emit(ACK, 0, sid, b"", address)
+                self._emit(ACK, 0, sid, pad_control(b""), address)
                 return
             if self.active_address == address and self.active_session is not None:
-                sid = session_id(self.key, session, payload)
+                sid = session_id(self.key, session, nonce)
                 if hmac.compare_digest(sid, self.active_session):
                     # Lost ACK: resend it without touching the replay state or
                     # the sender sequence of an already active session.
-                    self._emit(ACK, 0, self.active_session, b"", address)
+                    self._emit(ACK, 0, self.active_session, pad_control(b""),
+                               address)
             return
         if frame_type not in (DATA, KEEPALIVE):
             return
@@ -278,8 +317,8 @@ class GatewayLink(object):
                 self.tun_write(packet)
         else:
             self.send_sequence += 1
-            self._emit(KEEPALIVE, self.send_sequence, self.active_session, b"",
-                       self.active_address)
+            self._emit(KEEPALIVE, self.send_sequence, self.active_session,
+                       pad_control(b""), self.active_address)
 
     def send_data(self, payload):
         if self.active_address is None or self.active_session is None:
@@ -345,7 +384,7 @@ class ClientLink(object):
         self.next_retry = now + RETRY_INTERVAL
         self.last_sent = now
         self.send_sequence = 0
-        self._emit(HELLO, 0, self.client_nonce, b"")
+        self._emit(HELLO, 0, self.client_nonce, pad_control(b""))
 
     def handle_datagram(self, data, address):
         if address != self.gateway_address:
@@ -360,20 +399,23 @@ class ClientLink(object):
                 return
             if sequence != 0 or session != self.client_nonce:
                 return
-            if len(payload) != 16 or self.server_nonce is not None:
+            nonce = unpad_control(payload, 16)
+            if nonce is None or self.server_nonce is not None:
                 return
-            self.server_nonce = payload
+            self.server_nonce = nonce
             self.next_retry = now + RETRY_INTERVAL
             self.last_sent = now
-            self._emit(RESPONSE, 0, self.client_nonce, self.server_nonce)
+            self._emit(RESPONSE, 0, self.client_nonce,
+                       pad_control(self.server_nonce))
             return
         if frame_type == ACK:
             if not self.pending or self.server_nonce is None:
                 return
             if now - self.pending_started >= PENDING_TTL:
                 return
-            if sequence != 0 or payload or session != session_id(
-                    self.key, self.client_nonce, self.server_nonce):
+            if (sequence != 0 or unpad_control(payload, 0) is None
+                    or session != session_id(self.key, self.client_nonce,
+                                             self.server_nonce)):
                 return
             self.active = True
             self.pending = False
@@ -416,9 +458,10 @@ class ClientLink(object):
                 self.next_retry = now + RETRY_INTERVAL
                 self.last_sent = now
                 if self.server_nonce is None:
-                    self._emit(HELLO, 0, self.client_nonce, b"")
+                    self._emit(HELLO, 0, self.client_nonce, pad_control(b""))
                 else:
-                    self._emit(RESPONSE, 0, self.client_nonce, self.server_nonce)
+                    self._emit(RESPONSE, 0, self.client_nonce,
+                               pad_control(self.server_nonce))
             return
         if not self.active:
             return
@@ -428,7 +471,8 @@ class ClientLink(object):
         if now - self.last_sent >= KEEPALIVE_INTERVAL:
             self.send_sequence += 1
             self.last_sent = now
-            self._emit(KEEPALIVE, self.send_sequence, self.session, b"")
+            self._emit(KEEPALIVE, self.send_sequence, self.session,
+                       pad_control(b""))
 
     def timeout(self, now):
         limit = 1.0
@@ -574,6 +618,28 @@ def _send(sock, data, address):
             raise
 
 
+def client_rebind_due(now, created, last_received):
+    """True when an unchanged client socket has seen no authenticated frame."""
+    return now - max(created, last_received) >= CLIENT_REBIND_TIMEOUT
+
+
+def rebind_client_socket(sock):
+    """Return a bound nonblocking replacement for a stalled client socket.
+
+    The replacement binds before the old socket closes so the operating system
+    cannot hand back the stalled port; a failed replacement leaks nothing.
+    """
+    replacement = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        replacement.bind(("", 0))
+        replacement.setblocking(False)
+    except Exception:
+        replacement.close()
+        raise
+    sock.close()
+    return replacement
+
+
 def _write_tun(tun, payload):
     try:
         os.write(tun, payload)
@@ -610,6 +676,7 @@ def serve(config):
             sock.bind(("", 0))
             link = ClientLink(config["key"], plan, resolve_gateway(transport))
         sock.setblocking(False)
+        socket_created = link.clock()
         link.emit = lambda data, address: _send(sock, data, address)
         link.tun_write = lambda payload: _write_tun(tun, payload)
         sys.stderr.write("udp-media-link: %s %s port %d\n" % (
@@ -619,6 +686,12 @@ def serve(config):
             link.start()
         while not STOP:
             now = link.clock()
+            # The emit closure reads this local, so replacing it rebinds sends.
+            if role == "pbx" and client_rebind_due(now, socket_created,
+                                                   link.last_received):
+                sock = rebind_client_socket(sock)
+                socket_created = now
+                link.start()
             link.poll()
             readable, _, _ = select.select([sock, tun], [], [], link.timeout(now))
             if sock in readable:
