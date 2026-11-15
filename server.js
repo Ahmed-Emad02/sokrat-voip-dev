@@ -12171,8 +12171,8 @@ function annotateE173VoiceWarnings(devices) {
         if (warning) {
             device.voiceEnableWarning = {
                 attempts: warning.attempts,
-                messageEn: `E173 voice activation failed after ${warning.attempts} attempts. Audio may be missing on this dongle; retry AT^CVOICE=0 or restart the modem.`,
-                messageAr: `فشل تفعيل صوت E173 بعد ${warning.attempts} محاولات. قد يكون الصوت مفقوداً على هذا الدونجل؛ أعد محاولة AT^CVOICE=0 أو أعد تشغيل المودم.`
+                messageEn: `Voice activation failed after ${warning.attempts} attempts. Audio may be missing on this dongle; retry AT^CVOICE=0 or restart the modem.`,
+                messageAr: `فشل تفعيل الصوت بعد ${warning.attempts} محاولات. قد يكون الصوت مفقوداً على هذا الدونجل؛ أعد محاولة AT^CVOICE=0 أو أعد تشغيل المودم.`
             };
         }
     }

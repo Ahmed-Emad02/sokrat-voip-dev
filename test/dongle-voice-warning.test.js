@@ -17,6 +17,11 @@ test('E173 voice warning tracks failure after three attempts and clears on init'
     assert.deepEqual(parseE173VoiceWarningState(log), { dongle1: { attempts: 3 } });
 });
 
+test('generic voice warning matches failures from non-E173 dongles', () => {
+    const log = '[2026-11-15 19:00:00] WARNING[x] at_response.c: [dongle2] AT^CVOICE=0 failed after 3 attempts; voice may remain disabled';
+    assert.deepEqual(parseE173VoiceWarningState(log), { dongle2: { attempts: 3 } });
+});
+
 test('E173 voice warning clears on a successful voice-enable log', () => {
     const log = [
         '[2026-11-15 19:00:00] WARNING[x] at_response.c: [dongle0] E173 AT^CVOICE=0 failed after 3 attempts; voice may remain disabled',

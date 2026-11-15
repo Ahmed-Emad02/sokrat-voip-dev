@@ -3441,7 +3441,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                     <div class="mx-3.5 sm:mx-4 mt-3 rounded-xl border border-amber-500/60 bg-amber-500/15 px-3 py-2 text-[10px] text-[var(--text-primary)] flex items-start gap-2">
                         <svg class="shrink-0 mt-0.5" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
                         <div class="flex-1 min-w-0">
-                            <div class="font-bold">${isRtl ? 'تحذير صوت E173' : 'E173 Voice Warning'}</div>
+                            <div class="font-bold">${isRtl ? 'تحذير تفعيل الصوت' : 'Voice Enable Warning'}</div>
                             <div class="font-medium leading-relaxed">${escapeHtml(message || '')}</div>
                         </div>
                         ${isRootUser ? `<button type="button" onclick="runAtDiag('${escapeHtml(dongleKey)}', 'AT^CVOICE=0')" class="shrink-0 px-2 py-1 rounded-lg border border-amber-500/60 bg-amber-500/15 hover:bg-amber-500/25 text-[var(--text-primary)] font-mono font-bold cursor-pointer">AT^CVOICE=0</button>` : ''}

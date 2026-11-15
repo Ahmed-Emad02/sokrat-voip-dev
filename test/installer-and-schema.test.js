@@ -421,21 +421,22 @@ test('chan_dongle CLCC answer polling is packaged for every install path', () =>
     assert.ok(binary.length > 200000, 'bundle binary must be present and non-empty');
 });
 
-test('E173 voice activation and bounded retry are packaged for all install paths', () => {
+test('voice activation and bounded retry are packaged for all install paths', () => {
     const rootDir = path.join(__dirname, '..');
-    const patchPath = path.join(rootDir, 'asterisk', 'chan_dongle-e173-voice.patch');
-    assert.ok(fs.existsSync(patchPath), 'E173 voice patch must exist');
+    const patchPath = path.join(rootDir, 'asterisk', 'chan_dongle-voice-enable.patch');
+    assert.ok(fs.existsSync(patchPath), 'voice enable patch must exist');
     const patch = fs.readFileSync(patchPath, 'utf8');
-    assert.match(patch, /AT\^CVOICE=0/, 'patch must activate E173 voice');
-    assert.match(patch, /strstr\(pvt->model, "E173"\)/, 'voice activation must be E173-only');
+    assert.match(patch, /AT\^CVOICE=0/, 'patch must activate voice');
+    assert.doesNotMatch(patch, /strstr\(pvt->model, "E173"\)/, 'voice activation must not be E173-only');
+    assert.match(patch, /Enabling voice with AT\^CVOICE=0/, 'patch must enable voice for every dongle');
     assert.match(patch, /E173_VOICE_MAX_ATTEMPTS/, 'patch must bound retries');
     assert.match(patch, /failed; retrying/, 'patch must retry a failed voice enable');
 
     const helper = fs.readFileSync(path.join(rootDir, 'scripts', 'dongle-module.sh'), 'utf8');
-    assert.match(helper, /chan_dongle-e173-voice\.patch/, 'shared dongle helper must apply the E173 voice patch');
-    assert.match(helper, /9b4d1eac50bea4b294c0c8d2670b140af70e180a0e243d22c026407fc46ea174/, 'bundle hash must pin the E173 module');
+    assert.match(helper, /chan_dongle-voice-enable\.patch/, 'shared dongle helper must apply the voice enable patch');
+    assert.match(helper, /2d11c69815d424ff3d8a90d25c079c59d02bb2a87f180be7f4ea28142fa5e844/, 'bundle hash must pin the generic voice module');
 
     const binary = fs.readFileSync(path.join(rootDir, 'installer-bundle', 'binaries', 'chan_dongle.so'));
-    assert.ok(binary.includes(Buffer.from('E173 detected, enabling voice with AT^CVOICE=0')), 'bundle binary must include E173 voice activation');
-    assert.ok(binary.includes(Buffer.from('E173 AT^CVOICE=0 failed; retrying')), 'bundle binary must include E173 retry handling');
+    assert.ok(binary.includes(Buffer.from('Enabling voice with AT^CVOICE=0')), 'bundle binary must include generic voice activation');
+    assert.ok(binary.includes(Buffer.from('AT^CVOICE=0 failed; retrying')), 'bundle binary must include generic retry handling');
 });

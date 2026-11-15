@@ -22,11 +22,11 @@
  }
  
  /*!
-+ * \brief Enable voice audio on E173/HiSilicon firmware
++ * \brief Enable voice audio on every dongle during initialization.
 + *
-+ * Firmware 21.x can report voice support while the PCM/audio path remains
-+ * disabled.  AT^CVOICE=0 is the documented E173 voice-enable command.  It is
-+ * issued only for E173 models so E153 and other dongles are untouched.
++ * Firmware can report voice support while the PCM/audio path remains disabled.
++ * AT^CVOICE=0 is sent for every dongle; unsupported devices simply fail the
++ * bounded retry path.
 + */
 +EXPORT_DEF int at_enqueue_cvoice_enable(struct cpvt *cpvt)
 +{
@@ -46,7 +46,7 @@
   * \return 0 on success
 --- a/at_response.c
 +++ b/at_response.c
-@@ -35,6 +35,25 @@
+@@ -35,6 +35,22 @@
  #define CLCC_CALL_TYPE_DATA	1
  #define CLCC_CALL_TYPE_FAX	2
  
@@ -55,36 +55,33 @@
 +
 +static void maybe_enable_e173_voice(struct pvt* pvt)
 +{
-+	if (pvt->model[0] && strstr(pvt->model, "E173") != NULL)
++	if (pvt->e173_voice_attempts >= E173_VOICE_MAX_ATTEMPTS)
 +	{
-+		if (pvt->e173_voice_attempts >= E173_VOICE_MAX_ATTEMPTS)
-+		{
-+			ast_log (LOG_WARNING, "[%s] E173 voice enable exhausted %u attempts\n", PVT_ID(pvt), pvt->e173_voice_attempts);
-+			return;
-+		}
-+		pvt->e173_voice_attempts++;
-+		ast_debug (1, "[%s] E173 detected, enabling voice with AT^CVOICE=0 (attempt %u/%u)\n", PVT_ID(pvt), pvt->e173_voice_attempts, E173_VOICE_MAX_ATTEMPTS);
-+		if (at_enqueue_cvoice_enable(&pvt->sys_chan))
-+			ast_log (LOG_WARNING, "[%s] Could not enqueue E173 voice enable\n", PVT_ID(pvt));
++		ast_log (LOG_WARNING, "[%s] Voice enable exhausted %u attempts\n", PVT_ID(pvt), pvt->e173_voice_attempts);
++		return;
 +	}
++	pvt->e173_voice_attempts++;
++	ast_debug (1, "[%s] Enabling voice with AT^CVOICE=0 (attempt %u/%u)\n", PVT_ID(pvt), pvt->e173_voice_attempts, E173_VOICE_MAX_ATTEMPTS);
++	if (at_enqueue_cvoice_enable(&pvt->sys_chan))
++		ast_log (LOG_WARNING, "[%s] Could not enqueue voice enable\n", PVT_ID(pvt));
 +}
 +
  static const at_response_t at_responses_list[] = {
  
  	AT_RESPONSES_TABLE(AT_RES_AS_STRUCTLIST)
-@@ -141,6 +160,11 @@
+@@ -141,6 +157,11 @@
  					}
  				}
  				break;
 +			case CMD_AT_CVOICE_ENABLE:
-+				ast_debug (1, "[%s] E173 voice audio enabled\n", PVT_ID(pvt));
++				ast_debug (1, "[%s] Voice audio enabled\n", PVT_ID(pvt));
 +				pvt->has_voice = 1;
 +				pvt->e173_voice_attempts = 0;
 +				break;
  			case CMD_AT_QPCMV:
  				ast_debug (1, "[%s] Dongle has Quectel voice support\n", PVT_ID(pvt));
  				pvt->has_voice = 1;
-@@ -175,6 +199,7 @@
+@@ -175,6 +196,7 @@
  					pvt->initialized = 1;
  					ast_verb (3, "[%s] Dongle initialized and ready\n", PVT_ID(pvt));
  					manager_event_device_status(PVT_ID(pvt), "Initialize");
@@ -92,19 +89,19 @@
  				}
  				break;
  
-@@ -395,6 +420,17 @@
+@@ -395,6 +417,17 @@
  				ast_debug(1, "[%s] Dongle has NO (CVOICE) voice support\n", PVT_ID(pvt));
  				pvt->has_voice = 0;
  				break;
 +			case CMD_AT_CVOICE_ENABLE:
 +				if (pvt->e173_voice_attempts < E173_VOICE_MAX_ATTEMPTS)
 +				{
-+					ast_log(LOG_WARNING, "[%s] E173 AT^CVOICE=0 failed; retrying (%u/%u)\n", PVT_ID(pvt), pvt->e173_voice_attempts + 1, E173_VOICE_MAX_ATTEMPTS);
++					ast_log(LOG_WARNING, "[%s] AT^CVOICE=0 failed; retrying (%u/%u)\n", PVT_ID(pvt), pvt->e173_voice_attempts + 1, E173_VOICE_MAX_ATTEMPTS);
 +					maybe_enable_e173_voice(pvt);
 +				}
 +				else
 +				{
-+					ast_log(LOG_WARNING, "[%s] E173 AT^CVOICE=0 failed after %u attempts; voice may remain disabled\n", PVT_ID(pvt), pvt->e173_voice_attempts);
++					ast_log(LOG_WARNING, "[%s] AT^CVOICE=0 failed after %u attempts; voice may remain disabled\n", PVT_ID(pvt), pvt->e173_voice_attempts);
 +				}
 +				break;
  			case CMD_AT_QPCMV:

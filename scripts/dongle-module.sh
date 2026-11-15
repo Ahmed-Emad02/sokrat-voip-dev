@@ -16,7 +16,7 @@ SOKRAT_CHAN_DONGLE_COMMIT="${SOKRAT_CHAN_DONGLE_COMMIT:-7db8e75bc2b7c81b173e1bb4
 # Release-pinned module shipped in installer-bundle/binaries/chan_dongle.so.
 # This digest is mandatory for bundle installs only: compiler output from a
 # source build is not byte-identical and is never compared with it.
-SOKRAT_CHAN_DONGLE_BUNDLE_SHA256="9b4d1eac50bea4b294c0c8d2670b140af70e180a0e243d22c026407fc46ea174"
+SOKRAT_CHAN_DONGLE_BUNDLE_SHA256="2d11c69815d424ff3d8a90d25c079c59d02bb2a87f180be7f4ea28142fa5e844"
 
 # Strip URL userinfo (user:password@) from any line passed on stdin. Used for
 # every origin string that reaches installer output, including git's own
@@ -310,26 +310,26 @@ dongle_module_build_source() {
             echo "  Applied Sokrat chan_dongle TX buffer reset patch"
         fi
 
-        # E173 firmware 21.x can report voice support while its PCM path is
-        # disabled. Enable it explicitly for E173 models only; E153 and other
-        # dongles never enter this conditional path.
-        e173_voice_patch="${patch_file%/*}/chan_dongle-e173-voice.patch"
-        if [ -f "$e173_voice_patch" ] && ! grep -q "E173_VOICE_MAX_ATTEMPTS" at_response.c 2>/dev/null; then
+        # Some firmware reports voice support while its PCM path is disabled.
+        # Enable voice explicitly for every dongle; unsupported devices fail
+        # through the bounded retry path without aborting initialization.
+        voice_patch="${patch_file%/*}/chan_dongle-voice-enable.patch"
+        if [ -f "$voice_patch" ] && ! grep -q "E173_VOICE_MAX_ATTEMPTS" at_response.c 2>/dev/null; then
             if command -v patch >/dev/null 2>&1; then
-                patch -p1 -N < "$e173_voice_patch" >>"$log_file" 2>&1 || {
-                    echo "  ERROR: chan_dongle E173 voice patch did not apply" >&2
+                patch -p1 -N < "$voice_patch" >>"$log_file" 2>&1 || {
+                    echo "  ERROR: chan_dongle voice enable patch did not apply" >&2
                     exit 1
                 }
-            elif git apply --check "$e173_voice_patch" >/dev/null 2>&1; then
-                git apply "$e173_voice_patch" || {
-                    echo "  ERROR: chan_dongle E173 voice patch did not apply" >&2
+            elif git apply --check "$voice_patch" >/dev/null 2>&1; then
+                git apply "$voice_patch" || {
+                    echo "  ERROR: chan_dongle voice enable patch did not apply" >&2
                     exit 1
                 }
             else
-                echo "  ERROR: chan_dongle E173 voice patch does not apply" >&2
+                echo "  ERROR: chan_dongle voice enable patch does not apply" >&2
                 exit 1
             fi
-            echo "  Applied Sokrat chan_dongle E173 voice patch"
+            echo "  Applied Sokrat chan_dongle voice enable patch"
         fi
 
         cp "$header_file" ./dongle_rx_condition.h || exit 1
