@@ -3672,10 +3672,9 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
 
                             <!-- Col 4: State Status Pill -->
                             <div class="flex items-center">
-                                <span class="dongle-status-pill inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[10px] font-black uppercase tracking-wider">
-                                    <span class="dongle-status-dot h-1.5 w-1.5 rounded-full ${state.badge.dot}${state.animate ? ' animate-pulse' : ''} shrink-0"></span>
-                                    ${escapeHtml(state.label)}
-                                </span>
+                                    <span class="dongle-status-pill inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[10px] font-black uppercase tracking-wider">
+                                            ${escapeHtml(state.label)}
+                                        </span>
                             </div>
 
                             <!-- Col 5: Signal Level Bars -->
@@ -3716,7 +3715,6 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                                     </div>
                                     <div class="flex items-center gap-1.5 shrink-0">
                                         <span class="dongle-status-pill inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[10px] font-black uppercase tracking-wider">
-                                            <span class="dongle-status-dot h-1.5 w-1.5 rounded-full ${state.badge.dot}${state.animate ? ' animate-pulse' : ''} shrink-0"></span>
                                             ${escapeHtml(state.label)}
                                         </span>
                                         <span class="px-2 py-1 rounded-lg bg-transparent border border-[var(--border-primary)] text-[9px] font-bold text-[var(--text-muted)]">${isRtl ? 'المجموعة' : 'Group'} ${escapeHtml(dev.Group || '0')}</span>
@@ -3806,7 +3804,6 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                                     </div>
                                     <div class="flex items-center gap-2 shrink-0 self-center">
                                         <span class="dongle-status-pill inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs sm:text-sm leading-none font-black uppercase tracking-wider">
-                                            <span class="dongle-status-dot h-2 w-2 rounded-full ${state.badge.dot}${state.animate ? ' animate-pulse' : ''} shrink-0"></span>
                                             ${escapeHtml(state.label)}
                                         </span>
                                         <div class="flex items-center gap-2.5" title="${escapeHtml(signal.level)} · ${signal.rssi}/31">

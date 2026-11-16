@@ -19246,6 +19246,26 @@ app.get('/api/config/trunks', async (req, res) => {
             }
         }
 
+        const outboundRoutesByTrunk = new Map();
+        try {
+            const [routeRows] = await pool.query(`
+                SELECT rt.trunk_id, r.route_id, r.name
+                FROM \`asterisk\`.\`outbound_route_trunks\` rt
+                JOIN \`asterisk\`.\`outbound_routes\` r ON r.route_id = rt.route_id
+                ORDER BY r.name ASC, r.route_id ASC
+            `);
+            for (const row of routeRows || []) {
+                const key = String(row.trunk_id);
+                if (!outboundRoutesByTrunk.has(key)) outboundRoutesByTrunk.set(key, []);
+                const list = outboundRoutesByTrunk.get(key);
+                if (!list.some(route => String(route.route_id) === String(row.route_id))) {
+                    list.push({ route_id: row.route_id, name: row.name || `Route #${row.route_id}` });
+                }
+            }
+        } catch (_) {
+            // Older schemas may not have route associations; return the trunks anyway.
+        }
+
         for (const trunk of trunks) {
             const ruleRows = dialPatternsByTrunk.get(String(trunk.trunkid)) || [];
             trunk.dialpatterns = ruleRows.map(row => ({
@@ -19254,6 +19274,7 @@ app.get('/api/config/trunks', async (req, res) => {
                 pattern: row.match_pattern_pass || ''
             }));
             trunk.dialrules = trunk.dialpatterns;
+            trunk.outboundRoutes = outboundRoutesByTrunk.get(String(trunk.trunkid)) || [];
             trunk.host = '';
             trunk.username = '';
             trunk.secret = '';
