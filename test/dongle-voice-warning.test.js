@@ -30,6 +30,31 @@ test('E173 voice warning clears on a successful voice-enable log', () => {
     assert.deepEqual(parseE173VoiceWarningState(log), {});
 });
 
+test('enabled AT^CVOICE? query suppresses stale enable-command failures', () => {
+    const log = [
+        '[2026-11-15 19:00:00] VERBOSE[x] at_response.c: [dongle1] Got Response for user\'s command:\'^CVOICE:0,8000,16,20\'',
+        '[2026-11-15 19:01:00] VERBOSE[x] at_response.c: [dongle1] Dongle initialized and ready',
+        '[2026-11-15 19:01:02] WARNING[x] at_response.c: [dongle1] NONFATAL: AT^CVOICE=0 failed after 3 attempts; voice may remain disabled'
+    ].join('\n');
+    assert.deepEqual(parseE173VoiceWarningState(log), {});
+});
+
+test('a later enabled AT^CVOICE? query clears an existing warning', () => {
+    const log = [
+        '[2026-11-15 19:00:00] WARNING[x] at_response.c: [dongle1] NONFATAL: AT^CVOICE=0 failed after 3 attempts; voice may remain disabled',
+        '[2026-11-15 19:00:10] VERBOSE[x] at_response.c: [dongle1] Got Response for user\'s command:\'^CVOICE:0,8000,16,20\''
+    ].join('\n');
+    assert.deepEqual(parseE173VoiceWarningState(log), {});
+});
+
+test('a disabled AT^CVOICE? query does not suppress a later failure', () => {
+    const log = [
+        '[2026-11-15 19:00:00] VERBOSE[x] at_response.c: [dongle1] Got Response for user\'s command:\'^CVOICE:1,8000,16,20\'',
+        '[2026-11-15 19:00:10] WARNING[x] at_response.c: [dongle1] NONFATAL: AT^CVOICE=0 failed after 3 attempts; voice may remain disabled'
+    ].join('\n');
+    assert.deepEqual(parseE173VoiceWarningState(log), { dongle1: { attempts: 3 } });
+});
+
 test('non-fatal feature failures are surfaced but do not affect the dongle state', () => {
     const log = [
         '[2026-11-15 19:00:00] WARNING[x] at_response.c: [dongle0] NONFATAL: SMS unavailable; calls remain enabled',
