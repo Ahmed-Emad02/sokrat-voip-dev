@@ -271,6 +271,61 @@ test('reload verification reports the running module and fails for a stopped one
     assert.match(stillLoaded.stderr, /still running/);
 });
 
+test('installers use the already-loaded-safe RNNoise helper', () => {
+    for (const name of ['install.sh', 'installer-bundle/install-sokrat.sh']) {
+        const text = fs.readFileSync(path.join(root, name), 'utf8');
+        assert.match(text, /dongle_module_ensure_func_rnnoise/, `${name} must use the safe RNNoise helper`);
+        assert.doesNotMatch(text, /module load func_rnnoise/, `${name} must not call module load blindly`);
+        assert.doesNotMatch(text, /func_rnnoise\.so.*loaded into Asterisk/, `${name} must not claim success on a failed load`);
+    }
+});
+
+test('reload verification tolerates the systemctl restart pgrep race', t => {
+    const directory = sandbox(t);
+    const bin = path.join(directory, 'bin');
+    fs.mkdirSync(bin);
+    fs.writeFileSync(path.join(bin, 'pgrep'), [
+        '#!/bin/bash',
+        'if [ ! -f "$PGREP_STATE" ]; then touch "$PGREP_STATE"; exit 1; fi',
+        'exit 0',
+        '',
+    ].join('\n'), { mode: 0o755 });
+    fs.writeFileSync(path.join(bin, 'sleep'), '#!/bin/bash\nexit 0\n', { mode: 0o755 });
+    fs.writeFileSync(path.join(bin, 'asterisk'), [
+        '#!/bin/bash',
+        'printf "chan_dongle.so Huawei 3G Dongle Channel Driver 0 Running extended\\n"',
+        '',
+    ].join('\n'), { mode: 0o755 });
+    const env = {
+        PATH: `${bin}:${process.env.PATH}`,
+        PGREP_STATE: path.join(directory, 'pgrep-state'),
+    };
+    const result = runHelper('. "$1"; dongle_module_wait_running 1', [helper], env);
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /chan_dongle\.so is running/);
+});
+
+test('optional RNNoise helper treats an already-running module as success', t => {
+    const directory = sandbox(t);
+    const bin = path.join(directory, 'bin');
+    fs.mkdirSync(bin);
+    const callLog = path.join(directory, 'calls.log');
+    fs.writeFileSync(path.join(bin, 'asterisk'), [
+        '#!/bin/bash',
+        'printf "%s\\n" "$2" >> "$CALL_LOG"',
+        'case "$2" in',
+        '  "module show"*) printf "func_rnnoise.so RNNoise 0 Running core\\n"; exit 0 ;;',
+        '  "module load"*) exit 0 ;;',
+        'esac',
+        '',
+    ].join('\n'), { mode: 0o755 });
+    const env = { PATH: `${bin}:${process.env.PATH}`, CALL_LOG: callLog };
+    const result = runHelper('. "$1"; dongle_module_ensure_func_rnnoise asterisk', [helper], env);
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /already running/);
+    assert.doesNotMatch(fs.readFileSync(callLog, 'utf8'), /^module load/m);
+});
+
 test('reload verification waits for the CLI socket and fails closed if it never becomes ready', t => {
     const directory = sandbox(t);
     const bin = path.join(directory, 'bin');

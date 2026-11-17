@@ -1797,7 +1797,7 @@ elif command -v asterisk &>/dev/null && pgrep -x asterisk >/dev/null 2>&1; then
         echo "  ERROR: chan_dongle.so failed to load" >&2
         exit 1
     }
-    asterisk -rx "module load func_rnnoise.so" >/dev/null 2>&1 || true
+    dongle_module_ensure_func_rnnoise asterisk || true
 fi
 dongle_module_wait_running 20 || {
     echo "  ERROR: chan_dongle.so is not running after the reload" >&2

@@ -419,6 +419,41 @@ dongle_module_require_idle() {
     return 1
 }
 
+# Load optional func_rnnoise only when it is not already running. Asterisk
+# returns "Unable to load module" when a module is already loaded, which is
+# commonly mistaken for a real failure by installers.
+dongle_module_ensure_func_rnnoise() {
+    local ast="${1:-asterisk}"
+    local module_status=""
+
+    if ! command -v "$ast" >/dev/null 2>&1; then
+        echo "  WARNING: Asterisk CLI unavailable; func_rnnoise.so load is unverified" >&2
+        return 1
+    fi
+
+    module_status=$("$ast" -rx "module show like func_rnnoise.so" 2>/dev/null || true)
+    if printf '%s\n' "$module_status" | grep -Eq 'func_rnnoise\.so[[:space:]].*Running'; then
+        echo "  func_rnnoise.so already running"
+        return 0
+    fi
+
+    if "$ast" -rx "module load func_rnnoise.so" >/dev/null 2>&1; then
+        echo "  func_rnnoise.so loaded into Asterisk"
+        return 0
+    fi
+
+    # The load command can race the CLI or report "already loaded" as a
+    # failure. Re-read the module table before treating this as a real error.
+    module_status=$("$ast" -rx "module show like func_rnnoise.so" 2>/dev/null || true)
+    if printf '%s\n' "$module_status" | grep -Eq 'func_rnnoise\.so[[:space:]].*Running'; then
+        echo "  func_rnnoise.so already running"
+        return 0
+    fi
+
+    echo "  WARNING: func_rnnoise.so failed to load; RNNoise remains optional" >&2
+    return 1
+}
+
 dongle_module_wait_running() {
     local timeout="${1:-20}"
     local ast="${2:-asterisk}"
@@ -429,13 +464,18 @@ dongle_module_wait_running() {
         echo "  ERROR: Asterisk CLI is unavailable; chan_dongle reload is unverified" >&2
         return 1
     fi
-    if ! command -v pgrep >/dev/null 2>&1 || ! pgrep -x asterisk >/dev/null 2>&1; then
-        echo "  ERROR: Asterisk is not running; chan_dongle reload is unverified" >&2
+    if ! command -v pgrep >/dev/null 2>&1; then
+        echo "  ERROR: cannot determine whether Asterisk is running; chan_dongle reload is unverified" >&2
         return 1
     fi
 
     while :; do
-        if ! status=$(_dongle_module_status "$ast"); then
+        # systemctl restart returns before a Type=simple Asterisk process is
+        # necessarily visible, and the CLI socket can lag the process. Poll
+        # both until the timeout instead of failing on the first sample.
+        if ! pgrep -x asterisk >/dev/null 2>&1; then
+            status="Asterisk process starting"
+        elif ! status=$(_dongle_module_status "$ast"); then
             # A Type=simple service can start before its CLI socket is ready.
             status="CLI unavailable"
         fi

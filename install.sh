@@ -2736,6 +2736,19 @@ echo "  [10a] Installing build dependencies..."
 yum -y install gcc gcc-c++ make automake autoconf libtool sqlite-devel usbutils usb_modeswitch minicom wget curl tar patch
 yum -y install asterisk18-devel
 
+# Load shared dongle helpers before optional module validation.
+DONGLE_HELPER="$INSTALL_DIR/scripts/dongle-module.sh"
+if [ ! -f "$DONGLE_HELPER" ] && [ -f "$SCRIPT_DIR/scripts/dongle-module.sh" ]; then
+    DONGLE_HELPER="$SCRIPT_DIR/scripts/dongle-module.sh"
+fi
+if [ ! -f "$DONGLE_HELPER" ] && [ -f "$SCRIPT_DIR/../scripts/dongle-module.sh" ]; then
+    DONGLE_HELPER="$SCRIPT_DIR/../scripts/dongle-module.sh"
+fi
+if [ -f "$DONGLE_HELPER" ]; then
+    # shellcheck source=scripts/dongle-module.sh
+    . "$DONGLE_HELPER"
+fi
+
 # 10b — Compile and Install librnnoise & func_rnnoise.so
 echo "  [10b] Compiling librnnoise and func_rnnoise.so..."
 if [ ! -f /usr/lib64/librnnoise.so ] || [ ! -f /usr/include/rnnoise.h ]; then
@@ -2774,15 +2787,15 @@ if [ -f "$INSTALL_DIR/installer-bundle/binaries/func_rnnoise.so" ]; then
     else
         echo "  func_rnnoise.so already matches bundle binary (preserved live inode)"
     fi
-    asterisk -rx "module load func_rnnoise.so" 2>/dev/null || asterisk -rx "module reload func_rnnoise.so" 2>/dev/null || true
+    dongle_module_ensure_func_rnnoise asterisk || true
 elif [ -f "$INSTALL_DIR/asterisk/func_rnnoise.c" ] && [ -f /usr/lib64/librnnoise.so ] && [ -f /usr/include/rnnoise.h ]; then
     gcc -shared -fPIC -O3 -I/usr/include -o /usr/lib64/asterisk/modules/func_rnnoise.so.tmp \
         "$INSTALL_DIR/asterisk/func_rnnoise.c" -lrnnoise -lm -lpthread
     strip /usr/lib64/asterisk/modules/func_rnnoise.so.tmp 2>/dev/null || true
     chmod 755 /usr/lib64/asterisk/modules/func_rnnoise.so.tmp
     mv -f /usr/lib64/asterisk/modules/func_rnnoise.so.tmp /usr/lib64/asterisk/modules/func_rnnoise.so
-    asterisk -rx "module load func_rnnoise.so" 2>/dev/null || asterisk -rx "module reload func_rnnoise.so" 2>/dev/null || true
-    echo "  func_rnnoise.so compiled and loaded into Asterisk"
+    dongle_module_ensure_func_rnnoise asterisk || true
+    echo "  func_rnnoise.so compiled and prepared for Asterisk"
 fi
 
 # 10c — Install or Compile chan_dongle (with Sokrat decline detection, 20ms audio frame accumulator, modem cooldown pacing, Call Waiting rejection, CRING ring detection, and SMS/PDU memory safety)
