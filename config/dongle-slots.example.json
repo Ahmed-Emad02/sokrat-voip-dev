@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "slots": {
+    "dongle0": {
+      "port": "pci-0000:02:00.0-usb-0:2",
+      "expected_model": "12d1:1506",
+      "description": "fixed USB port 2"
+    },
+    "dongle2": {
+      "port": "pci-0000:02:00.0-usb-0:4",
+      "expected_model": "12d1:1506",
+      "expected_imsi": "420013719152890",
+      "description": "fixed USB port 4"
+    }
+  },
+  "options": {
+    "reconcile_interval_seconds": 60
+  }
+}

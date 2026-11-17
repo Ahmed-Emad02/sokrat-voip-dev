@@ -10341,6 +10341,29 @@
         window.saveAllDongleGains = saveAllDongleGains;
         window.saveModemConfig = saveAllDongleGains;
 
+        async function rollbackDongleAutoconfig() {
+            const message = isRtl
+                ? 'سيتم استعادة النسخة الأصلية من dongle.conf قبل الإعداد التلقائي، تعطيل الإعداد التلقائي، وإعادة تحميل chan_dongle. لن يُسمح بالتنفيذ أثناء وجود مكالمات نشطة. هل تريد المتابعة؟'
+                : 'This restores the original pre-autoconfig dongle.conf backup, disables automatic dongle reconciliation, and reloads chan_dongle. It will refuse while calls are active. Continue?';
+            if (!window.confirm(message)) return;
+            try {
+                const res = await fetch('/api/config/modem/autoconfig/rollback', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(data.message || (isRtl ? 'تم التراجع عن الإعداد التلقائي.' : 'Autoconfig rolled back.'), 'success');
+                    if (typeof fetchModemConfig === 'function') fetchModemConfig();
+                } else {
+                    showToast(data.error || (isRtl ? 'تعذر التراجع عن الإعداد التلقائي.' : 'Failed to rollback autoconfig.'), 'error');
+                }
+            } catch (e) {
+                showToast((isRtl ? 'خطأ في التراجع: ' : 'Rollback error: ') + e.message, 'error');
+            }
+        }
+        window.rollbackDongleAutoconfig = rollbackDongleAutoconfig;
+
         async function loadAudioGlobals() {
             const threshEl = document.getElementById('dspVadThreshold') || document.getElementById('globalVadThreshold');
             const hangEl = document.getElementById('dspVadHangover') || document.getElementById('globalVadHangover');
