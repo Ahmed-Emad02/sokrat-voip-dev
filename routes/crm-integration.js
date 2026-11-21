@@ -585,7 +585,7 @@ function getDetectedNetworkInterfaces() {
             api_version: '1.0',
             application_version: pkg.version || '1.0.0',
             server_time: moment().format(),
-            timezone: 'Africa/Cairo',
+            timezone: process.env.SOKRAT_TIMEZONE || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
             network_interfaces: getDetectedNetworkInterfaces()
         });
     });
