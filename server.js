@@ -12189,6 +12189,17 @@ function annotateE173VoiceWarnings(devices) {
     return devices;
 }
 
+function stripDongleWarnings(devices) {
+    if (!Array.isArray(devices)) return devices;
+    return devices.map(device => {
+        if (!device || typeof device !== 'object') return device;
+        const copy = { ...device };
+        delete copy.voiceEnableWarning;
+        delete copy.nonFatalWarning;
+        return copy;
+    });
+}
+
 function getEnrichedDevices() {
     const now = Date.now();
     if (cachedEnrichedDevices && (now - lastEnrichedDevicesTime) < ENRICHED_DEVICES_CACHE_TTL) {
@@ -12329,8 +12340,9 @@ app.get('/gsm-dongles', async (req, res) => {
         });
 
         const devices = isCentral ? [...localDevices, ...remoteDevices] : localDevices;
+        const visibleDevices = res.locals.isRootUser ? devices : stripDongleWarnings(devices);
         res.render('gsm-dongles', {
-            devices,
+            devices: visibleDevices,
             fedDongleNodes: renderedNodes,
             fedLocalSite: nodeModel.localSite,
             remoteNodes: [],
@@ -12359,9 +12371,10 @@ app.get('/api/gsm-dongles', async (req, res) => {
         const devices = allowedDongles !== null
             ? live.devices.filter(device => isDeviceAllowedForDongles(device, allowedDongles))
             : live.devices;
+        const visibleDevices = res.locals.isRootUser ? devices : stripDongleWarnings(devices);
         res.json({
             success: true,
-            devices,
+            devices: visibleDevices,
             nodes: live.nodes,
             localSite: live.localSite
         });
