@@ -154,12 +154,12 @@ test('CRM REST Router health and pairing endpoints work correctly', async () => 
     const pool = new MockPool();
     const app = express();
     app.use(express.json());
-    app.use('/api/integrations/crm/v1', createCrmRouter(pool));
+    app.use('/api/integrations/v1', createCrmRouter(pool));
 
     const server = http.createServer(app);
     await new Promise(r => server.listen(0, r));
     const port = server.address().port;
-    const baseUrl = `http://127.0.0.1:${port}/api/integrations/crm/v1`;
+    const baseUrl = `http://127.0.0.1:${port}/api/integrations/v1`;
 
     try {
         // 1. Test Health (Public)

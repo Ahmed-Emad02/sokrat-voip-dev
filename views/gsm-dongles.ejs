@@ -493,21 +493,18 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
         .dongle-device-card .dongle-routing-panel,
         .dongle-device-card .dongle-routing-trunk,
         .dongle-device-card .dongle-dial-string,
-        .dongle-device-card .dongle-at-diag-panel,
         .dongle-device-card[class*="dongle-state-"] .dongle-priority-metric,
         .dongle-device-card[class*="dongle-state-"] .dongle-metric,
         .dongle-device-card[class*="dongle-state-"] .dongle-hardware-summary,
         .dongle-device-card[class*="dongle-state-"] .dongle-routing-panel,
         .dongle-device-card[class*="dongle-state-"] .dongle-routing-trunk,
         .dongle-device-card[class*="dongle-state-"] .dongle-dial-string,
-        .dongle-device-card[class*="dongle-state-"] .dongle-at-diag-panel,
         html.light-theme .dongle-device-card[class*="dongle-state-"] .dongle-priority-metric,
         html.light-theme .dongle-device-card[class*="dongle-state-"] .dongle-metric,
         html.light-theme .dongle-device-card[class*="dongle-state-"] .dongle-hardware-summary,
         html.light-theme .dongle-device-card[class*="dongle-state-"] .dongle-routing-panel,
         html.light-theme .dongle-device-card[class*="dongle-state-"] .dongle-routing-trunk,
-        html.light-theme .dongle-device-card[class*="dongle-state-"] .dongle-dial-string,
-        html.light-theme .dongle-device-card[class*="dongle-state-"] .dongle-at-diag-panel {
+        html.light-theme .dongle-device-card[class*="dongle-state-"] .dongle-dial-string {
             background: transparent !important;
             background-color: transparent !important;
         }
@@ -3771,20 +3768,6 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                                     </div>
 
                                     ${renderDongleRouting(dev)}
-
-                                    ${isRootUser ? `
-                                    <div class="dongle-at-diag-panel mt-2 p-2.5 rounded-xl flex flex-col gap-2">
-                                        <div class="flex items-center justify-between">
-                                            <span class="text-[10px] font-black uppercase text-purple-400 tracking-wider flex items-center gap-1.5">
-                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
-                                                <span>${isRtl ? 'تشخيص AT' : 'AT Diagnostics'}</span>
-                                            </span>
-                                            <span class="text-[9px] font-mono text-[var(--text-muted)] font-bold">${escapeHtml(rawId)}</span>
-                                        </div>
-                                        <button type="button" onclick="openAtDiagConsole('${escapeHtml(id)}')" class="w-full text-center py-2 rounded-xl text-xs font-bold bg-[var(--bg-hover)] hover:bg-zinc-700/60 border border-[var(--border-primary)] text-zinc-200 hover:text-white transition cursor-pointer flex items-center justify-center gap-1.5" title="Open the full AT console">
-                                            <span>${isRtl ? 'وحدة التحكم' : 'Console'}</span> &rarr;
-                                        </button>
-                                    </div>` : ''}
                                 </div>
                             </div>
 
@@ -3842,12 +3825,6 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                                 </div>
 
                                 ${renderDongleRouting(dev)}
-                                ${isRootUser ? `
-                                <div class="dongle-at-diag-panel mt-2.5 p-3 rounded-xl flex flex-col gap-2">
-                                    <button type="button" onclick="openAtDiagConsole('${escapeHtml(id)}')" class="w-full text-center py-2 rounded-xl text-xs font-bold bg-[var(--bg-hover)] hover:bg-zinc-700/60 border border-[var(--border-primary)] text-zinc-200 hover:text-white transition cursor-pointer flex items-center justify-center gap-1.5" title="Open the full AT console">
-                                        <span>${isRtl ? 'وحدة التحكم' : 'Console'}</span> &rarr;
-                                    </button>
-                                </div>` : ''}
                             </div>
                             <div class="dongle-card-footer px-3.5 sm:px-4 py-2.5 w-full">
                                 ${renderDongleActions(id, hasValidHardware)}

@@ -83,6 +83,14 @@ const {
     validateApiKey
 } = require('./lib/api-key-manager');
 const {
+    hasScope,
+    hasAnyScope,
+    getApiKeyScopes,
+    enforceReadOnlyApiKey
+} = require('./lib/api-key-scopes');
+const { checkApiKeyRateLimit } = require('./lib/api-key-rate-limit');
+const callLifecycle = require('./lib/call-events');
+const {
     initCrmTables,
     createPairingCode,
     consumeEmbedTicket,
@@ -1953,6 +1961,17 @@ return null;
 
 function requireTabPermission(tabName) {
 return (req, res, next) => {
+if (req.isApiKeyAuthenticated && req.apiKey) {
+    const required = tabName === 'call_history' || tabName === 'cdr'
+        ? ['calls:read', 'cdr', 'cdr:read', 'recordings:read']
+        : tabName === 'ext-stats'
+            ? ['stats:read', 'ext-stats']
+            : tabName === 'operator'
+                ? ['live:read', 'operator']
+                : [tabName];
+    if (hasAnyScope(getApiKeyScopes(req), required)) return next();
+    return res.status(403).json({ success: false, error: `Forbidden. API key missing required scope: ${required.join(' or ')}` });
+}
 if (isSuperAdmin(req)) return next();
 const perms = req.session.userPermissions || [];
         if (perms.includes(tabName)) return next();
@@ -2628,7 +2647,7 @@ async function requireAuth(req, res, next) {
                          req.path.startsWith('/api/') ||
                          req.path.startsWith('/audio/') ||
                          req.path.startsWith('/recordings/') ||
-                         (req.path.startsWith('/integrations/') && req.path !== '/integrations/crm') ||
+                         (req.path.startsWith('/integrations/') && req.path !== '/integrations') ||
                          req.xhr ||
                          (req.headers.accept && req.headers.accept.includes('application/json') && !req.headers.accept.includes('text/html'))
     );
@@ -2644,8 +2663,7 @@ async function requireAuth(req, res, next) {
 function requireActionPermission(actionPermission) {
     return (req, res, next) => {
         if (req.isApiKeyAuthenticated && req.apiKey) {
-            const scopes = String(req.apiKey.scopes || '*').split(',').map(s => s.trim().toLowerCase());
-            if (scopes.includes('*') || scopes.includes(actionPermission.toLowerCase())) {
+            if (hasScope(getApiKeyScopes(req), actionPermission)) {
                 return next();
             }
             return res.status(403).json({ success: false, error: `Forbidden. API key missing required scope: ${actionPermission}` });
@@ -2662,8 +2680,7 @@ function requireActionPermission(actionPermission) {
 function requireConfigPermission(subTab) {
     return (req, res, next) => {
         if (req.isApiKeyAuthenticated && req.apiKey) {
-            const scopes = String(req.apiKey.scopes || '*').split(',').map(s => s.trim().toLowerCase());
-            if (scopes.includes('*') || scopes.includes('config') || scopes.includes('config-' + subTab.toLowerCase())) {
+            if (hasAnyScope(getApiKeyScopes(req), ['config', `config-${String(subTab).toLowerCase()}`])) {
                 return next();
             }
             return res.status(403).json({ success: false, error: `Forbidden. API key missing required scope: config` });
@@ -2715,12 +2732,24 @@ app.use(async (req, res, next) => {
             });
         }
 
+        const rate = checkApiKeyRateLimit(result.key.id, clientIp);
+        res.set('X-RateLimit-Limit', String(rate.limit));
+        res.set('X-RateLimit-Remaining', String(rate.remaining));
+        res.set('X-RateLimit-Reset', String(Math.ceil(rate.resetAt / 1000)));
+        if (!rate.allowed) {
+            res.set('Retry-After', String(rate.retryAfterSec));
+            return res.status(429).json({
+                success: false,
+                error: 'API key rate limit exceeded. Retry later.'
+            });
+        }
+
         // Attach authenticated key metadata
         req.apiKey = result.key;
         req.isApiKeyAuthenticated = true;
         res.locals.currentUser = result.key.name || 'API Client';
         res.locals.isApiKey = true;
-        next();
+        return enforceReadOnlyApiKey(req, res, next);
     } catch (err) {
         console.error('API Key Middleware Error:', err);
         return res.status(500).json({ success: false, error: 'Internal API key validation error' });
@@ -2757,12 +2786,12 @@ app.use((req, res, next) => {
     const publicPaths = [
         '/login', '/logout', '/forgot-password', '/reset-password',
         '/api/auth/forgot-password', '/api/auth/reset-password', '/api/network-info',
-        '/favicon.ico', '/favicon.png', '/robots.txt', '/embed/crm/live',
+        '/favicon.ico', '/favicon.png', '/robots.txt', '/embed/live',
         '/preview/guest-call',
         '/401', '/403', '/404', '/api/telephony/camp-on/dialplan-trigger',
         '/api/federation/v1/ping'
     ];
-    if (publicPaths.includes(req.path) || req.path.startsWith('/public/') || req.path.startsWith('/c/') || req.path.startsWith('/api/public/') || req.path.startsWith('/api/extension-policy/') || req.path.startsWith('/api/integrations/crm/v1/') || req.path.startsWith('/api/extension/v1/') || req.path.startsWith('/api/extension-chat/v1/') || req.path.startsWith('/api/extension-video/v1/') || req.path.startsWith('/api/extension-agent-status/v1/')) {
+    if (publicPaths.includes(req.path) || req.path.startsWith('/public/') || req.path.startsWith('/c/') || req.path.startsWith('/api/public/') || req.path.startsWith('/api/extension-policy/') || req.path.startsWith('/api/integrations/v1/') || req.path.startsWith('/api/extension/v1/') || req.path.startsWith('/api/extension-chat/v1/') || req.path.startsWith('/api/extension-video/v1/') || req.path.startsWith('/api/extension-agent-status/v1/')) {
         return next();
     }
     requireAuth(req, res, next);
@@ -3051,7 +3080,7 @@ let peerIPs = {};
 let pjsipContactState = {};
 let sipSnapshotStartTime = 0;
 // Mount CRM Integration REST API Router
-app.use('/api/integrations/crm/v1', createCrmRouter(pool, {
+app.use('/api/integrations/v1', createCrmRouter(pool, {
     getPeerStatus: () => peerStatus,
     getActiveCalls: () => activeCalls,
     getAmiClient: () => amiClient,
@@ -4273,6 +4302,9 @@ function connectAMI() {
 
             // Handle Auto-Dialer AMI Events
             handleDialerAmiEvents(event);
+
+            // Inbound SIP/PJSIP trunk lifecycle events (ringing/answered/ended)
+            callLifecycle.handleAmiEvent(event);
 
             // New channel = new call, always fresh timestamp
             if (event.Event === 'Newchannel') {
@@ -6239,20 +6271,21 @@ app.post('/api/settings/client', requireAuth, handleClientSettingsUpdate);
 app.put('/api/settings/client', requireAuth, handleClientSettingsUpdate);
 
 // --- INBOUND CALL WEBHOOK SETTINGS ---
-let cachedWebhookConfig = { enabled: false, url: '', secret: '' };
+let cachedWebhookConfig = { enabled: false, url: '', secret: '', callEventsEnabled: false };
 
 async function loadWebhookConfigFromDb() {
     try {
         const conn = asteriskPool;
         const [rows] = await conn.execute(
-            "SELECT setting_key, setting_value FROM dashboard_settings WHERE setting_key LIKE 'webhook_incoming_call_%'"
+            "SELECT setting_key, setting_value FROM dashboard_settings WHERE setting_key LIKE 'webhook_%'"
         );
         const map = {};
         rows.forEach(r => { map[r.setting_key] = r.setting_value; });
         cachedWebhookConfig = {
             enabled: map['webhook_incoming_call_enabled'] === 'true',
             url: String(map['webhook_incoming_call_url'] || '').trim(),
-            secret: String(map['webhook_incoming_call_secret'] || '').trim()
+            secret: String(map['webhook_incoming_call_secret'] || '').trim(),
+            callEventsEnabled: map['webhook_call_events_enabled'] === 'true'
         };
     } catch (_) {}
     return cachedWebhookConfig;
@@ -6372,6 +6405,50 @@ async function fireInboundCallWebhook(callerNumber, calledNumber, dongleId) {
     }
 }
 
+/**
+ * Deliver SIP/PJSIP trunk lifecycle events to the same signed webhook endpoint.
+ * This is opt-in via webhook_call_events_enabled to avoid changing the payload
+ * stream for existing GSM-only installations.
+ */
+async function fireCallLifecycleWebhook(payload) {
+    if (!cachedWebhookConfig.enabled || !cachedWebhookConfig.url || !cachedWebhookConfig.callEventsEnabled) return;
+    try {
+        const body = JSON.stringify(payload);
+        const parsed = new URL(cachedWebhookConfig.url);
+        const isHttps = parsed.protocol === 'https:';
+        const reqOptions = {
+            hostname: parsed.hostname,
+            port: parsed.port || (isHttps ? 443 : 80),
+            path: parsed.pathname + parsed.search,
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(body),
+                'User-Agent': 'SokratVoIP-Webhook/1.0'
+            },
+            timeout: 10000
+        };
+        if (cachedWebhookConfig.secret) {
+            reqOptions.headers['X-Sokrat-Signature'] = require('crypto')
+                .createHmac('sha256', cachedWebhookConfig.secret)
+                .update(body)
+                .digest('hex');
+        }
+        const transport = isHttps ? require('https') : require('http');
+        const req = transport.request(reqOptions, (resp) => resp.resume());
+        req.on('error', (err) => console.error('Call lifecycle webhook delivery failed:', err.message));
+        req.on('timeout', () => req.destroy());
+        req.write(body);
+        req.end();
+    } catch (err) {
+        console.error('Call lifecycle webhook delivery failed:', err.message);
+    }
+}
+
+callLifecycle.on('event', (payload) => {
+    fireCallLifecycleWebhook(payload).catch(() => {});
+});
+
 app.get('/api/settings/webhook', requireAuth, async (req, res) => {
     try {
         if (!isSuperAdmin(req)) {
@@ -6382,7 +6459,8 @@ app.get('/api/settings/webhook', requireAuth, async (req, res) => {
             success: true,
             enabled: cachedWebhookConfig.enabled,
             url: cachedWebhookConfig.url,
-            secret: cachedWebhookConfig.secret ? '••••••••' : ''
+            secret: cachedWebhookConfig.secret ? '••••••••' : '',
+            call_events_enabled: cachedWebhookConfig.callEventsEnabled
         });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
@@ -6394,7 +6472,11 @@ app.post('/api/settings/webhook', requireAuth, async (req, res) => {
         if (!isSuperAdmin(req)) {
             return res.status(403).json({ success: false, error: 'Forbidden: Super Admin access required' });
         }
-        const { enabled, url, secret } = req.body || {};
+        const { enabled, url, secret, call_events_enabled } = req.body || {};
+        const callEventsEnabled = call_events_enabled === true
+            || call_events_enabled === 'true'
+            || call_events_enabled === 1
+            || call_events_enabled === '1';
 
         const trimmedUrl = String(url || '').trim();
         if (enabled && trimmedUrl) {
@@ -6411,7 +6493,8 @@ app.post('/api/settings/webhook', requireAuth, async (req, res) => {
         const settingsToSave = [
             ['webhook_incoming_call_enabled', enabled ? 'true' : 'false'],
             ['webhook_incoming_call_url', trimmedUrl],
-            ['webhook_incoming_call_secret', String(secret || '').trim()]
+            ['webhook_incoming_call_secret', String(secret || '').trim()],
+            ['webhook_call_events_enabled', callEventsEnabled ? 'true' : 'false']
         ];
 
         const conn = asteriskPool;
@@ -6426,7 +6509,8 @@ app.post('/api/settings/webhook', requireAuth, async (req, res) => {
         cachedWebhookConfig = {
             enabled: enabled ? true : false,
             url: trimmedUrl,
-            secret: String(secret || '').trim()
+            secret: String(secret || '').trim(),
+            callEventsEnabled
         };
 
         res.json({ success: true, message: 'Webhook settings saved successfully' });
@@ -8703,21 +8787,40 @@ async function handleCdrRootQuery(req, res) {
     });
 }
 
-// Public Open Routes - No Auth Required
-app.get('/api/cdr/phone/:phone', handleCdrPhoneSearch);
-app.get('/api/cdr/by-phone/:phone', handleCdrPhoneSearch);
-app.get('/api/cdr/audio/:uniqueid', handleCdrAudioStream);
-app.get('/api/cdr/:uniqueid/audio', handleCdrAudioStream);
-app.get('/api/cdr/:uniqueid', handleCdrSingleRecord);
-app.get('/api/cdr', handleCdrRootQuery);
+function requireCdrReadAccess(req, res, next) {
+    if (req.isApiKeyAuthenticated && req.apiKey) {
+        if (hasAnyScope(getApiKeyScopes(req), ['calls:read', 'cdr', 'cdr:read', 'recordings:read', 'cdr:audio'])) {
+            return next();
+        }
+        return res.status(403).json({ success: false, error: 'Forbidden. API key missing calls:read or recordings:read.' });
+    }
+    if (req.isFederationAuthenticated) return next();
+    if (req.session && req.session.userId) {
+        if (isSuperAdmin(req)) return next();
+        const perms = req.session.userPermissions || [];
+        if (perms.includes('call_history') || perms.includes('cdr') || perms.some(p => p.startsWith('cdr-')) || perms.includes('operator')) {
+            return next();
+        }
+        return res.status(403).json({ success: false, error: 'Forbidden. Missing call-history permission.' });
+    }
+    return res.status(401).json({ success: false, error: 'Unauthorized. Provide an API key or sign in.' });
+}
+
+// CDR reads require an authenticated API key or a dashboard session.
+app.get('/api/cdr/phone/:phone', requireAuth, requireCdrReadAccess, handleCdrPhoneSearch);
+app.get('/api/cdr/by-phone/:phone', requireAuth, requireCdrReadAccess, handleCdrPhoneSearch);
+app.get('/api/cdr/audio/:uniqueid', requireAuth, requireCdrReadAccess, handleCdrAudioStream);
+app.get('/api/cdr/:uniqueid/audio', requireAuth, requireCdrReadAccess, handleCdrAudioStream);
+app.get('/api/cdr/:uniqueid', requireAuth, requireCdrReadAccess, handleCdrSingleRecord);
+app.get('/api/cdr', requireAuth, requireCdrReadAccess, handleCdrRootQuery);
 
 // Aliases under /api/calls
-app.get('/api/calls/phone/:phone', handleCdrPhoneSearch);
-app.get('/api/calls/by-phone/:phone', handleCdrPhoneSearch);
-app.get('/api/calls/audio/:uniqueid', handleCdrAudioStream);
-app.get('/api/calls/:uniqueid/audio', handleCdrAudioStream);
-app.get('/api/calls/:uniqueid', handleCdrSingleRecord);
-app.get('/api/calls', handleCdrRootQuery);
+app.get('/api/calls/phone/:phone', requireAuth, requireCdrReadAccess, handleCdrPhoneSearch);
+app.get('/api/calls/by-phone/:phone', requireAuth, requireCdrReadAccess, handleCdrPhoneSearch);
+app.get('/api/calls/audio/:uniqueid', requireAuth, requireCdrReadAccess, handleCdrAudioStream);
+app.get('/api/calls/:uniqueid/audio', requireAuth, requireCdrReadAccess, handleCdrAudioStream);
+app.get('/api/calls/:uniqueid', requireAuth, requireCdrReadAccess, handleCdrSingleRecord);
+app.get('/api/calls', requireAuth, requireCdrReadAccess, handleCdrRootQuery);
 
 // --- VOICEMAIL ---
 const VM_ROOT = '/var/spool/asterisk/voicemail/default';
@@ -9205,8 +9308,7 @@ app.post('/api/voicemail-storage/settings', requireAuth, async (req, res) => {
 function requireTranscriptPermission(tabPermission) {
     return (req, res, next) => {
         if (req.isApiKeyAuthenticated && req.apiKey) {
-            const scopes = String(req.apiKey.scopes || '*').split(',').map(scope => scope.trim().toLowerCase());
-            if (scopes.includes('*') || scopes.includes(tabPermission)) return next();
+            if (hasScope(getApiKeyScopes(req), tabPermission)) return next();
             return res.status(403).json({ success: false, error: `Forbidden. API key missing required scope: ${tabPermission}` });
         }
         if (isSuperAdmin(req)) return next();
@@ -9560,7 +9662,11 @@ function calculateShiftOverlapSec(startMs, endMs, intervals) {
 // --- API: GENERAL EXTENSIONS OVERVIEW ---
 app.get('/api/ext-overview', async (req, res) => {
     try {
-        if (!isSuperAdmin(req)) {
+        if (req.isApiKeyAuthenticated && req.apiKey) {
+            if (!hasAnyScope(getApiKeyScopes(req), ['stats:read', 'ext-stats', 'operator'])) {
+                return res.status(403).json({ success: false, error: 'Forbidden: API key missing stats:read.' });
+            }
+        } else if (!isSuperAdmin(req)) {
             const perms = req.session.userPermissions || [];
             if (!perms.includes('ext-stats') && !perms.includes('operator') && !perms.some(p => p.startsWith('operator-'))) {
                 return res.status(403).json({ success: false, error: 'Forbidden: Missing permission to view extension overview.' });
@@ -9765,7 +9871,11 @@ app.get('/ext-stats', (req, res) => {
 app.get('/api/ext-stats/:extension', async (req, res) => {
     try {
         const { extension } = req.params;
-        if (!isSuperAdmin(req)) {
+        if (req.isApiKeyAuthenticated && req.apiKey) {
+            if (!hasAnyScope(getApiKeyScopes(req), ['stats:read', 'ext-stats', 'operator'])) {
+                return res.status(403).json({ success: false, error: 'Forbidden: API key missing stats:read.' });
+            }
+        } else if (!isSuperAdmin(req)) {
             const perms = req.session.userPermissions || [];
             if (!perms.includes('ext-stats') && !perms.includes('operator') && !perms.some(p => p.startsWith('operator-'))) {
                 return res.status(403).json({ success: false, error: 'Forbidden: Missing permission to view extension statistics.' });
@@ -14934,7 +15044,7 @@ app.post('/api/gsm-dongles/call-forwarding', async (req, res) => {
 
 
 // --- ROUTE 5: AUDIO STREAM / DOWNLOAD PIPELINE ---
-app.get('/audio/:uniqueid', async (req, res) => {
+app.get('/audio/:uniqueid', requireAuth, requireCdrReadAccess, async (req, res) => {
     try {
         const { uniqueid } = req.params;
         const scopedExts = getUserScopedExtensions(req);
@@ -16248,7 +16358,7 @@ local_net=127.0.0.0/8
 
 
 // GET /api/config/extensions - List all Extensions
-app.get('/api/config/extensions', async (req, res) => {
+app.get('/api/config/extensions', requireConfigPermission('extensions'), async (req, res) => {
     try {
         const [extensions] = await pool.query(`
             SELECT u.extension, u.name, u.outboundcid, u.recording, u.voicemail,
@@ -26913,7 +27023,7 @@ app.post('/log_error', (req, res) => {
     res.json({ success: true });
 });
 // --- SOKRAT SUPER ADMIN CRM INTEGRATION MANAGEMENT ROUTES ---
-app.get('/integrations/crm', requireAuth, async (req, res) => {
+app.get('/integrations', requireAuth, async (req, res) => {
     if (!hasRootAccess(req)) {
         const currentLang = (req.session && req.session.lang) || 'en';
         return res.status(403).render('403', {
@@ -26932,7 +27042,7 @@ app.get('/integrations/crm', requireAuth, async (req, res) => {
     }
 });
 
-app.post('/integrations/crm/pairing-code', requireAuth, async (req, res) => {
+app.post('/integrations/pairing-code', requireAuth, async (req, res) => {
     if (!hasRootAccess(req)) {
         return res.status(403).json({ success: false, error: 'Unauthorized: Only the root user can generate pairing codes.' });
     }
@@ -26948,7 +27058,7 @@ app.post('/integrations/crm/pairing-code', requireAuth, async (req, res) => {
     }
 });
 
-app.post('/integrations/crm/clients/:id/revoke', requireAuth, async (req, res) => {
+app.post('/integrations/clients/:id/revoke', requireAuth, async (req, res) => {
     if (!hasRootAccess(req)) {
         return res.status(403).json({ success: false, error: 'Unauthorized: Only the root user can revoke integration clients.' });
     }
@@ -26983,7 +27093,7 @@ app.post('/integrations/crm/clients/:id/revoke', requireAuth, async (req, res) =
     }
 });
 
-app.post('/integrations/crm/clients/:id/rotate', requireAuth, async (req, res) => {
+app.post('/integrations/clients/:id/rotate', requireAuth, async (req, res) => {
     if (!hasRootAccess(req)) {
         return res.status(403).json({ success: false, error: 'Unauthorized: Only the root user can rotate client secrets.' });
     }
@@ -27022,7 +27132,7 @@ app.post('/integrations/crm/clients/:id/rotate', requireAuth, async (req, res) =
     }
 });
 
-app.post('/integrations/crm/clients/:id/update', requireAuth, async (req, res) => {
+app.post('/integrations/clients/:id/update', requireAuth, async (req, res) => {
     if (!hasRootAccess(req)) {
         return res.status(403).json({ success: false, error: 'Unauthorized: Only the root user can update integration configuration.' });
     }
@@ -27155,7 +27265,7 @@ app.get('/preview/guest-call', (req, res) => {
 });
 
 // --- EMBEDDED CRM LIVE PANEL VIEW ---
-app.get('/embed/crm/live', async (req, res) => {
+app.get('/embed/live', async (req, res) => {
     const { ticket } = req.query;
     if (!ticket) {
         return res.status(400).send('Embed ticket is required');

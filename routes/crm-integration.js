@@ -1,6 +1,6 @@
 /**
  * CRM Integration REST API Router
- * Handles /api/integrations/crm/v1/* endpoints
+ * Handles /api/integrations/v1/* endpoints
  */
 
 const express = require('express');
@@ -26,6 +26,7 @@ const { createMediaId, resolveRecordingPath, streamRecordingFile } = require('..
 const contactsStore = require('../lib/contacts');
 const agentStatusService = require('../lib/agent-status');
 const { getPhoneVariants, cleanPhoneString } = require('../lib/phone-normalization');
+const callLifecycle = require('../lib/call-events');
 
 // Rate limiting map for pairing attempts (IP -> timestamps array)
 const pairingRateLimitMap = new Map();
@@ -741,6 +742,42 @@ function getDetectedNetworkInterfaces() {
         });
     });
 
+    // 3b. LIVE CALL EVENT STREAM (SSE, read-only scope)
+    router.get('/events', requireCrmScope('live:read'), (req, res) => {
+        res.status(200);
+        res.set({
+            'Content-Type': 'text/event-stream; charset=utf-8',
+            'Cache-Control': 'no-cache, no-transform',
+            Connection: 'keep-alive',
+            'X-Accel-Buffering': 'no'
+        });
+        if (typeof res.flushHeaders === 'function') res.flushHeaders();
+
+        const send = (payload) => {
+            if (res.writableEnded) return;
+            res.write(`event: ${payload.event || 'message'}\n`);
+            res.write(`data: ${JSON.stringify(payload)}\n\n`);
+        };
+
+        send({
+            event: 'snapshot',
+            active_calls: callLifecycle.getActiveCalls(),
+            timestamp: new Date().toISOString()
+        });
+
+        const onEvent = (payload) => send(payload);
+        callLifecycle.on('event', onEvent);
+        const heartbeat = setInterval(() => {
+            if (!res.writableEnded) res.write(': heartbeat\n\n');
+        }, 25000);
+        if (heartbeat.unref) heartbeat.unref();
+
+        req.on('close', () => {
+            clearInterval(heartbeat);
+            callLifecycle.removeListener('event', onEvent);
+        });
+    });
+
     // 4. SAFE LIVE EXTENSION LIST
     router.get('/extensions', requireCrmScope('extensions:read'), async (req, res) => {
         try {
@@ -990,6 +1027,24 @@ function getDetectedNetworkInterfaces() {
         } catch (err) {
             console.error('CRM Recording streaming error:', err.message);
             res.status(500).json({ success: false, error: 'Failed to stream recording file' });
+        }
+    });
+
+    // 6b. CALL TRANSCRIPT API
+    router.get('/recordings/:mediaId/transcript', requireCrmScope(['recordings:read', 'calls:read']), async (req, res) => {
+        const { mediaId } = req.params;
+        try {
+            const [rows] = await pool.query(
+                'SELECT uniqueid, recordingfile, language, transcript, status, error_message, duration_sec, created_at, completed_at FROM `asteriskcdrdb`.`cdr_transcriptions` WHERE uniqueid = ? LIMIT 1',
+                [mediaId]
+            );
+            if (!rows.length) {
+                return res.status(404).json({ success: false, error: 'Transcript not found for this call.' });
+            }
+            return res.json({ success: true, ...rows[0] });
+        } catch (err) {
+            console.error('CRM Transcript fetch error:', err.message);
+            return res.status(500).json({ success: false, error: 'Failed to load call transcript' });
         }
     });
 
@@ -1830,7 +1885,7 @@ results['pjsip_reload_out'] = (stdout || '') + (stderr || '');
                 auto_answer: policy.auto_answer || 'user_choice',
                 dnd: policy.dnd || 'user_choice',
                 disable_outbound_ringing_cancel: Boolean(policy.disable_outbound_ringing_cancel),
-                api_url: `http://${host}:8080/api/integrations/crm/v1`,
+                api_url: `http://${host}:8080/api/integrations/v1`,
                 softphone_api_url: `http://${host}:8090`
             });
         } catch (err) {
