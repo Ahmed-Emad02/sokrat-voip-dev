@@ -1,0 +1,195 @@
+<%
+var activeLang = (typeof currentLang !== 'undefined' && currentLang) ? currentLang : 'en';
+var pageRtl = (typeof isRtl !== 'undefined') ? isRtl : (activeLang === 'ar');
+%>
+<!DOCTYPE html>
+<html lang="<%= activeLang %>" dir="<%= pageRtl ? 'rtl' : 'ltr' %>">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sokrat VOIP - PBX Canvas</title>
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap" rel="stylesheet">
+    <script src="/js/tailwindcss-browser.js"></script>
+    <script>
+        (function () {
+            var serverTheme = '<%= typeof currentTheme !== "undefined" ? currentTheme : "" %>';
+            var theme = serverTheme || localStorage.getItem('theme') || 'dark';
+            if (theme === 'light') document.documentElement.classList.add('light-theme');
+        })();
+    </script>
+    <link rel="stylesheet" href="/css/pbx-canvas.css?v=48">
+</head>
+<body class="canvas-body">
+<%- include('sidebar') %>
+<div class="canvas-shell" id="pbx-canvas" data-rtl="<%= pageRtl ? 'true' : 'false' %>">
+    <header class="canvas-topbar">
+        <div class="canvas-brand">
+            <div class="canvas-brand-mark">
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1">
+                    <rect x="3" y="3" width="7" height="6" rx="1.5"/>
+                    <rect x="14" y="15" width="7" height="6" rx="1.5"/>
+                    <path d="M10 6h4a3 3 0 0 1 3 3v6"/>
+                </svg>
+            </div>
+            <div>
+                <h1><%= pageRtl ? 'لوحة إعداد المقسم' : 'PBX Canvas' %></h1>
+                <p><%= pageRtl ? 'تكوين مرئي متصل' : 'Visual PBX configuration' %></p>
+            </div>
+        </div>
+
+        <button type="button" class="canvas-btn ghost canvas-mobile-menu-btn" id="canvas-mobile-menu-btn" aria-label="<%= pageRtl ? 'إجراءات إضافية' : 'More actions' %>" aria-expanded="false" aria-controls="canvas-top-actions" title="<%= pageRtl ? 'إجراءات إضافية' : 'More actions' %>">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>
+        </button>
+
+        <div class="canvas-top-actions" id="canvas-top-actions">
+            <input type="search" id="canvas-search" class="canvas-search" placeholder="<%= pageRtl ? 'ابحث عن بطاقة…' : 'Search cards…' %>" autocomplete="off">
+            <button type="button" class="canvas-btn" id="canvas-refresh-btn" aria-label="<%= pageRtl ? 'تحديث من المقسم' : 'Refresh from PBX' %>" title="<%= pageRtl ? 'تحديث من المقسم' : 'Refresh from PBX' %>">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 11a8 8 0 1 0-2.34 5.66"/><path d="M20 4v7h-7"/></svg>
+                <span><%= pageRtl ? 'تحديث' : 'Refresh' %></span>
+            </button>
+            <button type="button" class="canvas-btn" id="canvas-fit-btn" aria-label="<%= pageRtl ? 'ملاءمة العرض' : 'Fit view' %>" title="<%= pageRtl ? 'ملاءمة العرض' : 'Fit view' %>">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+                <span><%= pageRtl ? 'ملاءمة' : 'Fit' %></span>
+            </button>
+            <button type="button" class="canvas-btn" id="canvas-layout-btn" aria-label="<%= pageRtl ? 'ترتيب تلقائي' : 'Auto layout' %>" title="<%= pageRtl ? 'ترتيب تلقائي' : 'Auto layout' %>">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><path d="M10 6.5h4a3.5 3.5 0 0 1 3.5 3.5v4"/></svg>
+                <span><%= pageRtl ? 'ترتيب' : 'Auto' %></span>
+            </button>
+            <button type="button" class="canvas-btn ghost" id="canvas-undo-btn" disabled aria-label="<%= pageRtl ? 'تراجع' : 'Undo' %>" title="<%= pageRtl ? 'تراجع' : 'Undo' %>">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg>
+                <span><%= pageRtl ? 'تراجع' : 'Undo' %></span>
+            </button>
+            <button type="button" class="canvas-btn ghost" id="canvas-redo-btn" disabled aria-label="<%= pageRtl ? 'إعادة' : 'Redo' %>" title="<%= pageRtl ? 'إعادة' : 'Redo' %>">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/></svg>
+                <span><%= pageRtl ? 'إعادة' : 'Redo' %></span>
+            </button>
+            <button type="button" class="canvas-btn ghost" id="canvas-discard-btn" disabled><%= pageRtl ? 'تجاهل' : 'Discard' %></button>
+            <button type="button" class="canvas-btn primary" id="canvas-apply-btn" disabled>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>
+                <span id="canvas-apply-label"><%= pageRtl ? 'تطبيق التغييرات' : 'Apply Changes' %></span>
+            </button>
+            <a class="canvas-btn ghost" href="/config" aria-label="<%= pageRtl ? 'الإعداد الكلاسيكي' : 'Classic config' %>"><%= pageRtl ? 'الإعداد الكلاسيكي' : 'Classic config' %></a>
+        </div>
+    </header>
+
+    <div class="canvas-main">
+        <aside class="canvas-palette">
+            <div class="canvas-side-head"><%= pageRtl ? 'إضافة بطاقة' : 'Add card' %></div>
+            <div class="canvas-palette-grid" id="canvas-palette-grid"></div>
+        </aside>
+
+        <main class="canvas-viewport" id="canvas-viewport">
+            <div class="canvas-world" id="canvas-world">
+                <div class="canvas-nodes" id="canvas-nodes"></div>
+            </div>
+            <svg class="canvas-edges" id="canvas-edges"></svg>
+            <div class="canvas-empty" id="canvas-empty">
+                <%= pageRtl ? 'لا توجد عناصر لعرضها.' : 'No configuration elements to display.' %>
+            </div>
+            <div class="canvas-minimap" id="canvas-minimap"></div>
+            <div class="canvas-toolbar">
+                <button type="button" class="canvas-zoom-btn" id="canvas-zoom-out" title="Zoom out">−</button>
+                <button type="button" class="canvas-zoom-btn" id="canvas-zoom-reset" title="Reset zoom">100%</button>
+                <button type="button" class="canvas-zoom-btn" id="canvas-zoom-in" title="Zoom in">+</button>
+            </div>
+            <div class="canvas-edge-toolbar" id="canvas-edge-toolbar" hidden>
+                <span id="canvas-edge-toolbar-label"></span>
+                <button type="button" class="canvas-btn danger" id="canvas-edge-remove"><%= pageRtl ? 'حذف الاتصال' : 'Remove connection' %></button>
+            </div>
+            <div class="canvas-status" id="canvas-status" role="status" aria-live="polite">Ready</div>
+        </main>
+
+    </div>
+</div>
+
+<div class="canvas-connection-popup" id="canvas-connection-popup" hidden>
+    <div class="canvas-connection-popup-head"><%= pageRtl ? 'اختر نوع الاتصال' : 'Choose connection type' %></div>
+    <div class="canvas-connection-options" id="canvas-connection-options"></div>
+    <button type="button" class="canvas-btn ghost" id="canvas-connection-cancel"><%= pageRtl ? 'إلغاء' : 'Cancel' %></button>
+</div>
+
+<div class="canvas-studio-overlay" id="canvas-studio-overlay" hidden>
+    <div class="canvas-studio-card">
+        <div class="canvas-studio-head">
+            <h2 id="canvas-studio-title"><%= pageRtl ? 'استوديو الصوت' : 'Audio Studio' %></h2>
+            <button type="button" class="canvas-btn ghost" id="canvas-studio-close" aria-label="<%= pageRtl ? 'إغلاق' : 'Close' %>">✕</button>
+        </div>
+        <div class="canvas-studio-grid">
+            <label class="canvas-form-field"><span><%= pageRtl ? 'الكسب (dB)' : 'Gain (dB)' %></span><input id="studio-gain" type="number" min="-50" max="20" value="0"></label>
+            <label class="canvas-form-field"><span><%= pageRtl ? 'التطبيع (dB)' : 'Normalize (dB)' %></span><input id="studio-normalize" type="number" min="-50" max="0" placeholder="—"></label>
+            <label class="canvas-form-field"><span><%= pageRtl ? 'الضغط' : 'Compand' %></span><select id="studio-compand"><option value="off">off</option><option value="soft">soft</option><option value="broadcast">broadcast</option></select></label>
+            <label class="canvas-form-field"><span><%= pageRtl ? 'الباس' : 'Bass' %></span><input id="studio-bass" type="number" min="-12" max="12" value="0"></label>
+            <label class="canvas-form-field"><span><%= pageRtl ? 'التريبل' : 'Treble' %></span><input id="studio-treble" type="number" min="-12" max="12" value="0"></label>
+            <label class="canvas-form-field"><span><%= pageRtl ? 'السرعة' : 'Tempo' %></span><input id="studio-tempo" type="number" min="0.7" max="1.5" step="0.05" value="1"></label>
+            <label class="canvas-form-field"><span><%= pageRtl ? 'تلاشي الدخول (ث)' : 'Fade in (s)' %></span><input id="studio-fade-in" type="number" min="0" max="2" step="0.1" value="0"></label>
+            <label class="canvas-form-field"><span><%= pageRtl ? 'تلاشي الخروج (ث)' : 'Fade out (s)' %></span><input id="studio-fade-out" type="number" min="0" max="2" step="0.1" value="0"></label>
+            <label class="canvas-form-field"><span><%= pageRtl ? 'صمت البداية (ث)' : 'Pad lead (s)' %></span><input id="studio-pad-lead" type="number" min="0" max="10" step="0.1" value="0"></label>
+            <label class="canvas-form-field"><span><%= pageRtl ? 'صمت النهاية (ث)' : 'Pad trail (s)' %></span><input id="studio-pad-trail" type="number" min="0" max="10" step="0.1" value="0"></label>
+        </div>
+        <div class="canvas-studio-checks">
+            <label class="canvas-form-check"><input id="studio-bandpass" type="checkbox"><span><%= pageRtl ? 'فلتر النطاق' : 'Band-pass filter' %></span></label>
+            <label class="canvas-form-check"><input id="studio-hiss" type="checkbox"><span><%= pageRtl ? 'إزالة الهسيس' : 'Remove hiss' %></span></label>
+            <label class="canvas-form-check"><input id="studio-trim" type="checkbox"><span><%= pageRtl ? 'قص الصمت' : 'Trim silence' %></span></label>
+            <label class="canvas-form-check"><input id="studio-reset" type="checkbox"><span><%= pageRtl ? 'استعادة الأصل' : 'Reset to original' %></span></label>
+            <label class="canvas-form-check" id="studio-codecs-wrap"><input id="studio-codecs" type="checkbox" checked><span><%= pageRtl ? 'توليد الترميزات' : 'Generate codecs' %></span></label>
+        </div>
+        <div class="canvas-form-status" id="canvas-studio-status"></div>
+        <div class="canvas-studio-footer">
+            <button type="button" class="canvas-btn ghost" id="canvas-studio-cancel"><%= pageRtl ? 'إلغاء' : 'Cancel' %></button>
+            <button type="button" class="canvas-btn primary" id="canvas-studio-apply"><%= pageRtl ? 'تطبيق' : 'Apply' %></button>
+        </div>
+    </div>
+</div>
+
+<div class="canvas-editor-overlay" id="canvas-editor-overlay" aria-hidden="true">
+    <div class="canvas-editor-panel" role="dialog" aria-modal="true" aria-labelledby="canvas-editor-title">
+        <div class="canvas-editor-head">
+            <div>
+                <h2 id="canvas-editor-title"><%= pageRtl ? 'محرر الإعداد' : 'Configuration editor' %></h2>
+                <p><%= pageRtl ? 'كل خيارات الإعداد الكلاسيكي داخل اللوحة' : 'Full classic options, inside the canvas' %></p>
+            </div>
+            <div class="canvas-editor-actions">
+                <button type="button" class="canvas-btn danger" id="canvas-editor-delete" hidden><%= pageRtl ? 'حذف البطاقة' : 'Delete card' %></button>
+                <button type="button" class="canvas-btn ghost" id="canvas-editor-classic" hidden><%= pageRtl ? 'تعديل في الإعداد الكلاسيكي' : 'Edit in classic config' %></button>
+                <button type="button" class="canvas-btn ghost" id="canvas-editor-refresh"><%= pageRtl ? 'تحديث اللوحة' : 'Reload canvas' %></button>
+                <button type="button" class="canvas-btn ghost" id="canvas-editor-close" aria-label="<%= pageRtl ? 'إغلاق' : 'Close' %>">✕</button>
+            </div>
+        </div>
+        <div class="canvas-editor-frame-wrap">
+            <form id="canvas-native-form" class="canvas-native-form" novalidate>
+                <div class="canvas-form-scroll" id="canvas-form-fields"></div>
+                <div class="canvas-form-footer">
+                    <span class="canvas-form-status" id="canvas-form-status"></span>
+                    <button type="button" class="canvas-btn ghost" id="canvas-form-cancel"><%= pageRtl ? 'إلغاء' : 'Cancel' %></button>
+                    <button type="submit" class="canvas-btn primary" id="canvas-form-submit"><%= pageRtl ? 'حفظ' : 'Save' %></button>
+                </div>
+            </form>
+            <div class="canvas-editor-loading" id="canvas-editor-loading"><%= pageRtl ? 'جاري تحميل النموذج…' : 'Loading form…' %></div>
+        </div>
+    </div>
+</div>
+
+<div class="canvas-modal" id="canvas-review-modal" aria-hidden="true">
+    <div class="canvas-modal-card canvas-review-card">
+        <div class="canvas-modal-head">
+            <h2><%= pageRtl ? 'مراجعة التغييرات' : 'Review changes' %></h2>
+            <button type="button" class="canvas-btn ghost" id="canvas-review-close">✕</button>
+        </div>
+        <div class="canvas-modal-body canvas-review-body" id="canvas-review-body"></div>
+        <div class="canvas-modal-footer canvas-review-footer">
+            <span class="canvas-review-status" id="canvas-review-status"></span>
+            <button type="button" class="canvas-btn ghost" id="canvas-review-cancel"><%= pageRtl ? 'رجوع' : 'Back' %></button>
+            <button type="button" class="canvas-btn primary" id="canvas-review-apply"><%= pageRtl ? 'تطبيق التغييرات' : 'Apply changes' %></button>
+        </div>
+    </div>
+</div>
+
+<div class="canvas-toast" id="canvas-toast"></div>
+<script src="/js/pbx-canvas-model.js?v=43"></script>
+<script src="/js/pbx-canvas-forms.js?v=43"></script>
+<script src="/js/pbx-canvas.js?v=45"></script>
+</body>
+</html>

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Sokrat VoIP - Speech-To-Text background worker.
- * Supports offline whisper.cpp and the existing cloud providers.
+ * Sokrat VoIP - ElevenLabs Scribe v3 speech-to-text worker.
+ * Processes completed call recordings and voicemails asynchronously.
  */
 
 const fs = require('fs');
@@ -14,7 +14,6 @@ const { evaluateTranscript } = require('../lib/ai/evaluation');
 const {
     normaliseSegments,
     singleSegment,
-    deepgramSegments,
     transcriptText
 } = require('../lib/ai/transcripts');
 
@@ -44,21 +43,11 @@ const DB_CONFIG = {
 
 const MONITOR_ROOT = process.env.STT_MONITOR_ROOT || '/var/spool/asterisk/monitor';
 const VM_ROOT = process.env.STT_VM_ROOT || '/var/spool/asterisk/voicemail/default';
-const LOCAL_ENDPOINT = process.env.STT_LOCAL_ENDPOINT || 'http://127.0.0.1:8178/inference';
-const LOCAL_TIMEOUT_MS = Math.max(30_000, Number(process.env.STT_LOCAL_TIMEOUT_MS || 1_800_000));
+const STT_TIMEOUT_MS = Math.max(30_000, Number(process.env.STT_TIMEOUT_MS || 1_800_000));
 const MAX_ATTEMPTS = Math.max(1, Number(process.env.STT_MAX_ATTEMPTS || 3));
-
-const DEFAULT_PROMPTS = {
-    ar: 'تسجيل مكالمة هاتفية خدمة عملاء باللغة العربية والعامية المصرية: الموظف، العميل، التحويلة، المكالمة.',
-    en: 'Phone conversation: hello, yes, okay, thank you, goodbye.',
-    auto: 'محادثة هاتفية بالعامية المصرية: ألو، أيوة، تمام، إزيك، شكراً. Phone call.'
-};
 
 let isRunning = true;
 let isBusy = false;
-let localInferenceActive = false;
-let pauseDuringCallsEnabled = true;
-let whisperPausedForCall = false;
 let shuttingDown = false;
 let activeJob = null;
 let activeRequestController = null;
@@ -134,240 +123,80 @@ async function prepareAudioForUpload(inputPath, outputPath) {
     ], { timeout: 120_000 });
 }
 
-async function prepareAudioForLocal(inputPath, outputPath) {
-    await execFileAsync('ffmpeg', [
-        '-y', '-i', inputPath, '-ar', '16000', '-ac', '1',
-        '-c:a', 'pcm_s16le',
-        '-af', 'highpass=f=120,lowpass=f=3800',
-        outputPath
-    ], { timeout: 120_000 });
+function parseKeyterms(prompt = '') {
+    return String(prompt || '')
+        .split(',')
+        .map(item => item.trim())
+        .filter(item => item && item.length <= 50 && item.split(/\s+/).length <= 5)
+        .slice(0, 1000);
 }
 
-function assertLoopbackEndpoint(rawUrl) {
-    const endpoint = new URL(rawUrl || LOCAL_ENDPOINT);
-    const host = endpoint.hostname.replace(/^\[|\]$/g, '').toLowerCase();
-    if (endpoint.protocol !== 'http:' || !['127.0.0.1', 'localhost', '::1'].includes(host)) {
-        throw new Error('Local whisper.cpp endpoint must use HTTP on 127.0.0.1, localhost, or ::1.');
-    }
-    return endpoint.toString();
-}
-
-function extractTranscript(data) {
-    if (!data) return '';
-    if (typeof data === 'string') return data.trim();
-    if (typeof data.text === 'string') return data.text.trim();
-    if (typeof data.transcript === 'string') return data.transcript.trim();
-    if (Array.isArray(data.transcription)) {
-        return data.transcription.map(item => typeof item === 'string' ? item : item?.text || '').join(' ').trim();
-    }
-    if (Array.isArray(data.segments)) {
-        return data.segments.map(item => item?.text || '').join(' ').trim();
-    }
-    return '';
-}
-
-async function transcribeWithLocalWhisper(audioFilePath, options = {}) {
-    const endpoint = assertLoopbackEndpoint(options.apiUrl || options.api_url || LOCAL_ENDPOINT);
-    const language = options.language || 'ar';
-    const prompt = options.prompt || DEFAULT_PROMPTS[language] || DEFAULT_PROMPTS.ar;
-    const fileBuffer = fs.readFileSync(audioFilePath);
-    const formData = new FormData();
-    formData.append('file', new Blob([fileBuffer], { type: 'audio/wav' }), path.basename(audioFilePath));
-    formData.append('response_format', 'json');
-    formData.append('temperature', '0.0');
-    if (language) formData.append('language', language);
-    if (prompt) {
-        formData.append('prompt', prompt);
-
-    }
-
-    let response;
-    try {
-        const timeoutSignal = AbortSignal.timeout(options.timeoutMs || LOCAL_TIMEOUT_MS);
-        response = await fetch(endpoint, {
-            method: 'POST', body: formData,
-            signal: options.signal ? AbortSignal.any([options.signal, timeoutSignal]) : timeoutSignal
-        });
-    } catch (err) {
-        throw new Error(`Local whisper.cpp service unreachable at ${endpoint}: ${err.message}`);
-    }
-    const body = await response.text();
-    if (!response.ok) throw new Error(`Local whisper.cpp error (${response.status}): ${body.slice(0, 500)}`);
-    let parsed = body;
-    try { parsed = JSON.parse(body); } catch (_) {}
-    return extractTranscript(parsed).replace(/\s+/g, ' ').trim();
-}
-
-const MUNSIT_SEGMENT_SEC = Math.max(60, Number(process.env.MUNSIT_SEGMENT_SEC || 600));
-
-async function getAudioDuration(filePath) {
-    return new Promise(resolve => {
-        execFile('ffmpeg', ['-i', filePath], (err, stdout, stderr) => {
-            const out = (stderr || '') + (err ? err.message : '');
-            const match = out.match(/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/);
-            if (match) {
-                const sec = parseInt(match[1], 10) * 3600 + parseInt(match[2], 10) * 60 + parseFloat(match[3]);
-                return resolve(sec);
-            }
-            resolve(0);
-        });
-    });
-}
-
-async function transcribeMunsitSingleFile(filePath, options = {}) {
-    const { apiKey = '', apiUrl = '', modelName = 'munsit', language = 'ar' } = options;
-    const endpoint = apiUrl || 'https://api.munsit.com/api/v1/audio/transcribe';
-    const fileBuffer = fs.readFileSync(filePath);
-    const fileName = path.basename(filePath);
-    const formData = new FormData();
-    formData.append('file', new Blob([fileBuffer], { type: filePath.endsWith('.mp3') ? 'audio/mpeg' : 'audio/wav' }), fileName);
-    formData.append('model', modelName || 'munsit');
-    if (language && language !== 'auto') formData.append('language', language);
-    const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'x-api-key': apiKey },
-        body: formData,
-        signal: options.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(LOCAL_TIMEOUT_MS)]) : AbortSignal.timeout(LOCAL_TIMEOUT_MS)
-    });
-    if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(`Munsit API error (${res.status}): ${errText.slice(0, 500)}`);
-    }
-    const json = await res.json();
-    return (json?.data?.transcription || json?.data?.text || '').trim();
-}
-
-async function transcribeWithMunsit(audioFilePath, options = {}) {
-    const durationSec = await getAudioDuration(audioFilePath);
-    if (!durationSec || durationSec <= MUNSIT_SEGMENT_SEC) {
-        return transcribeMunsitSingleFile(audioFilePath, options);
-    }
-
-    const chunkDir = path.join(os.tmpdir(), `munsit_chunks_${Date.now()}_${process.pid}`);
-    fs.mkdirSync(chunkDir, { recursive: true });
-    const ext = path.extname(audioFilePath) || '.wav';
-    try {
-        await execFileAsync('ffmpeg', [
-            '-y', '-i', audioFilePath,
-            '-f', 'segment',
-            '-segment_time', String(MUNSIT_SEGMENT_SEC),
-            '-reset_timestamps', '1',
-            '-c', 'copy',
-            path.join(chunkDir, `chunk_%03d${ext}`)
-        ], { timeout: 120_000 });
-
-        const chunks = fs.readdirSync(chunkDir)
-            .filter(f => f.startsWith('chunk_') && f.endsWith(ext))
-            .sort()
-            .map(f => path.join(chunkDir, f));
-
-        if (!chunks.length) {
-            return transcribeMunsitSingleFile(audioFilePath, options);
+function elevenLabsSegments(data, fallbackText = '') {
+    const words = Array.isArray(data?.words) ? data.words : [];
+    const segments = [];
+    let current = null;
+    for (const word of words) {
+        if (word.type !== 'word' || !word.text) continue;
+        const speaker = word.speaker_id || 'speaker_1';
+        const startMs = Number.isFinite(word.start) ? Math.round(word.start * 1000) : null;
+        const endMs = Number.isFinite(word.end) ? Math.round(word.end * 1000) : null;
+        if (!current || current.speaker !== speaker) {
+            if (current) segments.push(current);
+            current = { speaker, start_ms: startMs, end_ms: endMs, text: String(word.text).trim() };
+        } else {
+            current.text = `${current.text} ${String(word.text).trim()}`.trim();
+            current.end_ms = endMs ?? current.end_ms;
         }
-
-        const chunkTranscripts = [];
-        for (let i = 0; i < chunks.length; i++) {
-            const chunkPath = chunks[i];
-            console.log(`[STT-WORKER] Transcribing Munsit segment ${i + 1}/${chunks.length} (${path.basename(chunkPath)})...`);
-            const text = await transcribeMunsitSingleFile(chunkPath, options);
-            if (text) chunkTranscripts.push(text);
-        }
-        return chunkTranscripts.join(' ').trim();
-    } finally {
-        try {
-            fs.rmSync(chunkDir, { recursive: true, force: true });
-        } catch (_) {}
     }
+    if (current) segments.push(current);
+    return segments.length ? segments : singleSegment(fallbackText, Number(data?.audio_duration_secs) || 0);
 }
 
-
-async function transcribeWithCloudAiDetailed(audioFilePath, options = {}) {
+async function transcribeWithElevenLabs(audioFilePath, options = {}) {
     const {
-        provider = 'groq', apiKey = '', apiUrl = '', modelName = 'whisper-large-v3',
-        language = 'auto', prompt = ''
+        apiKey = '', apiUrl = '', modelName = 'scribe_v3',
+        language = 'ar', prompt = '', signal
     } = options;
-    if (!apiKey) throw new Error('AI Provider API key is not configured. Please set your API key in PBX Settings -> Speech-to-Text.');
-
-    const normalizedProvider = String(provider || 'groq').toLowerCase();
+    if (!apiKey) throw new Error('ElevenLabs API key is not configured. Add it in Configuration -> Speech-to-Text.');
+    const endpoint = apiUrl || 'https://api.elevenlabs.io/v1/speech-to-text';
     const fileBuffer = fs.readFileSync(audioFilePath);
     const fileName = path.basename(audioFilePath);
-    const resolvedPrompt = prompt || DEFAULT_PROMPTS[language] || DEFAULT_PROMPTS.ar;
-    const durationSec = await getAudioDuration(audioFilePath).catch(() => 0);
-
-    if (normalizedProvider === 'munsit') {
-        const text = await transcribeWithMunsit(audioFilePath, options);
-        return {
-            text: transcriptText(singleSegment(text, durationSec), text),
-            segments: singleSegment(text, durationSec),
-            language,
-            provider: 'munsit',
-            model: modelName || 'munsit',
-            raw: null
-        };
-    }
-
-    if (normalizedProvider === 'deepgram') {
-        const targetUrl = new URL(apiUrl || 'https://api.deepgram.com/v1/listen');
-        if (modelName) targetUrl.searchParams.set('model', modelName);
-        if (language && language !== 'auto') targetUrl.searchParams.set('language', language);
-        else targetUrl.searchParams.set('detect_language', 'true');
-        targetUrl.searchParams.set('smart_format', 'true');
-        targetUrl.searchParams.set('punctuate', 'true');
-        // Speaker diarization is the critical addition. Utterances give
-        // speaker-labeled segments with millisecond timestamps.
-        targetUrl.searchParams.set('diarize', 'true');
-        targetUrl.searchParams.set('utterances', 'true');
-        targetUrl.searchParams.set('paragraphs', 'true');
-        const res = await fetch(targetUrl.toString(), {
-            method: 'POST',
-            headers: { Authorization: `Token ${apiKey}`, 'Content-Type': audioFilePath.endsWith('.mp3') ? 'audio/mpeg' : 'audio/wav' },
-            body: fileBuffer,
-            signal: options.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(LOCAL_TIMEOUT_MS)]) : AbortSignal.timeout(LOCAL_TIMEOUT_MS)
-        });
-        if (!res.ok) throw new Error(`Deepgram API error (${res.status}): ${await res.text()}`);
-        const data = await res.json();
-        const fallbackText = (data?.results?.channels?.[0]?.alternatives?.[0]?.transcript || '').trim();
-        const segments = deepgramSegments(data, fallbackText);
-        return {
-            text: transcriptText(segments, fallbackText),
-            segments,
-            language: data?.results?.channels?.[0]?.detected_language || language,
-            provider: 'deepgram',
-            model: modelName || 'nova-3',
-            raw: data
-        };
-    }
-
-    let endpoint = apiUrl;
-    if (!endpoint) endpoint = normalizedProvider === 'openai'
-        ? 'https://api.openai.com/v1/audio/transcriptions'
-        : 'https://api.groq.com/openai/v1/audio/transcriptions';
+    const mime = audioFilePath.toLowerCase().endsWith('.mp3') ? 'audio/mpeg' : 'audio/wav';
     const formData = new FormData();
-    formData.append('file', new Blob([fileBuffer], { type: audioFilePath.endsWith('.mp3') ? 'audio/mpeg' : 'audio/wav' }), fileName);
-    let effectiveModel = modelName;
-    if (!effectiveModel || ['base', 'small', 'tiny'].includes(effectiveModel)) {
-        effectiveModel = normalizedProvider === 'openai' ? 'whisper-1' : 'whisper-large-v3';
-    }
-    formData.append('model', effectiveModel);
-    if (language && language !== 'auto') formData.append('language', language);
-    if (resolvedPrompt) formData.append('prompt', resolvedPrompt);
-    formData.append('temperature', '0.0');
+    formData.append('file', new Blob([fileBuffer], { type: mime }), fileName);
+    formData.append('model_id', 'scribe_v3');
+    if (language && language !== 'auto') formData.append('language_code', language);
+    formData.append('diarize', 'true');
+    formData.append('timestamps_granularity', 'word');
+    formData.append('numbers_format', 'digits');
+    formData.append('tag_audio_events', 'false');
+    for (const keyterm of parseKeyterms(prompt)) formData.append('keyterms', keyterm);
     const res = await fetch(endpoint, {
-        method: 'POST', headers: { Authorization: `Bearer ${apiKey}` }, body: formData,
-        signal: options.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(LOCAL_TIMEOUT_MS)]) : AbortSignal.timeout(LOCAL_TIMEOUT_MS)
+        method: 'POST',
+        headers: { 'xi-api-key': apiKey },
+        body: formData,
+        signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(STT_TIMEOUT_MS)]) : AbortSignal.timeout(STT_TIMEOUT_MS)
     });
-    if (!res.ok) throw new Error(`${normalizedProvider.toUpperCase()} API error (${res.status}): ${await res.text()}`);
+    if (!res.ok) throw new Error(`ElevenLabs API error (${res.status}): ${(await res.text()).slice(0, 800)}`);
     const data = await res.json();
-    const text = extractTranscript(data);
-    const segments = singleSegment(text, durationSec);
+    const text = String(data?.text || '').trim();
+    const segments = elevenLabsSegments(data, text);
     return {
         text: transcriptText(segments, text),
         segments,
-        language,
-        provider: normalizedProvider,
-        model: effectiveModel,
+        language: data?.language_code || language,
+        provider: 'elevenlabs',
+        model: 'scribe_v3',
         raw: data
     };
+}
+
+async function transcribeWithCloudAiDetailed(audioFilePath, options = {}) {
+    const provider = String(options.provider || 'elevenlabs').toLowerCase();
+    if (provider !== 'elevenlabs') {
+        throw new Error('Only ElevenLabs Scribe v3 is configured. Change the STT provider in Configuration -> Speech-to-Text.');
+    }
+    return transcribeWithElevenLabs(audioFilePath, options);
 }
 
 async function transcribeWithCloudAi(audioFilePath, options = {}) {
@@ -375,14 +204,7 @@ async function transcribeWithCloudAi(audioFilePath, options = {}) {
     return detailed.text;
 }
 
-function isLocalSettings(settings = {}) {
-    return settings.engine === 'local_whisper' || settings.provider === 'local';
-}
-
 async function transcribeAudioDetailed(audioPath, settings) {
-    if (isLocalSettings(settings)) {
-        throw new Error('Local whisper engine has been removed. Please select a Cloud STT provider (Munsit, Groq, OpenAI, Deepgram, or Custom) in settings.');
-    }
     return transcribeWithCloudAiDetailed(audioPath, {
         provider: settings.provider, apiKey: settings.api_key, apiUrl: settings.api_url,
         modelName: settings.model_name, language: settings.language, prompt: settings.prompt, signal: settings.signal
@@ -395,9 +217,6 @@ async function transcribeAudio(audioPath, settings) {
 }
 
 async function testSttConnection(settings = {}) {
-    if (isLocalSettings(settings)) {
-        throw new Error('Local whisper engine has been removed. Please configure a Cloud STT provider (Munsit, Groq, OpenAI, Deepgram, or Custom).');
-    }
     const startTime = Date.now();
     const tmpAudio = path.join(os.tmpdir(), `stt_test_${Date.now()}.mp3`);
     try {
@@ -432,70 +251,10 @@ async function getSttSettings(pool) {
         if (rows?.length) return rows[0];
     } catch (_) {}
     return {
-        enabled: 1, engine: 'cloud_api', provider: 'munsit', api_key: '', api_url: 'https://api.munsit.com/api/v1/audio/transcribe',
-        model_name: 'munsit', language: 'ar', prompt: DEFAULT_PROMPTS.ar,
-        transcribe_calls: 1, transcribe_voicemails: 1, min_duration_sec: 3, pause_during_calls: 1
+        enabled: 1, engine: 'cloud_api', provider: 'elevenlabs', api_key: '', api_url: 'https://api.elevenlabs.io/v1/speech-to-text',
+        model_name: 'scribe_v3', language: 'ar', prompt: '',
+        transcribe_calls: 1, transcribe_voicemails: 1, min_duration_sec: 3
     };
-}
-
-function parseAsteriskActivity(output = '') {
-    const channels = String(output).match(/(\d+) active channels?/i);
-    const calls = String(output).match(/(\d+) active calls?/i);
-    return Number(channels?.[1] || 0) > 0 || Number(calls?.[1] || 0) > 0;
-}
-
-async function hasActiveCalls() {
-    try {
-        const { stdout } = await execFileAsync('asterisk', ['-rx', 'core show channels count'], { timeout: 5000 });
-        return parseAsteriskActivity(stdout);
-    } catch (err) {
-        // Fail safe: if Asterisk cannot be queried, do not take CPU from telephony.
-        console.error(`[STT-WORKER] Unable to determine Asterisk call activity: ${err.message}`);
-        return true;
-    }
-}
-
-async function signalLocalWhisper(signal) {
-    try {
-        const { stdout } = await execFileAsync('pgrep', ['-u', String(process.getuid()), '-x', 'whisper-server'], { timeout: 3000 });
-        for (const rawPid of stdout.trim().split(/\s+/)) {
-            const pid = Number(rawPid);
-            if (Number.isInteger(pid) && pid > 1) process.kill(pid, signal);
-        }
-    } catch (err) {
-        if (!String(err.message).includes('Command failed')) {
-            console.error(`[STT-WORKER] Unable to signal local Whisper: ${err.message}`);
-        }
-    }
-}
-
-async function enforceLiveCallPriority() {
-    if (!pauseDuringCallsEnabled) {
-        if (whisperPausedForCall) {
-            await signalLocalWhisper('SIGCONT');
-            whisperPausedForCall = false;
-            console.log('[STT-WORKER] Resumed local Whisper inference.');
-        }
-        return;
-    }
-    const active = await hasActiveCalls();
-    if (!localInferenceActive) {
-        if (!active && whisperPausedForCall) {
-            await signalLocalWhisper('SIGCONT');
-            whisperPausedForCall = false;
-            console.log('[STT-WORKER] Resumed local Whisper after calls ended.');
-        }
-        return;
-    }
-    if (active && !whisperPausedForCall) {
-        await signalLocalWhisper('SIGSTOP');
-        whisperPausedForCall = true;
-        console.log('[STT-WORKER] Paused local Whisper inference for an active Asterisk call.');
-    } else if (!active && whisperPausedForCall) {
-        await signalLocalWhisper('SIGCONT');
-        whisperPausedForCall = false;
-        console.log('[STT-WORKER] Resumed local Whisper inference after calls ended.');
-    }
 }
 
 async function waitForStableFile(filePath) {
@@ -537,26 +296,13 @@ async function markFailure(pool, table, id, err, terminal = false) {
 
 async function normalizeAndTranscribe(audioPath, jobKey, settings) {
     await waitForStableFile(audioPath);
-    const local = isLocalSettings(settings);
-    const output = path.join(os.tmpdir(), `stt_${local ? 'local' : 'cloud'}_${jobKey}_${Date.now()}.${local ? 'wav' : 'mp3'}`);
+    const output = path.join(os.tmpdir(), `stt_cloud_${jobKey}_${Date.now()}.mp3`);
     try {
-        if (local) await prepareAudioForLocal(audioPath, output);
-        else await prepareAudioForUpload(audioPath, output);
-        if (local) localInferenceActive = true;
+        await prepareAudioForUpload(audioPath, output);
         activeRequestController = new AbortController();
         return await transcribeAudioDetailed(output, { ...settings, signal: activeRequestController.signal });
     } finally {
         activeRequestController = null;
-        if (local) {
-            localInferenceActive = false;
-            if (whisperPausedForCall) {
-                const active = pauseDuringCallsEnabled && await hasActiveCalls();
-                if (!active) {
-                    await signalLocalWhisper('SIGCONT');
-                    whisperPausedForCall = false;
-                }
-            }
-        }
         try { if (fs.existsSync(output)) fs.unlinkSync(output); } catch (_) {}
     }
 }
@@ -901,7 +647,7 @@ async function processVoicemail(pool, settings) {
                 processing_ms = ?, engine = ?, model_used = ?, segments_json = ?,
                 provider = ?, language_detected = ?, confidence_avg = ? WHERE id = ?
         `, [transcript, Date.now() - started,
-            isLocalSettings(settings) ? 'local_whisper' : 'cloud_api', detailed.model || settings.model_name || '',
+            'cloud_api', detailed.model || settings.model_name || '',
             JSON.stringify(saved.segments), detailed.provider || settings.provider || null,
             detailed.language || null, saved.confidenceAvg, job.id]);
         await enqueueEvaluationJobs(pool, 'voicemail', job.id, {
@@ -976,7 +722,7 @@ async function processCall(pool, settings) {
                 processing_started_at = NULL, processing_ms = ?, engine = ?, model_used = ?,
                 segments_json = ?, provider = ?, language_detected = ?, confidence_avg = ? WHERE id = ?
         `, [transcript, duration, Date.now() - started,
-            isLocalSettings(settings) ? 'local_whisper' : 'cloud_api', detailed.model || settings.model_name || '',
+            'cloud_api', detailed.model || settings.model_name || '',
             JSON.stringify(saved.segments), detailed.provider || settings.provider || null,
             detailed.language || null, saved.confidenceAvg, job.id]);
         let campaignId = null;
@@ -1015,13 +761,9 @@ async function processNextJob(pool) {
     isBusy = true;
     try {
         const settings = await getSttSettings(pool);
-        const canTranscribe = Boolean(Number(settings.enabled)) && (isLocalSettings(settings) || Boolean(settings.api_key));
-        if (canTranscribe) {
-            pauseDuringCallsEnabled = Boolean(Number(settings.pause_during_calls ?? 1));
-            if (!(pauseDuringCallsEnabled && await hasActiveCalls())) {
-                const didVoicemail = await processVoicemail(pool, settings);
-                if (!didVoicemail) await processCall(pool, settings);
-            }
+        if (Boolean(Number(settings.enabled)) && Boolean(settings.api_key)) {
+            const didVoicemail = await processVoicemail(pool, settings);
+            if (!didVoicemail) await processCall(pool, settings);
         }
         // Evaluation is a cloud API call, not local CPU. Run it even while
         // telephony is busy and when transcription is disabled. Do not return
@@ -1038,24 +780,11 @@ async function startWorker() {
     if (!DB_CONFIG.password) throw new Error(`A database password is required. Configure DB_PASS or DB_PASS_B64 in ${envFile}.`);
     console.log('[STT-WORKER] Starting Sokrat Speech-To-Text worker...');
     const pool = mysql.createPool(DB_CONFIG);
-    // Recover a suspended engine only when telephony is idle. Otherwise keep it
-    // stopped until the live-call guard observes that all channels have ended.
-    if (await hasActiveCalls()) {
-        await signalLocalWhisper('SIGSTOP');
-        whisperPausedForCall = true;
-    } else {
-        await signalLocalWhisper('SIGCONT');
-    }
     await recoverStaleJobs(pool);
-    const callGuard = setInterval(() => {
-        enforceLiveCallPriority().catch(err => console.error('[STT-WORKER] Live-call guard error:', err.message));
-    }, 2000);
-    callGuard.unref();
     const shutdown = async signal => {
         if (shuttingDown) return;
         shuttingDown = true;
         isRunning = false;
-        clearInterval(callGuard);
         activeRequestController?.abort(new Error(`Worker received ${signal}`));
         if (activeJob) {
             await pool.query(`
@@ -1065,10 +794,6 @@ async function startWorker() {
                 WHERE id = ? AND status = 'processing'
             `, [activeJob.id]);
             activeJob = null;
-        }
-        if (whisperPausedForCall && !await hasActiveCalls()) {
-            await signalLocalWhisper('SIGCONT');
-            whisperPausedForCall = false;
         }
         console.log(`[STT-WORKER] Received ${signal}; shutting down.`);
         await pool.end();
@@ -1098,24 +823,18 @@ module.exports = {
     resolveCallAudioPath,
     resolveVoicemailAudioPath,
     prepareAudioForUpload,
-    prepareAudioForLocal,
     transcribeWithCloudAi,
     transcribeWithCloudAiDetailed,
-    transcribeWithLocalWhisper,
     transcribeAudio,
     transcribeAudioDetailed,
     testCloudSttConnection,
-    getAudioDuration,
-    transcribeWithMunsit,
+    transcribeWithElevenLabs,
+    parseKeyterms,
+    elevenLabsSegments,
     testSttConnection,
     getSttSettings,
     getAiEvaluationSettings,
     processEvaluationJob,
     recoverStaleJobs,
-    processNextJob,
-    assertLoopbackEndpoint,
-    extractTranscript,
-    parseAsteriskActivity,
-    signalLocalWhisper,
-    enforceLiveCallPriority
+    processNextJob
 };

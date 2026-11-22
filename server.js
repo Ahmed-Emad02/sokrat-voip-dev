@@ -70,18 +70,40 @@ const registerCrmLiveSocket = require('./socket/crm-live');
 const { getPhoneVariants, cleanPhoneString } = require('./lib/phone-normalization');
 const { loadContactsCached } = require('./lib/contacts');
 const { MAX_BULK_EXTENSIONS, buildExtensionRange } = require('./lib/extension-bulk');
+const {
+    JB_DEFAULTS,
+    MANAGED_GLOBAL_JB_CONTEXTS,
+    LEGACY_GLOBAL_JB_CONTEXTS,
+    hasJitterBufferFields,
+    normalizeJitterBuffer,
+    astdbCommandsForJitterBuffer,
+    parseAmpuserJitterBufferMap,
+    getJitterBufferFromAstdbMap,
+    effectiveJitterBufferFields,
+    stripManagedJitterBufferLines,
+    managedJitterBufferPresence
+} = require('./lib/jitter-buffer');
 const dialerFollowup = require('./lib/dialer-followup');
 const { resolveRecordingPath, streamRecordingFile, createMediaId } = require('./lib/recordings');
 const gitHistoryService = require('./backend/git-history-service');
 const {
     initApiKeyTables,
     createApiKey,
+    updateApiKey,
     listApiKeys,
     revealApiKey,
     setApiKeyStatus,
     deleteApiKey,
     validateApiKey
 } = require('./lib/api-key-manager');
+const {
+    hasScope,
+    hasAnyScope,
+    getApiKeyScopes,
+    enforceReadOnlyApiKey
+} = require('./lib/api-key-scopes');
+const { checkApiKeyRateLimit } = require('./lib/api-key-rate-limit');
+const callLifecycle = require('./lib/call-events');
 const {
     initCrmTables,
     createPairingCode,
@@ -1454,28 +1476,26 @@ async function initAuthDb() {
             \`id\` INT PRIMARY KEY DEFAULT 1,
             \`enabled\` TINYINT(1) DEFAULT 1,
             \`engine\` VARCHAR(32) DEFAULT 'cloud_api',
-            \`provider\` VARCHAR(32) DEFAULT 'munsit',
+            \`provider\` VARCHAR(32) DEFAULT 'elevenlabs',
             \`api_key\` TEXT DEFAULT NULL,
-            \`api_url\` VARCHAR(255) DEFAULT 'https://api.munsit.com/api/v1/audio/transcribe',
-            \`model_name\` VARCHAR(64) DEFAULT 'munsit',
+            \`api_url\` VARCHAR(255) DEFAULT 'https://api.elevenlabs.io/v1/speech-to-text',
+            \`model_name\` VARCHAR(64) DEFAULT 'scribe_v3',
             \`language\` VARCHAR(10) DEFAULT 'ar',
             \`prompt\` TEXT DEFAULT NULL,
             \`transcribe_calls\` TINYINT(1) DEFAULT 0,
             \`transcribe_voicemails\` TINYINT(1) DEFAULT 0,
             \`min_duration_sec\` INT DEFAULT 3,
             \`max_concurrency\` INT DEFAULT 1,
-            \`pause_during_calls\` TINYINT(1) DEFAULT 1,
             \`updated_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
     // Existing cloud installations predate the engine discriminator. Preserve
     // their provider behavior safely without re-writing .frm files.
     await ensureDbColumn(conn, 'asterisk.stt_settings', 'engine', "VARCHAR(32) DEFAULT 'cloud_api'");
-    await ensureDbColumn(conn, 'asterisk.stt_settings', 'provider', "VARCHAR(32) DEFAULT 'groq'");
+    await ensureDbColumn(conn, 'asterisk.stt_settings', 'provider', "VARCHAR(32) DEFAULT 'elevenlabs'");
     await ensureDbColumn(conn, 'asterisk.stt_settings', 'api_key', 'TEXT DEFAULT NULL');
-    await ensureDbColumn(conn, 'asterisk.stt_settings', 'api_url', "VARCHAR(255) DEFAULT 'https://api.groq.com/openai/v1/audio/transcriptions'");
+    await ensureDbColumn(conn, 'asterisk.stt_settings', 'api_url', "VARCHAR(255) DEFAULT 'https://api.elevenlabs.io/v1/speech-to-text'");
     await ensureDbColumn(conn, 'asterisk.stt_settings', 'prompt', 'TEXT DEFAULT NULL');
-    await ensureDbColumn(conn, 'asterisk.stt_settings', 'pause_during_calls', 'TINYINT(1) DEFAULT 1');
     for (const table of ['cdr_transcriptions', 'voicemail_transcriptions']) {
         await ensureDbColumn(conn, `asteriskcdrdb.${table}`, 'attempt_count', 'INT NOT NULL DEFAULT 0');
         await ensureDbColumn(conn, `asteriskcdrdb.${table}`, 'processing_started_at', 'DATETIME DEFAULT NULL');
@@ -1953,6 +1973,17 @@ return null;
 
 function requireTabPermission(tabName) {
 return (req, res, next) => {
+if (req.isApiKeyAuthenticated && req.apiKey) {
+    const required = tabName === 'call_history' || tabName === 'cdr'
+        ? ['calls:read', 'cdr', 'cdr:read', 'recordings:read']
+        : tabName === 'ext-stats'
+            ? ['stats:read', 'ext-stats']
+            : tabName === 'operator'
+                ? ['live:read', 'operator']
+                : [tabName];
+    if (hasAnyScope(getApiKeyScopes(req), required)) return next();
+    return res.status(403).json({ success: false, error: `Forbidden. API key missing required scope: ${required.join(' or ')}` });
+}
 if (isSuperAdmin(req)) return next();
 const perms = req.session.userPermissions || [];
         if (perms.includes(tabName)) return next();
@@ -2628,7 +2659,7 @@ async function requireAuth(req, res, next) {
                          req.path.startsWith('/api/') ||
                          req.path.startsWith('/audio/') ||
                          req.path.startsWith('/recordings/') ||
-                         (req.path.startsWith('/integrations/') && req.path !== '/integrations/crm') ||
+                         (req.path.startsWith('/integrations/') && req.path !== '/integrations') ||
                          req.xhr ||
                          (req.headers.accept && req.headers.accept.includes('application/json') && !req.headers.accept.includes('text/html'))
     );
@@ -2644,8 +2675,7 @@ async function requireAuth(req, res, next) {
 function requireActionPermission(actionPermission) {
     return (req, res, next) => {
         if (req.isApiKeyAuthenticated && req.apiKey) {
-            const scopes = String(req.apiKey.scopes || '*').split(',').map(s => s.trim().toLowerCase());
-            if (scopes.includes('*') || scopes.includes(actionPermission.toLowerCase())) {
+            if (hasScope(getApiKeyScopes(req), actionPermission)) {
                 return next();
             }
             return res.status(403).json({ success: false, error: `Forbidden. API key missing required scope: ${actionPermission}` });
@@ -2662,8 +2692,7 @@ function requireActionPermission(actionPermission) {
 function requireConfigPermission(subTab) {
     return (req, res, next) => {
         if (req.isApiKeyAuthenticated && req.apiKey) {
-            const scopes = String(req.apiKey.scopes || '*').split(',').map(s => s.trim().toLowerCase());
-            if (scopes.includes('*') || scopes.includes('config') || scopes.includes('config-' + subTab.toLowerCase())) {
+            if (hasAnyScope(getApiKeyScopes(req), ['config', `config-${String(subTab).toLowerCase()}`])) {
                 return next();
             }
             return res.status(403).json({ success: false, error: `Forbidden. API key missing required scope: config` });
@@ -2715,12 +2744,24 @@ app.use(async (req, res, next) => {
             });
         }
 
+        const rate = checkApiKeyRateLimit(result.key.id, clientIp);
+        res.set('X-RateLimit-Limit', String(rate.limit));
+        res.set('X-RateLimit-Remaining', String(rate.remaining));
+        res.set('X-RateLimit-Reset', String(Math.ceil(rate.resetAt / 1000)));
+        if (!rate.allowed) {
+            res.set('Retry-After', String(rate.retryAfterSec));
+            return res.status(429).json({
+                success: false,
+                error: 'API key rate limit exceeded. Retry later.'
+            });
+        }
+
         // Attach authenticated key metadata
         req.apiKey = result.key;
         req.isApiKeyAuthenticated = true;
         res.locals.currentUser = result.key.name || 'API Client';
         res.locals.isApiKey = true;
-        next();
+        return enforceReadOnlyApiKey(req, res, next);
     } catch (err) {
         console.error('API Key Middleware Error:', err);
         return res.status(500).json({ success: false, error: 'Internal API key validation error' });
@@ -2757,12 +2798,12 @@ app.use((req, res, next) => {
     const publicPaths = [
         '/login', '/logout', '/forgot-password', '/reset-password',
         '/api/auth/forgot-password', '/api/auth/reset-password', '/api/network-info',
-        '/favicon.ico', '/favicon.png', '/robots.txt', '/embed/crm/live',
+        '/favicon.ico', '/favicon.png', '/robots.txt', '/embed/live',
         '/preview/guest-call',
         '/401', '/403', '/404', '/api/telephony/camp-on/dialplan-trigger',
         '/api/federation/v1/ping'
     ];
-    if (publicPaths.includes(req.path) || req.path.startsWith('/public/') || req.path.startsWith('/c/') || req.path.startsWith('/api/public/') || req.path.startsWith('/api/extension-policy/') || req.path.startsWith('/api/integrations/crm/v1/') || req.path.startsWith('/api/extension/v1/') || req.path.startsWith('/api/extension-chat/v1/') || req.path.startsWith('/api/extension-video/v1/') || req.path.startsWith('/api/extension-agent-status/v1/')) {
+    if (publicPaths.includes(req.path) || req.path.startsWith('/public/') || req.path.startsWith('/c/') || req.path.startsWith('/api/public/') || req.path.startsWith('/api/extension-policy/') || req.path.startsWith('/api/integrations/v1/') || req.path.startsWith('/api/extension/v1/') || req.path.startsWith('/api/extension-chat/v1/') || req.path.startsWith('/api/extension-video/v1/') || req.path.startsWith('/api/extension-agent-status/v1/')) {
         return next();
     }
     requireAuth(req, res, next);
@@ -3051,7 +3092,7 @@ let peerIPs = {};
 let pjsipContactState = {};
 let sipSnapshotStartTime = 0;
 // Mount CRM Integration REST API Router
-app.use('/api/integrations/crm/v1', createCrmRouter(pool, {
+app.use('/api/integrations/v1', createCrmRouter(pool, {
     getPeerStatus: () => peerStatus,
     getActiveCalls: () => activeCalls,
     getAmiClient: () => amiClient,
@@ -3117,9 +3158,7 @@ app.use('/api/extension-agent-status/v1', createExtensionAgentStatusRouter(pool,
 app.use('/api/ai', createAiEvaluationRouter({
     pool,
     encrypt,
-    decrypt,
-    isSuperAdmin,
-    hasRootAccess: isRootSession
+    decrypt
 }));
 
 // Public click-to-call sessions and platform tenant management.
@@ -4273,6 +4312,9 @@ function connectAMI() {
 
             // Handle Auto-Dialer AMI Events
             handleDialerAmiEvents(event);
+
+            // Inbound SIP/PJSIP trunk lifecycle events (ringing/answered/ended)
+            callLifecycle.handleAmiEvent(event);
 
             // New channel = new call, always fresh timestamp
             if (event.Event === 'Newchannel') {
@@ -6239,20 +6281,21 @@ app.post('/api/settings/client', requireAuth, handleClientSettingsUpdate);
 app.put('/api/settings/client', requireAuth, handleClientSettingsUpdate);
 
 // --- INBOUND CALL WEBHOOK SETTINGS ---
-let cachedWebhookConfig = { enabled: false, url: '', secret: '' };
+let cachedWebhookConfig = { enabled: false, url: '', secret: '', callEventsEnabled: false };
 
 async function loadWebhookConfigFromDb() {
     try {
         const conn = asteriskPool;
         const [rows] = await conn.execute(
-            "SELECT setting_key, setting_value FROM dashboard_settings WHERE setting_key LIKE 'webhook_incoming_call_%'"
+            "SELECT setting_key, setting_value FROM dashboard_settings WHERE setting_key LIKE 'webhook_%'"
         );
         const map = {};
         rows.forEach(r => { map[r.setting_key] = r.setting_value; });
         cachedWebhookConfig = {
             enabled: map['webhook_incoming_call_enabled'] === 'true',
             url: String(map['webhook_incoming_call_url'] || '').trim(),
-            secret: String(map['webhook_incoming_call_secret'] || '').trim()
+            secret: String(map['webhook_incoming_call_secret'] || '').trim(),
+            callEventsEnabled: map['webhook_call_events_enabled'] === 'true'
         };
     } catch (_) {}
     return cachedWebhookConfig;
@@ -6372,6 +6415,50 @@ async function fireInboundCallWebhook(callerNumber, calledNumber, dongleId) {
     }
 }
 
+/**
+ * Deliver SIP/PJSIP trunk lifecycle events to the same signed webhook endpoint.
+ * This is opt-in via webhook_call_events_enabled to avoid changing the payload
+ * stream for existing GSM-only installations.
+ */
+async function fireCallLifecycleWebhook(payload) {
+    if (!cachedWebhookConfig.enabled || !cachedWebhookConfig.url || !cachedWebhookConfig.callEventsEnabled) return;
+    try {
+        const body = JSON.stringify(payload);
+        const parsed = new URL(cachedWebhookConfig.url);
+        const isHttps = parsed.protocol === 'https:';
+        const reqOptions = {
+            hostname: parsed.hostname,
+            port: parsed.port || (isHttps ? 443 : 80),
+            path: parsed.pathname + parsed.search,
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(body),
+                'User-Agent': 'SokratVoIP-Webhook/1.0'
+            },
+            timeout: 10000
+        };
+        if (cachedWebhookConfig.secret) {
+            reqOptions.headers['X-Sokrat-Signature'] = require('crypto')
+                .createHmac('sha256', cachedWebhookConfig.secret)
+                .update(body)
+                .digest('hex');
+        }
+        const transport = isHttps ? require('https') : require('http');
+        const req = transport.request(reqOptions, (resp) => resp.resume());
+        req.on('error', (err) => console.error('Call lifecycle webhook delivery failed:', err.message));
+        req.on('timeout', () => req.destroy());
+        req.write(body);
+        req.end();
+    } catch (err) {
+        console.error('Call lifecycle webhook delivery failed:', err.message);
+    }
+}
+
+callLifecycle.on('event', (payload) => {
+    fireCallLifecycleWebhook(payload).catch(() => {});
+});
+
 app.get('/api/settings/webhook', requireAuth, async (req, res) => {
     try {
         if (!isSuperAdmin(req)) {
@@ -6382,7 +6469,8 @@ app.get('/api/settings/webhook', requireAuth, async (req, res) => {
             success: true,
             enabled: cachedWebhookConfig.enabled,
             url: cachedWebhookConfig.url,
-            secret: cachedWebhookConfig.secret ? '••••••••' : ''
+            secret: cachedWebhookConfig.secret ? '••••••••' : '',
+            call_events_enabled: cachedWebhookConfig.callEventsEnabled
         });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
@@ -6394,7 +6482,11 @@ app.post('/api/settings/webhook', requireAuth, async (req, res) => {
         if (!isSuperAdmin(req)) {
             return res.status(403).json({ success: false, error: 'Forbidden: Super Admin access required' });
         }
-        const { enabled, url, secret } = req.body || {};
+        const { enabled, url, secret, call_events_enabled } = req.body || {};
+        const callEventsEnabled = call_events_enabled === true
+            || call_events_enabled === 'true'
+            || call_events_enabled === 1
+            || call_events_enabled === '1';
 
         const trimmedUrl = String(url || '').trim();
         if (enabled && trimmedUrl) {
@@ -6411,7 +6503,8 @@ app.post('/api/settings/webhook', requireAuth, async (req, res) => {
         const settingsToSave = [
             ['webhook_incoming_call_enabled', enabled ? 'true' : 'false'],
             ['webhook_incoming_call_url', trimmedUrl],
-            ['webhook_incoming_call_secret', String(secret || '').trim()]
+            ['webhook_incoming_call_secret', String(secret || '').trim()],
+            ['webhook_call_events_enabled', callEventsEnabled ? 'true' : 'false']
         ];
 
         const conn = asteriskPool;
@@ -6426,7 +6519,8 @@ app.post('/api/settings/webhook', requireAuth, async (req, res) => {
         cachedWebhookConfig = {
             enabled: enabled ? true : false,
             url: trimmedUrl,
-            secret: String(secret || '').trim()
+            secret: String(secret || '').trim(),
+            callEventsEnabled
         };
 
         res.json({ success: true, message: 'Webhook settings saved successfully' });
@@ -8703,21 +8797,40 @@ async function handleCdrRootQuery(req, res) {
     });
 }
 
-// Public Open Routes - No Auth Required
-app.get('/api/cdr/phone/:phone', handleCdrPhoneSearch);
-app.get('/api/cdr/by-phone/:phone', handleCdrPhoneSearch);
-app.get('/api/cdr/audio/:uniqueid', handleCdrAudioStream);
-app.get('/api/cdr/:uniqueid/audio', handleCdrAudioStream);
-app.get('/api/cdr/:uniqueid', handleCdrSingleRecord);
-app.get('/api/cdr', handleCdrRootQuery);
+function requireCdrReadAccess(req, res, next) {
+    if (req.isApiKeyAuthenticated && req.apiKey) {
+        if (hasAnyScope(getApiKeyScopes(req), ['calls:read', 'cdr', 'cdr:read', 'recordings:read', 'cdr:audio'])) {
+            return next();
+        }
+        return res.status(403).json({ success: false, error: 'Forbidden. API key missing calls:read or recordings:read.' });
+    }
+    if (req.isFederationAuthenticated) return next();
+    if (req.session && req.session.userId) {
+        if (isSuperAdmin(req)) return next();
+        const perms = req.session.userPermissions || [];
+        if (perms.includes('call_history') || perms.includes('cdr') || perms.some(p => p.startsWith('cdr-')) || perms.includes('operator')) {
+            return next();
+        }
+        return res.status(403).json({ success: false, error: 'Forbidden. Missing call-history permission.' });
+    }
+    return res.status(401).json({ success: false, error: 'Unauthorized. Provide an API key or sign in.' });
+}
+
+// CDR reads require an authenticated API key or a dashboard session.
+app.get('/api/cdr/phone/:phone', requireAuth, requireCdrReadAccess, handleCdrPhoneSearch);
+app.get('/api/cdr/by-phone/:phone', requireAuth, requireCdrReadAccess, handleCdrPhoneSearch);
+app.get('/api/cdr/audio/:uniqueid', requireAuth, requireCdrReadAccess, handleCdrAudioStream);
+app.get('/api/cdr/:uniqueid/audio', requireAuth, requireCdrReadAccess, handleCdrAudioStream);
+app.get('/api/cdr/:uniqueid', requireAuth, requireCdrReadAccess, handleCdrSingleRecord);
+app.get('/api/cdr', requireAuth, requireCdrReadAccess, handleCdrRootQuery);
 
 // Aliases under /api/calls
-app.get('/api/calls/phone/:phone', handleCdrPhoneSearch);
-app.get('/api/calls/by-phone/:phone', handleCdrPhoneSearch);
-app.get('/api/calls/audio/:uniqueid', handleCdrAudioStream);
-app.get('/api/calls/:uniqueid/audio', handleCdrAudioStream);
-app.get('/api/calls/:uniqueid', handleCdrSingleRecord);
-app.get('/api/calls', handleCdrRootQuery);
+app.get('/api/calls/phone/:phone', requireAuth, requireCdrReadAccess, handleCdrPhoneSearch);
+app.get('/api/calls/by-phone/:phone', requireAuth, requireCdrReadAccess, handleCdrPhoneSearch);
+app.get('/api/calls/audio/:uniqueid', requireAuth, requireCdrReadAccess, handleCdrAudioStream);
+app.get('/api/calls/:uniqueid/audio', requireAuth, requireCdrReadAccess, handleCdrAudioStream);
+app.get('/api/calls/:uniqueid', requireAuth, requireCdrReadAccess, handleCdrSingleRecord);
+app.get('/api/calls', requireAuth, requireCdrReadAccess, handleCdrRootQuery);
 
 // --- VOICEMAIL ---
 const VM_ROOT = '/var/spool/asterisk/voicemail/default';
@@ -9205,8 +9318,7 @@ app.post('/api/voicemail-storage/settings', requireAuth, async (req, res) => {
 function requireTranscriptPermission(tabPermission) {
     return (req, res, next) => {
         if (req.isApiKeyAuthenticated && req.apiKey) {
-            const scopes = String(req.apiKey.scopes || '*').split(',').map(scope => scope.trim().toLowerCase());
-            if (scopes.includes('*') || scopes.includes(tabPermission)) return next();
+            if (hasScope(getApiKeyScopes(req), tabPermission)) return next();
             return res.status(403).json({ success: false, error: `Forbidden. API key missing required scope: ${tabPermission}` });
         }
         if (isSuperAdmin(req)) return next();
@@ -9346,25 +9458,29 @@ app.post('/api/transcripts/voicemail/:mailbox/:file/transcribe', requireAuth, re
     }
 });
 
-// 5. GET /api/config/stt - Get local/cloud STT engine settings
+// 5. GET /api/config/stt - Get cloud STT engine settings (never echo the secret)
 app.get('/api/config/stt', requireAuth, requireConfigPermission('recordings'), async (req, res) => {
     try {
         let settings = {
             enabled: 1,
             engine: 'cloud_api',
-            provider: 'munsit',
-            api_key: '',
-            api_url: 'https://api.munsit.com/api/v1/audio/transcribe',
-            model_name: 'munsit',
+            provider: 'elevenlabs',
+            api_url: 'https://api.elevenlabs.io/v1/speech-to-text',
+            model_name: 'scribe_v3',
             language: 'ar',
             prompt: 'محادثة هاتفية خدمة عملاء بالعامية المصرية: ألو، أيوة يا فندم، تمام، إزيك، معاك، الخط، حاضر، شكراً، مع السلامة.',
             transcribe_calls: 0,
             transcribe_voicemails: 0,
             min_duration_sec: 3,
-            pause_during_calls: 1
+            has_api_key: false
         };
         try {
-            const [rows] = await pool.query('SELECT * FROM `asterisk`.`stt_settings` WHERE id = 1');
+            const [rows] = await pool.query(`
+                SELECT id, enabled, engine, provider, api_url, model_name, language, prompt,
+                       transcribe_calls, transcribe_voicemails, min_duration_sec,
+                       (api_key IS NOT NULL AND api_key <> '') AS has_api_key
+                FROM \`asterisk\`.\`stt_settings\` WHERE id = 1
+            `);
             if (rows && rows.length > 0) settings = rows[0];
         } catch (_) {}
         res.json({ success: true, settings });
@@ -9387,25 +9503,27 @@ app.put('/api/config/stt', requireAuth, requireConfigPermission('recordings'), a
             transcribe_calls,
             transcribe_voicemails,
             min_duration_sec,
-            pause_during_calls
+            clear_api_key
         } = req.body;
 
         const isEnabled = (enabled === 1 || enabled === true || enabled === '1') ? 1 : 0;
-        const validProvider = ['munsit', 'groq', 'openai', 'deepgram', 'custom'].includes(provider) ? provider : 'munsit';
+        const validProvider = 'elevenlabs';
         const engine = 'cloud_api';
-        const apiKeyVal = api_key !== undefined ? String(api_key).trim() : '';
-        let apiUrlVal = api_url !== undefined ? String(api_url).trim() : '';
-        const model = String(model_name || (validProvider === 'munsit' ? 'munsit' : 'whisper-large-v3')).trim();
+        const submittedKey = api_key === undefined ? '' : String(api_key).trim();
+        const [existingRows] = await pool.query('SELECT api_key FROM `asterisk`.`stt_settings` WHERE id = 1');
+        const existingKey = existingRows?.[0]?.api_key || '';
+        const apiKeyVal = clear_api_key === true ? '' : (submittedKey || existingKey);
+        const apiUrlVal = 'https://api.elevenlabs.io/v1/speech-to-text';
+        const model = 'scribe_v3';
         const lang = String(language || 'ar').trim();
         const promptVal = prompt !== undefined ? String(prompt).trim() : '';
         const trCalls = (transcribe_calls === 1 || transcribe_calls === true || transcribe_calls === '1') ? 1 : 0;
         const trVm = (transcribe_voicemails === 1 || transcribe_voicemails === true || transcribe_voicemails === '1') ? 1 : 0;
         const minDur = Math.max(1, parseInt(min_duration_sec, 10) || 3);
-        const pauseDuringCalls = (pause_during_calls === 0 || pause_during_calls === false || pause_during_calls === '0') ? 0 : 1;
 
         await pool.query(`
-            INSERT INTO \`asterisk\`.\`stt_settings\` (id, enabled, engine, provider, api_key, api_url, model_name, language, prompt, transcribe_calls, transcribe_voicemails, min_duration_sec, pause_during_calls)
-            VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO \`asterisk\`.\`stt_settings\` (id, enabled, engine, provider, api_key, api_url, model_name, language, prompt, transcribe_calls, transcribe_voicemails, min_duration_sec)
+            VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 enabled = VALUES(enabled),
                 engine = VALUES(engine),
@@ -9417,9 +9535,8 @@ app.put('/api/config/stt', requireAuth, requireConfigPermission('recordings'), a
                 prompt = VALUES(prompt),
                 transcribe_calls = VALUES(transcribe_calls),
                 transcribe_voicemails = VALUES(transcribe_voicemails),
-                min_duration_sec = VALUES(min_duration_sec),
-                pause_during_calls = VALUES(pause_during_calls)
-        `, [isEnabled, engine, validProvider, apiKeyVal, apiUrlVal, model, lang, promptVal, trCalls, trVm, minDur, pauseDuringCalls]);
+                min_duration_sec = VALUES(min_duration_sec)
+        `, [isEnabled, engine, validProvider, apiKeyVal, apiUrlVal, model, lang, promptVal, trCalls, trVm, minDur]);
 
         res.json({
             success: true,
@@ -9427,7 +9544,6 @@ app.put('/api/config/stt', requireAuth, requireConfigPermission('recordings'), a
                 enabled: isEnabled,
                 engine,
                 provider: validProvider,
-                api_key: apiKeyVal,
                 api_url: apiUrlVal,
                 model_name: model,
                 language: lang,
@@ -9435,7 +9551,7 @@ app.put('/api/config/stt', requireAuth, requireConfigPermission('recordings'), a
                 transcribe_calls: trCalls,
                 transcribe_voicemails: trVm,
                 min_duration_sec: minDur,
-                pause_during_calls: pauseDuringCalls
+                has_api_key: Boolean(apiKeyVal)
             },
             message: 'Speech-to-Text settings updated successfully.'
         });
@@ -9447,9 +9563,22 @@ app.put('/api/config/stt', requireAuth, requireConfigPermission('recordings'), a
 // 6b. POST /api/config/stt/test-connection - Verify selected STT engine
 app.post('/api/config/stt/test-connection', requireAuth, requireConfigPermission('recordings'), async (req, res) => {
     try {
+        let saved = {};
+        try {
+            const [rows] = await pool.query('SELECT provider, api_key, api_url, model_name, language, prompt FROM `asterisk`.`stt_settings` WHERE id = 1');
+            saved = rows?.[0] || {};
+        } catch (_) {}
+        const body = req.body || {};
+        const apiKey = String(body.api_key || '').trim() || saved.api_key || '';
+        if (!apiKey) return res.status(400).json({ success: false, error: 'No STT API key configured.' });
         const { testSttConnection } = require('./scripts/stt-worker');
         const result = await testSttConnection({
-            ...req.body,
+            provider: 'elevenlabs',
+            api_key: apiKey,
+            api_url: 'https://api.elevenlabs.io/v1/speech-to-text',
+            model_name: 'scribe_v3',
+            language: body.language || saved.language || 'ar',
+            prompt: body.prompt ?? saved.prompt ?? '',
             engine: 'cloud_api'
         });
         res.json(result);
@@ -9464,6 +9593,42 @@ app.post('/api/transcripts/scan', requireAuth, requireConfigPermission('recordin
         const { scanAndEnqueueUntranscribed } = require('./scripts/enqueue-stt');
         await scanAndEnqueueUntranscribed();
         res.json({ success: true, message: 'Un-transcribed recordings and voicemails enqueued successfully.' });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// 7b. Manual/automatic call transcription mode. Automatic mode also runs a
+// bounded scanner every two minutes so new calls do not need a manual click.
+let autoSttScanRunning = false;
+async function runAutomaticSttScan() {
+    if (autoSttScanRunning) return;
+    autoSttScanRunning = true;
+    try {
+        const [rows] = await pool.query('SELECT enabled, transcribe_calls, transcribe_voicemails, api_key FROM `asterisk`.`stt_settings` WHERE id = 1');
+        const settings = rows?.[0];
+        if (settings && settings.api_key && Number(settings.enabled) && (Number(settings.transcribe_calls) || Number(settings.transcribe_voicemails))) {
+            const { scanAndEnqueueUntranscribed } = require('./scripts/enqueue-stt');
+            await scanAndEnqueueUntranscribed();
+        }
+    } catch (e) {
+        console.error('AUTO-STT scan skipped:', e.message);
+    } finally {
+        autoSttScanRunning = false;
+    }
+}
+setInterval(runAutomaticSttScan, 120_000).unref?.();
+
+app.post('/api/config/stt/transcription-mode', requireAuth, requireConfigPermission('recordings'), async (req, res) => {
+    try {
+        const automatic = String(req.body?.mode || '').toLowerCase() === 'automatic';
+        if (automatic) {
+            const [rows] = await pool.query('SELECT api_key FROM `asterisk`.`stt_settings` WHERE id = 1');
+            if (!rows?.[0]?.api_key) return res.status(400).json({ success: false, error: 'Add the ElevenLabs API key before enabling automatic transcription.' });
+        }
+        await pool.query('UPDATE `asterisk`.`stt_settings` SET transcribe_calls = ? WHERE id = 1', [automatic ? 1 : 0]);
+        if (automatic) setImmediate(runAutomaticSttScan);
+        res.json({ success: true, mode: automatic ? 'automatic' : 'manual' });
     } catch (e) {
         res.status(500).json({ success: false, error: e.message });
     }
@@ -9560,7 +9725,11 @@ function calculateShiftOverlapSec(startMs, endMs, intervals) {
 // --- API: GENERAL EXTENSIONS OVERVIEW ---
 app.get('/api/ext-overview', async (req, res) => {
     try {
-        if (!isSuperAdmin(req)) {
+        if (req.isApiKeyAuthenticated && req.apiKey) {
+            if (!hasAnyScope(getApiKeyScopes(req), ['stats:read', 'ext-stats', 'operator'])) {
+                return res.status(403).json({ success: false, error: 'Forbidden: API key missing stats:read.' });
+            }
+        } else if (!isSuperAdmin(req)) {
             const perms = req.session.userPermissions || [];
             if (!perms.includes('ext-stats') && !perms.includes('operator') && !perms.some(p => p.startsWith('operator-'))) {
                 return res.status(403).json({ success: false, error: 'Forbidden: Missing permission to view extension overview.' });
@@ -9711,7 +9880,9 @@ app.get('/api/ext-overview', async (req, res) => {
         const startFilterMs = new Date(startDate).getTime();
         const endFilterMs = new Date(endDate).getTime();
 
+        const jitterBufferMap = await readAmpuserJitterBufferMap();
         const list = Object.values(employeeMetrics).map(emp => {
+            Object.assign(emp, effectiveJitterBufferFields(getJitterBufferFromAstdbMap(jitterBufferMap, emp.extension)));
             emp.totalTalkSec = emp.inboundTalkSec + emp.outboundTalkSec;
             emp.uniqueContactCount = emp.uniqueNumbers.size;
             delete emp.uniqueNumbers;
@@ -9765,7 +9936,11 @@ app.get('/ext-stats', (req, res) => {
 app.get('/api/ext-stats/:extension', async (req, res) => {
     try {
         const { extension } = req.params;
-        if (!isSuperAdmin(req)) {
+        if (req.isApiKeyAuthenticated && req.apiKey) {
+            if (!hasAnyScope(getApiKeyScopes(req), ['stats:read', 'ext-stats', 'operator'])) {
+                return res.status(403).json({ success: false, error: 'Forbidden: API key missing stats:read.' });
+            }
+        } else if (!isSuperAdmin(req)) {
             const perms = req.session.userPermissions || [];
             if (!perms.includes('ext-stats') && !perms.includes('operator') && !perms.some(p => p.startsWith('operator-'))) {
                 return res.status(403).json({ success: false, error: 'Forbidden: Missing permission to view extension statistics.' });
@@ -10636,28 +10811,115 @@ async function auditDongleConfVsLive() {
         detectedUsbPorts
     };
 }
-const SOKRAT_MANAGED_CONTEXTS = ['from-dongle-custom', 'macro-dialout-trunk-predial-hook', 'macro-dialout-one-predial-hook'];
+const SOKRAT_MANAGED_CONTEXTS = MANAGED_GLOBAL_JB_CONTEXTS;
+const SOKRAT_DIALPLAN_JB_MARKER = 'AUDIO_GLOBALS/dialplan_jitterbuffer_enabled';
+const SOKRAT_GLOBAL_JB_DEFAULTS = Object.freeze({
+    mode: 'adaptive',
+    max_ms: 200,
+    resync_ms: 1000,
+    target_extra_ms: 40,
+    sync_video: false
+});
+const SOKRAT_GLOBAL_JB_KEYS = Object.freeze({
+    mode: 'dialplan_jb_mode',
+    max_ms: 'dialplan_jb_max_ms',
+    resync_ms: 'dialplan_jb_resync_ms',
+    target_extra_ms: 'dialplan_jb_target_extra_ms',
+    sync_video: 'dialplan_jb_sync_video'
+});
+
+function parseAstdbValue(stdout) {
+    const match = String(stdout || '').match(/Value:\s*(\S+)/i);
+    return match ? match[1].trim() : null;
+}
+
+async function readAstdbAudioGlobal(key) {
+    try {
+        const stdout = await execFileAsync(ASTERISK_BIN, ['-rx', `database get AUDIO_GLOBALS ${key}`]);
+        return parseAstdbValue(stdout);
+    } catch (_) {
+        return null;
+    }
+}
+
+function clampGlobalJbInt(value, fallback, min, max) {
+    const parsed = Number.parseInt(value, 10);
+    if (!Number.isFinite(parsed)) return fallback;
+    return Math.min(max, Math.max(min, parsed));
+}
+
+function normalizeGlobalJitterBuffer(input = {}) {
+    const rawMode = String(input.mode || input.type || SOKRAT_GLOBAL_JB_DEFAULTS.mode).toLowerCase();
+    const mode = ['adaptive', 'fixed', 'off'].includes(rawMode) ? rawMode : SOKRAT_GLOBAL_JB_DEFAULTS.mode;
+    return {
+        mode,
+        max_ms: clampGlobalJbInt(input.max_ms ?? input.maxMs ?? input.max_size,
+            SOKRAT_GLOBAL_JB_DEFAULTS.max_ms, 20, 1000),
+        resync_ms: clampGlobalJbInt(input.resync_ms ?? input.resyncMs ?? input.resync_threshold,
+            SOKRAT_GLOBAL_JB_DEFAULTS.resync_ms, 100, 5000),
+        target_extra_ms: clampGlobalJbInt(input.target_extra_ms ?? input.targetExtraMs ?? input.target_extra,
+            SOKRAT_GLOBAL_JB_DEFAULTS.target_extra_ms, 0, 200),
+        sync_video: Boolean(input.sync_video ?? input.syncVideo)
+    };
+}
+
+async function readGlobalJitterBufferConfig() {
+    const values = await Promise.all([
+        readAstdbAudioGlobal(SOKRAT_GLOBAL_JB_KEYS.mode),
+        readAstdbAudioGlobal(SOKRAT_GLOBAL_JB_KEYS.max_ms),
+        readAstdbAudioGlobal(SOKRAT_GLOBAL_JB_KEYS.resync_ms),
+        readAstdbAudioGlobal(SOKRAT_GLOBAL_JB_KEYS.target_extra_ms),
+        readAstdbAudioGlobal(SOKRAT_GLOBAL_JB_KEYS.sync_video)
+    ]);
+    const raw = {
+        mode: values[0] || SOKRAT_GLOBAL_JB_DEFAULTS.mode,
+        max_ms: values[1] || SOKRAT_GLOBAL_JB_DEFAULTS.max_ms,
+        resync_ms: values[2] || SOKRAT_GLOBAL_JB_DEFAULTS.resync_ms,
+        target_extra_ms: values[3] || SOKRAT_GLOBAL_JB_DEFAULTS.target_extra_ms,
+        sync_video: String(values[4] || '').toLowerCase() === 'yes'
+    };
+    return {
+        enabled: getDialplanJitterBufferStatus(),
+        config: normalizeGlobalJitterBuffer(raw)
+    };
+}
+
+async function writeGlobalJitterBufferConfig(input = {}) {
+    const config = normalizeGlobalJitterBuffer(input);
+    await execFileAsync(ASTERISK_BIN, ['-rx', `database put AUDIO_GLOBALS ${SOKRAT_GLOBAL_JB_KEYS.mode} ${config.mode}`]);
+    await execFileAsync(ASTERISK_BIN, ['-rx', `database put AUDIO_GLOBALS ${SOKRAT_GLOBAL_JB_KEYS.max_ms} ${config.max_ms}`]);
+    await execFileAsync(ASTERISK_BIN, ['-rx', `database put AUDIO_GLOBALS ${SOKRAT_GLOBAL_JB_KEYS.resync_ms} ${config.resync_ms}`]);
+    await execFileAsync(ASTERISK_BIN, ['-rx', `database put AUDIO_GLOBALS ${SOKRAT_GLOBAL_JB_KEYS.target_extra_ms} ${config.target_extra_ms}`]);
+    await execFileAsync(ASTERISK_BIN, ['-rx', `database put AUDIO_GLOBALS ${SOKRAT_GLOBAL_JB_KEYS.sync_video} ${config.sync_video ? 'yes' : 'no'}`]);
+    return config;
+}
+
+
+function readDialplanJitterBufferMarker() {
+    try {
+        const [family, key] = SOKRAT_DIALPLAN_JB_MARKER.split('/');
+        const stdout = execFileSync(ASTERISK_BIN, ['-rx', `database get ${family} ${key}`], {
+            encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore']
+        });
+        const match = stdout.match(/Value:\s*(\S+)/i);
+        return match ? match[1].trim() : null;
+    } catch (_) {
+        return null;
+    }
+}
 
 function getDialplanJitterBufferStatus() {
+    const marker = readDialplanJitterBufferMarker();
+    if (marker === '1') return true;
+    if (marker === '0') return false;
+
+    // Backward compatibility for installations that predate the AstDB marker:
+    // the legacy behavior was enabled only when all managed hooks carried the
+    // literal adaptive=default line.
     const filePath = '/etc/asterisk/extensions_custom.conf';
     if (!fs.existsSync(filePath)) return false;
-    const content = fs.readFileSync(filePath, 'utf8');
-    const lines = content.split(/\r?\n/);
-    let currentContext = null;
-    const foundContexts = new Set();
-
-    for (let line of lines) {
-        let trimmed = line.trim();
-        let ctxMatch = trimmed.match(/^\[([^\]]+)\]/);
-        if (ctxMatch) {
-            currentContext = ctxMatch[1].trim();
-        } else if (currentContext && SOKRAT_MANAGED_CONTEXTS.includes(currentContext)) {
-            if (!trimmed.startsWith(';') && !trimmed.startsWith('#') && trimmed.includes('JITTERBUFFER(adaptive)=default')) {
-                foundContexts.add(currentContext);
-            }
-        }
-    }
-    return SOKRAT_MANAGED_CONTEXTS.every(ctx => foundContexts.has(ctx));
+    const presence = managedJitterBufferPresence(fs.readFileSync(filePath, 'utf8'), SOKRAT_MANAGED_CONTEXTS);
+    return SOKRAT_MANAGED_CONTEXTS.every(ctx => presence[ctx]);
 }
 
 function setDialplanJitterBufferStatus(enable) {
@@ -10666,166 +10928,49 @@ function setDialplanJitterBufferStatus(enable) {
         throw new Error('/etc/asterisk/extensions_custom.conf file not found');
     }
 
-    let content = fs.readFileSync(filePath, 'utf8');
-    let lines = content.split(/\r?\n/);
-
-    if (!enable) {
-        let currentContext = null;
-        let newLines = [];
-        for (let line of lines) {
-            let trimmed = line.trim();
-            let ctxMatch = trimmed.match(/^\[([^\]]+)\]/);
-            if (ctxMatch) {
-                currentContext = ctxMatch[1].trim();
-            }
-            if (currentContext && SOKRAT_MANAGED_CONTEXTS.includes(currentContext) && trimmed.includes('JITTERBUFFER(adaptive)=default')) {
-                continue;
-            }
-            newLines.push(line);
-        }
-        fs.writeFileSync(filePath, newLines.join('\n'), 'utf8');
-    } else {
-        let currentContext = null;
-        let contextHasJb = { 'from-dongle-custom': false, 'macro-dialout-trunk-predial-hook': false, 'macro-dialout-one-predial-hook': false };
-
-        for (let line of lines) {
-            let trimmed = line.trim();
-            let ctxMatch = trimmed.match(/^\[([^\]]+)\]/);
-            if (ctxMatch) {
-                currentContext = ctxMatch[1].trim();
-            } else if (currentContext && SOKRAT_MANAGED_CONTEXTS.includes(currentContext)) {
-                if (!trimmed.startsWith(';') && !trimmed.startsWith('#') && trimmed.includes('JITTERBUFFER(adaptive)=default')) {
-                    contextHasJb[currentContext] = true;
-                }
-            }
-        }
-
-        let updatedLines = [];
-        currentContext = null;
-
-        for (let i = 0; i < lines.length; i++) {
-            let line = lines[i];
-            updatedLines.push(line);
-            let trimmed = line.trim();
-            let ctxMatch = trimmed.match(/^\[([^\]]+)\]/);
-            if (ctxMatch) {
-                currentContext = ctxMatch[1].trim();
-            }
-
-            if (currentContext === 'from-dongle-custom' && !contextHasJb['from-dongle-custom']) {
-                if (trimmed.includes('same => n(process),NoOp')) {
-                    updatedLines.push(SOKRAT_JB_LINE);
-                    contextHasJb['from-dongle-custom'] = true;
-                }
-            } else if (currentContext === 'macro-dialout-trunk-predial-hook' && !contextHasJb['macro-dialout-trunk-predial-hook']) {
-                if (trimmed.includes('exten => s,1,NoOp')) {
-                    updatedLines.push(SOKRAT_JB_LINE);
-                    contextHasJb['macro-dialout-trunk-predial-hook'] = true;
-                }
-            } else if (currentContext === 'macro-dialout-one-predial-hook' && !contextHasJb['macro-dialout-one-predial-hook']) {
-                if (trimmed.includes('exten => s,1,NoOp')) {
-                    updatedLines.push(SOKRAT_JB_LINE);
-                    contextHasJb['macro-dialout-one-predial-hook'] = true;
-                }
-            }
-        }
-
-        if (!content.includes('[macro-dialout-one-predial-hook]')) {
-            updatedLines.push('');
-            updatedLines.push('[macro-dialout-one-predial-hook]');
-            updatedLines.push('exten => s,1,NoOp(--- Dynamic Adaptive Jitter Buffer for Internal/Extension Call ---)');
-            updatedLines.push(SOKRAT_JB_LINE);
-            updatedLines.push('same => n,MacroExit()');
-        }
-
-        fs.writeFileSync(filePath, updatedLines.join('\n'), 'utf8');
-    }
-}
-const SOKRAT_DENOISE_RX_LINE = 'same => n,Set(DENOISE(rx)=on)';
-const SOKRAT_DENOISE_TX_LINE = 'same => n,Set(DENOISE(tx)=on)';
-const SOKRAT_DENOISE_CONTEXTS = ['from-dongle-custom', 'macro-dialout-trunk-predial-hook'];
-
-function getDialplanDenoiseStatus() {
-    const filePath = '/etc/asterisk/extensions_custom.conf';
-    if (!fs.existsSync(filePath)) return { rx: false, tx: false };
+    // Remove every legacy/global JITTERBUFFER line from managed hooks
+    // (including parameterized values and the old from-dongle line). The
+    // extension resolver is the single source of truth, so repeated enable
+    // calls cannot create duplicate or conflicting global lines.
     const content = fs.readFileSync(filePath, 'utf8');
-    const lines = content.split(/\r?\n/);
-    let currentContext = null;
-    let rxFound = false;
-    let txFound = false;
+    const cleaned = stripManagedJitterBufferLines(content, [
+        ...SOKRAT_MANAGED_CONTEXTS,
+        ...LEGACY_GLOBAL_JB_CONTEXTS
+    ]);
+    if (cleaned !== content) fs.writeFileSync(filePath, cleaned, 'utf8');
 
-    for (let line of lines) {
-        let trimmed = line.trim();
-        let ctxMatch = trimmed.match(/^\[([^\]]+)\]/);
-        if (ctxMatch) {
-            currentContext = ctxMatch[1].trim();
-        } else if (currentContext && SOKRAT_DENOISE_CONTEXTS.includes(currentContext)) {
-            if (!trimmed.startsWith(';') && !trimmed.startsWith('#')) {
-                if (trimmed.includes('DENOISE(rx)=on')) rxFound = true;
-                if (trimmed.includes('DENOISE(tx)=on')) txFound = true;
-            }
-        }
-    }
-    return { rx: rxFound, tx: txFound };
+    const [family, key] = SOKRAT_DIALPLAN_JB_MARKER.split('/');
+    execFileSync(ASTERISK_BIN, ['-rx', `database put ${family} ${key} ${enable ? '1' : '0'}`], {
+        encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'pipe']
+    });
 }
 
-function setDialplanDenoiseStatus({ rx, tx }) {
-    const filePath = '/etc/asterisk/extensions_custom.conf';
-    if (!fs.existsSync(filePath)) {
-        throw new Error('/etc/asterisk/extensions_custom.conf file not found');
+async function readAmpuserJitterBufferMap() {
+    try {
+        const stdout = await execFileAsync(ASTERISK_BIN, ['-rx', 'database show AMPUSER']);
+        return parseAmpuserJitterBufferMap(stdout);
+    } catch (_) {
+        return {};
     }
+}
 
-    let content = fs.readFileSync(filePath, 'utf8');
-    let lines = content.split(/\r?\n/);
-
-    const rxState = Boolean(rx);
-    const txState = Boolean(tx);
-
-    let currentContext = null;
-    let newLines = [];
-
-    for (let line of lines) {
-        let trimmed = line.trim();
-        let ctxMatch = trimmed.match(/^\[([^\]]+)\]/);
-        if (ctxMatch) {
-            currentContext = ctxMatch[1].trim();
-            newLines.push(line);
-            continue;
-        }
-
-        if (currentContext && SOKRAT_DENOISE_CONTEXTS.includes(currentContext)) {
-            if (trimmed.includes('DENOISE(rx)=on') || trimmed.includes('DENOISE(tx)=on')) {
-                continue;
-            }
-        }
-        newLines.push(line);
+async function readExtensionJitterBuffer(extNum) {
+    try {
+        const stdout = await execFileAsync(ASTERISK_BIN, ['-rx', `database show AMPUSER ${extNum}`]);
+        const map = parseAmpuserJitterBufferMap(stdout);
+        return getJitterBufferFromAstdbMap(map, extNum);
+    } catch (_) {
+        return { ...JB_DEFAULTS };
     }
+}
 
-    if (rxState || txState) {
-        let finalLines = [];
-        let inTargetCtx = false;
-
-        for (let i = 0; i < newLines.length; i++) {
-            let line = newLines[i];
-            let trimmed = line.trim();
-            let ctxMatch = trimmed.match(/^\[([^\]]+)\]/);
-
-            if (ctxMatch) {
-                inTargetCtx = SOKRAT_DENOISE_CONTEXTS.includes(ctxMatch[1].trim());
-            }
-
-            finalLines.push(line);
-
-            if (inTargetCtx && (trimmed.startsWith('exten =>') || trimmed.startsWith('same =>'))) {
-                if (rxState) finalLines.push(`same => n,Set(DENOISE(rx)=on)`);
-                if (txState) finalLines.push(`same => n,Set(DENOISE(tx)=on)`);
-                inTargetCtx = false;
-            }
-        }
-        newLines = finalLines;
+async function applyExtensionJitterBuffer(extNum, payload, base = null) {
+    const config = normalizeJitterBuffer(payload, base || {});
+    const commands = astdbCommandsForJitterBuffer(extNum, config);
+    for (const command of commands) {
+        await execFileAsync(ASTERISK_BIN, ['-rx', command]);
     }
-
-    fs.writeFileSync(filePath, newLines.join('\n'), 'utf8');
+    return effectiveJitterBufferFields(config);
 }
 
 app.post('/api/spy', requireAuth, (req, res, next) => {
@@ -12189,6 +12334,17 @@ function annotateE173VoiceWarnings(devices) {
     return devices;
 }
 
+function stripDongleWarnings(devices) {
+    if (!Array.isArray(devices)) return devices;
+    return devices.map(device => {
+        if (!device || typeof device !== 'object') return device;
+        const copy = { ...device };
+        delete copy.voiceEnableWarning;
+        delete copy.nonFatalWarning;
+        return copy;
+    });
+}
+
 function getEnrichedDevices() {
     const now = Date.now();
     if (cachedEnrichedDevices && (now - lastEnrichedDevicesTime) < ENRICHED_DEVICES_CACHE_TTL) {
@@ -12329,8 +12485,9 @@ app.get('/gsm-dongles', async (req, res) => {
         });
 
         const devices = isCentral ? [...localDevices, ...remoteDevices] : localDevices;
+        const visibleDevices = res.locals.isRootUser ? devices : stripDongleWarnings(devices);
         res.render('gsm-dongles', {
-            devices,
+            devices: visibleDevices,
             fedDongleNodes: renderedNodes,
             fedLocalSite: nodeModel.localSite,
             remoteNodes: [],
@@ -12359,9 +12516,10 @@ app.get('/api/gsm-dongles', async (req, res) => {
         const devices = allowedDongles !== null
             ? live.devices.filter(device => isDeviceAllowedForDongles(device, allowedDongles))
             : live.devices;
+        const visibleDevices = res.locals.isRootUser ? devices : stripDongleWarnings(devices);
         res.json({
             success: true,
-            devices,
+            devices: visibleDevices,
             nodes: live.nodes,
             localSite: live.localSite
         });
@@ -14921,7 +15079,7 @@ app.post('/api/gsm-dongles/call-forwarding', async (req, res) => {
 
 
 // --- ROUTE 5: AUDIO STREAM / DOWNLOAD PIPELINE ---
-app.get('/audio/:uniqueid', async (req, res) => {
+app.get('/audio/:uniqueid', requireAuth, requireCdrReadAccess, async (req, res) => {
     try {
         const { uniqueid } = req.params;
         const scopedExts = getUserScopedExtensions(req);
@@ -15713,6 +15871,28 @@ app.get('/config', requireAuth, (req, res) => {
     });
 });
 
+app.get('/config/canvas', requireAuth, (req, res) => {
+    const currentLang = res.locals.currentLang || 'en';
+    if (getTenantId(req)) {
+        return res.status(403).render('403', { currentLang, isRtl: currentLang === 'ar' });
+    }
+    if (!isRootSession(req)) {
+        return res.status(403).render('403', { currentLang, isRtl: currentLang === 'ar' });
+    }
+    if (String(process.env.SOKRAT_CANVAS_ENABLED || '1') === '0') {
+        return res.status(404).send('Canvas disabled');
+    }
+    res.render('config-canvas', {
+        currentPage: '/config/canvas',
+        currentLang,
+        isRtl: currentLang === 'ar',
+        isSuperAdmin: isSuperAdmin(req),
+        isRootUser: true,
+        currentTheme: res.locals.currentTheme || 'dark',
+        allowedTabs: res.locals.allowedTabs || []
+    });
+});
+
 // GET /chat-logs - internal extension chat transcript (permission: chat-logs)
 app.get('/chat-logs', requireAuth, (req, res) => {
     const currentLang = res.locals.currentLang || 'en';
@@ -15871,7 +16051,7 @@ function applyVoicemailState(extNum, displayName, vmVal) {
 }
 
 // Helper function to sync extension astdb recording & user settings
-async function setExtensionAstdbDefaults(extNum, displayName, vmVal = 'novm', tech = 'sip', denoiseVal = 'off', vadGateVal = '0', vadDbVal = 'off', customDial = null, agcVal = 'off', reloadVoicemail = true) {
+async function setExtensionAstdbDefaults(extNum, displayName, vmVal = 'novm', tech = 'sip', denoiseVal = 'off', vadGateVal = '0', vadDbVal = 'off', customDial = null, agcVal = 'off', reloadVoicemail = true, jitterBuffer = null) {
     let techUpper = (tech || 'sip').toUpperCase();
     let techLower = (tech || 'sip').toLowerCase();
     let dialTarget = customDial && String(customDial).trim() ? String(customDial).trim() : `${techUpper}/${extNum}`;
@@ -15907,6 +16087,9 @@ async function setExtensionAstdbDefaults(extNum, displayName, vmVal = 'novm', te
         `database put DEVICE/${extNum} user "${extNum}"`,
         `database put DEVICE/${extNum} type "fixed"`
     ];
+    if (jitterBuffer) {
+        commands.push(...astdbCommandsForJitterBuffer(extNum, jitterBuffer));
+    }
     for (const cmd of commands) {
         try {
             await execFileAsync(ASTERISK_BIN, ['-rx', cmd]);
@@ -16235,7 +16418,7 @@ local_net=127.0.0.0/8
 
 
 // GET /api/config/extensions - List all Extensions
-app.get('/api/config/extensions', async (req, res) => {
+app.get('/api/config/extensions', requireConfigPermission('extensions'), async (req, res) => {
     try {
         const [extensions] = await pool.query(`
             SELECT u.extension, u.name, u.outboundcid, u.recording, u.voicemail,
@@ -16259,8 +16442,10 @@ app.get('/api/config/extensions', async (req, res) => {
         let vadMap = {};
         let vadDbMap = {};
         let agcMap = {};
+        let jitterBufferMap = {};
         try {
             const { stdout: astdbOut } = await execPromise(`${ASTERISK_BIN} -rx "database show AMPUSER"`);
+            jitterBufferMap = parseAmpuserJitterBufferMap(astdbOut || '');
             const lines = (astdbOut || '').split('\n');
             for (const line of lines) {
                 const matchDenoise = line.match(/\/AMPUSER\/(\d+)\/ai_denoise\s*:\s*(\w+)/);
@@ -16281,7 +16466,7 @@ app.get('/api/config/extensions', async (req, res) => {
                 }
             }
         } catch (err) {
-            console.error('[GET /api/config/extensions] AstDB denoise/VAD/AGC lookup error:', err.message);
+            console.error('[GET /api/config/extensions] AstDB denoise/VAD/AGC/jitter-buffer lookup error:', err.message);
         }
 
         const enriched = extensions.map(ext => ({
@@ -16290,7 +16475,8 @@ app.get('/api/config/extensions', async (req, res) => {
             denoise: denoiseMap[ext.extension] || 'off',
             vad_gate: vadMap[ext.extension] !== undefined ? vadMap[ext.extension] : '0',
             vad_db: vadDbMap[ext.extension] || 'off',
-            agc: agcMap[ext.extension] || 'off'
+            agc: agcMap[ext.extension] || 'off',
+            ...effectiveJitterBufferFields(getJitterBufferFromAstdbMap(jitterBufferMap, ext.extension))
         }));
         res.json({ success: true, extensions: enriched });
     } catch (error) {
@@ -16463,6 +16649,7 @@ async function provisionExtension(payload = {}, options = {}) {
         return err;
     };
     const { extension, name, secret, voicemail, tech, denoise, vad_gate, vadGate, vad_db, vadDb, agc } = payload;
+    const jitterBuffer = normalizeJitterBuffer(payload);
     if (!extension || !/^\d+$/.test(String(extension))) {
         throw validationError('Valid numeric Extension number is required.');
     }
@@ -16568,7 +16755,8 @@ async function provisionExtension(payload = {}, options = {}) {
         vadDbVal,
         devDial,
         agcVal,
-        options.reloadVoicemail !== false
+        options.reloadVoicemail !== false,
+        jitterBuffer
     );
 
     if (payload.is_group_admin !== undefined || payload.isGroupAdmin !== undefined || payload.emp_group !== undefined) {
@@ -16603,7 +16791,7 @@ async function provisionExtension(payload = {}, options = {}) {
         syncExtensionCallPickupGroups().catch(() => {});
     }
 
-    return { extension: extNum, name: displayName, secret: extSecret, tech: devTech, isWebRTC };
+    return { extension: extNum, name: displayName, secret: extSecret, tech: devTech, isWebRTC, jitter_buffer: effectiveJitterBufferFields(jitterBuffer) };
 }
 
 app.post('/api/config/extensions', async (req, res) => {
@@ -16641,6 +16829,9 @@ app.post('/api/config/extensions/bulk', requireAuth, async (req, res) => {
         }
         const extensions = range.values;
 
+        // Validate jitter-buffer options before creating the first extension.
+        normalizeJitterBuffer(body);
+
         // Validate every number before inserting the first one.
         for (const extNum of extensions) {
             const collisionError = await checkNumberCollision(extNum, 'extension');
@@ -16663,6 +16854,10 @@ app.post('/api/config/extensions/bulk', requireAuth, async (req, res) => {
                     vad_gate: body.vad_gate !== undefined ? body.vad_gate : body.vadGate,
                     vad_db: body.vad_db !== undefined ? body.vad_db : body.vadDb,
                     agc: body.agc,
+                    jb_mode: body.jb_mode !== undefined ? body.jb_mode : body.jbMode,
+                    jb_max_ms: body.jb_max_ms !== undefined ? body.jb_max_ms : body.jbMaxMs,
+                    jb_resync_ms: body.jb_resync_ms !== undefined ? body.jb_resync_ms : body.jbResyncMs,
+                    jb_target_extra_ms: body.jb_target_extra_ms !== undefined ? body.jb_target_extra_ms : body.jbTargetExtraMs,
                     auto_answer: body.auto_answer,
                     dnd: body.dnd,
                     disable_outbound_ringing_cancel: body.disable_outbound_ringing_cancel
@@ -16722,6 +16917,15 @@ app.put('/api/config/extensions/:extension', async (req, res) => {
             return res.status(404).json({ success: false, error: `Extension ${extNum} not found.` });
         }
         const currentUser = userRows[0];
+
+        // Validate and resolve the jitter-buffer update before changing any
+        // extension or PBX state. Omitted jb_* fields preserve the current
+        // AstDB values; an explicit inherit removes the four keys.
+        let requestedJitterBuffer = null;
+        if (hasJitterBufferFields(req.body)) {
+            const baseJitterBuffer = await readExtensionJitterBuffer(extNum);
+            requestedJitterBuffer = normalizeJitterBuffer(req.body, baseJitterBuffer);
+        }
 
         // Never disable voicemail or reset the recording mode just because the
         // request omitted the field: fall back to the stored value.
@@ -16807,6 +17011,9 @@ app.put('/api/config/extensions/:extension', async (req, res) => {
             const validAgc = String(agc).trim() || 'off';
             await execPromise(`${ASTERISK_BIN} -rx "database put AMPUSER ${extNum}/agc ${validAgc}"`);
         }
+        if (requestedJitterBuffer) {
+            await applyExtensionJitterBuffer(extNum, requestedJitterBuffer);
+        }
 
         sipPresence[extNum] = false;
         pjsipPresence[extNum] = false;
@@ -16863,9 +17070,13 @@ app.put('/api/config/extensions/:extension', async (req, res) => {
 
         await reloadPbxConfigPromise();
         syncExtensionCallPickupGroups().catch(() => {});
-        res.json({ success: true, message: `Extension ${extNum} updated successfully.` });
+        res.json({
+            success: true,
+            message: `Extension ${extNum} updated successfully.`,
+            ...(requestedJitterBuffer ? { jitter_buffer: effectiveJitterBufferFields(requestedJitterBuffer) } : {})
+        });
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        res.status(error.statusCode || 500).json({ success: false, error: error.message });
     }
 });
 // DELETE /api/config/extensions/:extension - Delete Extension
@@ -20081,7 +20292,7 @@ app.delete('/api/config/ivrs/:id', async (req, res) => {
 app.get('/api/config/routes/outbound', async (req, res) => {
     try {
         const [routesRows] = await pool.query(`
-            SELECT r.route_id, r.name, COALESCE(MIN(s.seq), 9999) AS seq
+            SELECT r.route_id, r.name, r.outcid, r.outcid_mode, COALESCE(MIN(s.seq), 9999) AS seq
             FROM \`asterisk\`.\`outbound_routes\` r
             LEFT JOIN \`asterisk\`.\`outbound_route_sequence\` s ON s.route_id = r.route_id
             GROUP BY r.route_id, r.name
@@ -20120,6 +20331,8 @@ app.get('/api/config/routes/outbound', async (req, res) => {
             return {
                 route_id,
                 name: r.name,
+                outcid: r.outcid || '',
+                outcid_mode: r.outcid_mode || '',
                 seq: r.seq,
                 patterns,
                 trunks
@@ -21830,6 +22043,7 @@ app.get('/api/config/audio/extensions', async (req, res) => {
     try {
         const [rows] = await pool.query('SELECT extension, name FROM `asterisk`.`users` ORDER BY CAST(extension AS UNSIGNED) ASC');
         const { stdout: ampOut } = await execPromise(`${ASTERISK_BIN} -rx "database show AMPUSER"`);
+        const jitterBufferMap = parseAmpuserJitterBufferMap(ampOut || '');
         const extensions = rows.map(r => {
             const ext = String(r.extension);
             let denoise = 'default';
@@ -21847,7 +22061,7 @@ app.get('/api/config/audio/extensions', async (req, res) => {
             if (dbMatch) vad_db = dbMatch[1];
             if (aMatch) agc = aMatch[1];
             
-            return { extension: ext, name: r.name, denoise, vad_gate, vad_db, agc };
+            return { extension: ext, name: r.name, denoise, vad_gate, vad_db, agc, ...effectiveJitterBufferFields(getJitterBufferFromAstdbMap(jitterBufferMap, ext)) };
         });
         res.json({ success: true, extensions });
     } catch (e) {
@@ -21860,6 +22074,11 @@ app.put('/api/config/audio/extensions/:ext', async (req, res) => {
     try {
         const ext = req.params.ext;
         const { denoise, vad_gate, vad_db, agc } = req.body;
+        let jitterBuffer = null;
+        if (hasJitterBufferFields(req.body)) {
+            const base = await readExtensionJitterBuffer(ext);
+            jitterBuffer = normalizeJitterBuffer(req.body, base);
+        }
         
         if (denoise !== undefined) {
             if (denoise === 'default' || denoise === '') {
@@ -21889,9 +22108,12 @@ app.put('/api/config/audio/extensions/:ext', async (req, res) => {
                 await execPromise(`${ASTERISK_BIN} -rx "database put AMPUSER ${ext} agc ${agc}"`);
             }
         }
-        res.json({ success: true, message: `Extension ${ext} audio profile updated.` });
+        if (jitterBuffer) {
+            jitterBuffer = await applyExtensionJitterBuffer(ext, jitterBuffer);
+        }
+        res.json({ success: true, message: `Extension ${ext} audio profile updated.`, ...(jitterBuffer ? { jitter_buffer: jitterBuffer } : {}) });
     } catch (e) {
-        res.status(500).json({ success: false, error: e.message });
+        res.status(e.statusCode || 500).json({ success: false, error: e.message });
     }
 });
 
@@ -22625,22 +22847,33 @@ app.get('/api/config/moh/stream/:category/:file', requireAuth, (req, res) => {
         res.status(500).send(err.message);
     }
 });
-// GET /api/config/modem/jitterbuffer - Check if dialplan jitter buffer is enabled
+// GET /api/config/modem/jitterbuffer - Read global dialplan jitter-buffer defaults
 app.get('/api/config/modem/jitterbuffer', async (req, res) => {
     try {
-        const enabled = getDialplanJitterBufferStatus();
-        res.json({ success: true, enabled });
+        const state = await readGlobalJitterBufferConfig();
+        res.json({
+            success: true,
+            enabled: state.enabled,
+            config: { ...state.config, enabled: state.enabled }
+        });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
 });
 
-// POST /api/config/modem/jitterbuffer - Enable or disable dialplan jitter buffer
+// POST /api/config/modem/jitterbuffer - Update global dialplan jitter-buffer defaults
 app.post('/api/config/modem/jitterbuffer', async (req, res) => {
     try {
-        const { enabled } = req.body;
-        const targetState = Boolean(enabled);
-        setDialplanJitterBufferStatus(targetState);
+        const body = req.body || {};
+        const current = await readGlobalJitterBufferConfig();
+        const enabled = body.enabled === undefined ? current.enabled : Boolean(body.enabled);
+        if (body.enabled !== undefined) {
+            setDialplanJitterBufferStatus(enabled);
+        }
+        const config = await writeGlobalJitterBufferConfig({
+            ...current.config,
+            ...body
+        });
 
         try {
             await execFileAsync(ASTERISK_BIN, ['-rx', 'dialplan reload']);
@@ -22648,42 +22881,12 @@ app.post('/api/config/modem/jitterbuffer', async (req, res) => {
 
         res.json({
             success: true,
-            enabled: targetState,
-            message: targetState
-                ? 'Jitter buffer enabled in Asterisk dialplan and reloaded.'
-                : 'Jitter buffer removed from Asterisk dialplan and reloaded.'
+            enabled,
+            config: { ...config, enabled },
+            message: 'Global dialplan jitter-buffer defaults updated and reloaded.'
         });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
-    }
-});
-// GET /api/config/modem/denoise - Fetch DSP noise suppression status (rx/tx)
-app.get('/api/config/modem/denoise', async (req, res) => {
-    try {
-        const status = getDialplanDenoiseStatus();
-        res.json({ success: true, ...status });
-    } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
-
-// POST /api/config/modem/denoise - Update DSP noise suppression settings (rx/tx)
-app.post('/api/config/modem/denoise', async (req, res) => {
-    try {
-        setDialplanDenoiseStatus({ rx: false, tx: false });
-
-        try {
-            await execFileAsync(ASTERISK_BIN, ['-rx', 'dialplan reload']);
-        } catch (_) {}
-
-        return res.json({
-            success: true,
-            rx: false,
-            tx: false,
-            message: 'Asterisk DENOISE is disabled to prevent libspeexdsp system library crash.'
-        });
-    } catch (error) {
-        return res.status(500).json({ success: false, error: error.message });
     }
 });
 // GET /api/config/dongle-mappings - Fetch detailed GSM dongle DID dynamic mappings & telemetry
@@ -26864,7 +27067,7 @@ app.post('/log_error', (req, res) => {
     res.json({ success: true });
 });
 // --- SOKRAT SUPER ADMIN CRM INTEGRATION MANAGEMENT ROUTES ---
-app.get('/integrations/crm', requireAuth, async (req, res) => {
+app.get('/integrations', requireAuth, async (req, res) => {
     if (!hasRootAccess(req)) {
         const currentLang = (req.session && req.session.lang) || 'en';
         return res.status(403).render('403', {
@@ -26883,7 +27086,7 @@ app.get('/integrations/crm', requireAuth, async (req, res) => {
     }
 });
 
-app.post('/integrations/crm/pairing-code', requireAuth, async (req, res) => {
+app.post('/integrations/pairing-code', requireAuth, async (req, res) => {
     if (!hasRootAccess(req)) {
         return res.status(403).json({ success: false, error: 'Unauthorized: Only the root user can generate pairing codes.' });
     }
@@ -26899,7 +27102,7 @@ app.post('/integrations/crm/pairing-code', requireAuth, async (req, res) => {
     }
 });
 
-app.post('/integrations/crm/clients/:id/revoke', requireAuth, async (req, res) => {
+app.post('/integrations/clients/:id/revoke', requireAuth, async (req, res) => {
     if (!hasRootAccess(req)) {
         return res.status(403).json({ success: false, error: 'Unauthorized: Only the root user can revoke integration clients.' });
     }
@@ -26934,7 +27137,7 @@ app.post('/integrations/crm/clients/:id/revoke', requireAuth, async (req, res) =
     }
 });
 
-app.post('/integrations/crm/clients/:id/rotate', requireAuth, async (req, res) => {
+app.post('/integrations/clients/:id/rotate', requireAuth, async (req, res) => {
     if (!hasRootAccess(req)) {
         return res.status(403).json({ success: false, error: 'Unauthorized: Only the root user can rotate client secrets.' });
     }
@@ -26973,7 +27176,7 @@ app.post('/integrations/crm/clients/:id/rotate', requireAuth, async (req, res) =
     }
 });
 
-app.post('/integrations/crm/clients/:id/update', requireAuth, async (req, res) => {
+app.post('/integrations/clients/:id/update', requireAuth, async (req, res) => {
     if (!hasRootAccess(req)) {
         return res.status(403).json({ success: false, error: 'Unauthorized: Only the root user can update integration configuration.' });
     }
@@ -27106,7 +27309,7 @@ app.get('/preview/guest-call', (req, res) => {
 });
 
 // --- EMBEDDED CRM LIVE PANEL VIEW ---
-app.get('/embed/crm/live', async (req, res) => {
+app.get('/embed/live', async (req, res) => {
     const { ticket } = req.query;
     if (!ticket) {
         return res.status(400).send('Embed ticket is required');
@@ -27199,6 +27402,24 @@ app.post('/api/admin/api-keys', requireAuth, async (req, res) => {
         res.json({ success: true, key });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.put('/api/admin/api-keys/:id', requireAuth, async (req, res) => {
+    const isRoot = hasRootAccess(req);
+    if (!isRoot) {
+        return res.status(403).json({ success: false, error: 'Unauthorized: Only the root user can manage API keys.' });
+    }
+    try {
+        const id = parseInt(req.params.id, 10);
+        if (isNaN(id) || id < 1) {
+            return res.status(400).json({ success: false, error: 'Invalid API key ID' });
+        }
+        const { name, scopes, allowed_ips, expires_at } = req.body || {};
+        const key = await updateApiKey(pool, id, { name, scopes, allowed_ips, expires_at });
+        res.json({ success: true, key });
+    } catch (err) {
+        res.status(400).json({ success: false, error: err.message });
     }
 });
 

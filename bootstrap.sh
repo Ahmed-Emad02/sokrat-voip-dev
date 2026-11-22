@@ -240,6 +240,9 @@ fi
 # ──────────────────────────────────────────────────────────────────────────────
 # Step 3: Run Master Appliance Installer & Sokrat Setup
 # ──────────────────────────────────────────────────────────────────────────────
+# Prefer the local bundle; allow repository fallback only if a bundled
+# component is missing. Set SOKRAT_OFFLINE=1 to forbid fallback entirely.
+export SOKRAT_OFFLINE="${SOKRAT_OFFLINE:-0}"
 cd "$INSTALL_DIR/installer-bundle"
 
 echo "--> Launching Master Issabel 5 & Asterisk 18 Setup..."

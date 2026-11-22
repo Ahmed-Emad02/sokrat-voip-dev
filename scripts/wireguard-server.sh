@@ -51,7 +51,9 @@ install_wireguard_server() {
     if command -v dnf >/dev/null 2>&1; then pkg_mgr="dnf"; elif command -v yum >/dev/null 2>&1; then pkg_mgr="yum"; fi
 
     if ! command -v wg >/dev/null 2>&1 || ! command -v wg-quick >/dev/null 2>&1; then
-        if [ -n "$pkg_mgr" ]; then
+        if [ "${SOKRAT_OFFLINE:-0}" = "1" ]; then
+            echo "  WARNING: wireguard-tools is not in the offline bundle (continuing)"
+        elif [ -n "$pkg_mgr" ]; then
             if $pkg_mgr install -y wireguard-tools >/dev/null 2>&1; then
                 echo "  wireguard-tools installed"
             else

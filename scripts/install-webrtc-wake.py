@@ -25,7 +25,8 @@ NAME = 'extensions_sokrat_webrtc_wake.conf'
 DISPATCHER_MARKER = 'Authenticated WebRTC wake dispatcher v1.'
 WAKE = r'''
 [sub-sokrat-webrtc-wake]
-exten => s,1,GotoIf($["${DB(DEVICE/${ARG1}/tech)}"!="pjsip"]?done)
+exten => s,1,Gosub(sokrat-jb,s,1(${CALLERID(num)},))
+ same => n,GotoIf($["${DB(DEVICE/${ARG1}/tech)}"!="pjsip"]?done)
  same => n,GotoIf($["${DB(DND/${ARG1})}"!=""]?done)
  same => n,GotoIf($["${DB(CF/${ARG1})}"!=""]?done)
  same => n,GotoIf($["${DB(CFU/${ARG1})}"!="" & ("${EXTENSION_STATE(${ARG1})}"="UNAVAILABLE" | "${EXTENSION_STATE(${ARG1})}"="UNKNOWN")]?done)
@@ -171,7 +172,18 @@ def contexts(text):
 
 
 def endpoint_ids(text):
-    return sorted(name for name, lines in contexts(text).items()
+    # PJSIP normally repeats endpoint/auth/aor names; merge them instead of
+    # applying the dialplan "duplicate context" rule.
+    sections = {}
+    name = None
+    for line in text.splitlines():
+        header = re.fullmatch(r'\s*\[([^\]]+)\](?:\([^)]*\))?\s*(?:;.*)?', line)
+        if header:
+            name = header.group(1)
+            sections.setdefault(name, [])
+        elif name:
+            sections[name].append(line)
+    return sorted(name for name, lines in sections.items()
                   if re.fullmatch(r'[0-9]{1,12}', name)
                   and any(re.fullmatch(r'\s*webrtc\s*=\s*yes\s*(?:;.*)?', line, re.I) for line in lines))
 

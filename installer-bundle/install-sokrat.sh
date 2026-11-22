@@ -20,6 +20,17 @@ case "$SOKRAT_TRANSPORT" in
     *) echo "Invalid SOKRAT_TRANSPORT: $SOKRAT_TRANSPORT" >&2; exit 2 ;;
 esac
 
+# Offline bundle first. Online repository fallbacks are allowed only when a
+# bundled component is missing or fails. Set SOKRAT_OFFLINE=1 to forbid them.
+SOKRAT_OFFLINE="${SOKRAT_OFFLINE:-0}"
+case "$SOKRAT_OFFLINE" in
+    1|true|yes|on) SOKRAT_OFFLINE=1 ;;
+    0|false|no|off) SOKRAT_OFFLINE=0 ;;
+    *) echo "Invalid SOKRAT_OFFLINE: $SOKRAT_OFFLINE" >&2; exit 2 ;;
+esac
+export SOKRAT_OFFLINE
+is_offline() { [ "$SOKRAT_OFFLINE" = "1" ]; }
+
 INSTALL_DIR=/opt/sokrat-voip
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
 PARENT_DIR="$(cd "$SCRIPT_DIR/.." 2>/dev/null && pwd)"
@@ -104,8 +115,10 @@ if ! command -v git &>/dev/null; then
         rpm -Uvh --replacepkgs --nodeps --oldpackage "$SCRIPT_DIR/all-rpms"/git*.rpm "$SCRIPT_DIR/all-rpms"/perl*.rpm 2>/dev/null || true
     elif [ -d "$INSTALL_DIR/installer-bundle/all-rpms" ] && ls "$INSTALL_DIR/installer-bundle/all-rpms"/git*.rpm 1>/dev/null 2>&1; then
         rpm -Uvh --replacepkgs --nodeps --oldpackage "$INSTALL_DIR/installer-bundle/all-rpms"/git*.rpm "$INSTALL_DIR/installer-bundle/all-rpms"/perl*.rpm 2>/dev/null || true
-    else
+    elif ! is_offline; then
         yum install -y git 2>/dev/null || dnf install -y git 2>/dev/null || true
+    else
+        echo "  Warning: git is unavailable from the offline bundle; skipping online install."
     fi
 fi
 # Packages already provided by installer-bundle (sox, sqlite, picotts, net-tools, nano)
@@ -123,7 +136,11 @@ if ! command -v sshpass >/dev/null 2>&1; then
     done
 fi
 if ! command -v sshpass >/dev/null 2>&1; then
-    yum install -y sshpass openssh-clients 2>/dev/null || dnf install -y sshpass openssh-clients 2>/dev/null || true
+    if ! is_offline; then
+        yum install -y sshpass openssh-clients 2>/dev/null || dnf install -y sshpass openssh-clients 2>/dev/null || true
+    else
+        echo "  Warning: sshpass is not in the offline bundle; federation SSH bootstrap will need it installed manually."
+    fi
 fi
 if ! command -v sshpass >/dev/null 2>&1; then
     echo "  Warning: sshpass is unavailable; federation SSH bootstrap will need it installed manually."
@@ -522,11 +539,14 @@ elif [ -f "/tmp/sokrat-repo/installer-bundle/binaries/node" ]; then
     cp "/tmp/sokrat-repo/installer-bundle/binaries/node" /usr/local/bin/node
     chmod +x /usr/local/bin/node
     echo "  Node.js installed: $(/usr/local/bin/node -v)"
-else
+elif ! is_offline; then
     curl -fsSL -o /tmp/nodesetup.sh "$NODE_SETUP_URL"
     bash /tmp/nodesetup.sh
     dnf --disablerepo="issabel*,remi*,epel*,sokrat*" install -y nodejs 2>/dev/null || yum install -y nodejs
     rm -f /tmp/nodesetup.sh
+else
+    echo "  ERROR: Node.js is missing from the offline bundle." >&2
+    exit 1
 fi
 
 # ──────────────────────────────────────────────
@@ -558,10 +578,15 @@ elif [ -d "$INSTALL_DIR/.git" ]; then
     cd "$INSTALL_DIR"
     git config http.postBuffer 524288000 2>/dev/null || true
     git remote set-url origin "$REPO_URL" 2>/dev/null || true
-    git fetch --depth 1 origin "$REPO_BRANCH" 2>/dev/null || true
-    if git diff-index --quiet HEAD -- 2>/dev/null; then
-        git checkout -B "$REPO_BRANCH" "origin/$REPO_BRANCH" 2>/dev/null || true
+    if ! is_offline; then
+        git fetch --depth 1 origin "$REPO_BRANCH" 2>/dev/null || true
+        if git diff-index --quiet HEAD -- 2>/dev/null; then
+            git checkout -B "$REPO_BRANCH" "origin/$REPO_BRANCH" 2>/dev/null || true
+        fi
     fi
+elif is_offline; then
+    echo "  ERROR: application source is missing from the offline bundle at $INSTALL_DIR." >&2
+    exit 1
 else
     if ! git clone --depth 1 --branch "$REPO_BRANCH" --single-branch "$REPO_URL" "$INSTALL_DIR"; then
         echo "  Shallow clone failed, retrying git clone..."
@@ -615,15 +640,20 @@ elif [ -d "$SOFTPHONE_DIR/.git" ]; then
     cd "$SOFTPHONE_DIR"
     git config http.postBuffer 524288000 2>/dev/null || true
     git remote set-url origin "$SOFTPHONE_REPO_URL" 2>/dev/null || true
-    git fetch --depth 1 origin "$SOFTPHONE_REPO_BRANCH" 2>/dev/null || true
-    if git diff-index --quiet HEAD -- 2>/dev/null; then
-        git checkout -B "$SOFTPHONE_REPO_BRANCH" "origin/$SOFTPHONE_REPO_BRANCH" 2>/dev/null || true
+    if ! is_offline; then
+        git fetch --depth 1 origin "$SOFTPHONE_REPO_BRANCH" 2>/dev/null || true
+        if git diff-index --quiet HEAD -- 2>/dev/null; then
+            git checkout -B "$SOFTPHONE_REPO_BRANCH" "origin/$SOFTPHONE_REPO_BRANCH" 2>/dev/null || true
+        fi
     fi
     cd "$INSTALL_DIR"
-else
+elif ! is_offline; then
     if ! git clone --depth 1 --branch "$SOFTPHONE_REPO_BRANCH" --single-branch "$SOFTPHONE_REPO_URL" "$SOFTPHONE_DIR" 2>/dev/null; then
         echo "  Notice: Online clone of Sokrat VOICE softphone unavailable; skipping optional standalone phone..."
     fi
+    cd "$INSTALL_DIR"
+else
+    echo "  Notice: Sokrat VOICE source is not in the offline bundle; skipping optional standalone phone."
     cd "$INSTALL_DIR"
 fi
 
@@ -651,6 +681,9 @@ fi
 
 if [ -d "$INSTALL_DIR/node_modules" ] && [ -f "$INSTALL_DIR/node_modules/express/package.json" ]; then
     echo "  Dependencies already bundled in node_modules, skipping npm install."
+elif is_offline; then
+    echo "  ERROR: node_modules is missing from the offline bundle." >&2
+    exit 1
 elif [ -f package-lock.json ]; then
     npm ci --omit=dev --prefer-offline --no-audit --no-fund 2>/dev/null || npm install --omit=dev --prefer-offline --no-audit --no-fund
 else
@@ -660,10 +693,12 @@ fi
 echo "  [4a] Installing Sokrat VOICE softphone npm dependencies..."
 if [ -d "$SOFTPHONE_DIR/node_modules" ] && [ -f "$SOFTPHONE_DIR/node_modules/express/package.json" ]; then
     echo "  Softphone dependencies already bundled in node_modules, skipping npm install."
-elif [ -d "$SOFTPHONE_DIR" ]; then
+elif [ -d "$SOFTPHONE_DIR" ] && ! is_offline; then
     cd "$SOFTPHONE_DIR"
     npm install --omit=dev --prefer-offline --no-audit --no-fund --fetch-timeout=3000 2>/dev/null || true
     cd "$INSTALL_DIR"
+elif [ -d "$SOFTPHONE_DIR" ]; then
+    echo "  Notice: softphone node_modules missing from offline bundle; skipping online npm install."
 fi
 echo "  [4b] Installing ffmpeg (static build, recording upload conversion)..."
 if ! command -v ffmpeg &>/dev/null && [ ! -x /usr/local/bin/ffmpeg ]; then
@@ -694,22 +729,26 @@ if ! command -v ffmpeg &>/dev/null && [ ! -x /usr/local/bin/ffmpeg ]; then
         echo "  Installing ffmpeg from offline bundle..."
         cp "/tmp/sokrat-repo/installer-bundle/binaries/ffmpeg" /usr/local/bin/ffmpeg
         chmod +x /usr/local/bin/ffmpeg
-    elif timeout 10 yum install -y ffmpeg &>/dev/null; then
-        echo "  ffmpeg installed via package manager"
+    elif is_offline; then
+        echo "  Notice: ffmpeg is missing from the offline bundle; audio conversion will use sox."
     else
-        echo "  Checking static ffmpeg mirrors (5s timeout)..."
-        cd /tmp
-        rm -rf ffmpeg-*-static ffmpeg-release-amd64-static.tar.xz
-        if curl -fsSL --connect-timeout 5 --max-time 15 -o /usr/local/bin/ffmpeg "https://github.com/eugeneware/ffmpeg-static/releases/download/b6.0/ffmpeg-linux-x64" 2>/dev/null; then
-            chmod +x /usr/local/bin/ffmpeg 2>/dev/null || true
-        elif curl -fsSL --connect-timeout 5 --max-time 20 -o ffmpeg-release-amd64-static.tar.xz "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz" 2>/dev/null; then
-            tar xJf ffmpeg-release-amd64-static.tar.xz 2>/dev/null || true
-            cp ffmpeg-*-static/ffmpeg /usr/local/bin/ 2>/dev/null || true
-            cp ffmpeg-*-static/ffprobe /usr/local/bin/ 2>/dev/null || true
-            chmod +x /usr/local/bin/ffmpeg /usr/local/bin/ffprobe 2>/dev/null || true
+        if timeout 10 yum install -y ffmpeg &>/dev/null; then
+            echo "  ffmpeg installed via package manager"
+        else
+            echo "  Checking static ffmpeg mirrors (5s timeout)..."
+            cd /tmp
             rm -rf ffmpeg-*-static ffmpeg-release-amd64-static.tar.xz
+            if curl -fsSL --connect-timeout 5 --max-time 15 -o /usr/local/bin/ffmpeg "https://github.com/eugeneware/ffmpeg-static/releases/download/b6.0/ffmpeg-linux-x64" 2>/dev/null; then
+                chmod +x /usr/local/bin/ffmpeg 2>/dev/null || true
+            elif curl -fsSL --connect-timeout 5 --max-time 20 -o ffmpeg-release-amd64-static.tar.xz "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz" 2>/dev/null; then
+                tar xJf ffmpeg-release-amd64-static.tar.xz 2>/dev/null || true
+                cp ffmpeg-*-static/ffmpeg /usr/local/bin/ 2>/dev/null || true
+                cp ffmpeg-*-static/ffprobe /usr/local/bin/ 2>/dev/null || true
+                chmod +x /usr/local/bin/ffmpeg /usr/local/bin/ffprobe 2>/dev/null || true
+                rm -rf ffmpeg-*-static ffmpeg-release-amd64-static.tar.xz
+            fi
+            cd "$INSTALL_DIR"
         fi
-        cd "$INSTALL_DIR"
     fi
 fi
 
@@ -754,6 +793,8 @@ if ! command -v frpc &>/dev/null && [ ! -x /usr/local/bin/frpc ]; then
     if [ -n "$FRPC_SRC" ]; then
         echo "  Installing frpc from bundle $(basename "$FRPC_SRC")..."
         install -m 0755 "$FRPC_SRC" /usr/local/bin/frpc
+    elif is_offline; then
+        echo "  Notice: frpc is missing from the offline bundle; reverse tunnel can be enabled later."
     elif curl -fsSL --connect-timeout 5 --max-time 30 -o /tmp/frp.tar.gz "https://github.com/fatedier/frp/releases/download/v0.71.1/frp_0.71.1_linux_amd64.tar.gz" 2>/dev/null; then
         echo "  Installing frpc from online release..."
         tar -xzf /tmp/frp.tar.gz -C /tmp
@@ -1369,12 +1410,18 @@ elif [ -n "$PUSH_GATEWAY_BUNDLE" ]; then
 elif [ -d "$PUSH_GATEWAY_DIR/.git" ]; then
     echo "  Updating sokrat-push-gateway..."
     cd "$PUSH_GATEWAY_DIR"
-    git fetch origin 2>/dev/null || true
-    git checkout origin/master -B master 2>/dev/null || git checkout origin/main -B main 2>/dev/null || true
+    if ! is_offline; then
+        git fetch origin 2>/dev/null || true
+        git checkout origin/master -B master 2>/dev/null || git checkout origin/main -B main 2>/dev/null || true
+    fi
 else
-    rm -rf "$PUSH_GATEWAY_DIR"
-    if ! git clone "$PUSH_GATEWAY_REPO" "$PUSH_GATEWAY_DIR" 2>/dev/null; then
-        echo "  Notice: Online clone of Sokrat Push Gateway unavailable; skipping optional push gateway..."
+    if is_offline; then
+        echo "  Notice: push gateway source is not in the offline bundle; skipping optional gateway."
+    else
+        rm -rf "$PUSH_GATEWAY_DIR"
+        if ! git clone "$PUSH_GATEWAY_REPO" "$PUSH_GATEWAY_DIR" 2>/dev/null; then
+            echo "  Notice: Online clone of Sokrat Push Gateway unavailable; skipping optional push gateway..."
+        fi
     fi
     cd "$INSTALL_DIR"
 fi
@@ -1382,8 +1429,10 @@ fi
 if [ -f "$PUSH_GATEWAY_DIR/package.json" ]; then
     if [ -d "$PUSH_GATEWAY_DIR/node_modules" ] && [ -f "$PUSH_GATEWAY_DIR/node_modules/express/package.json" ]; then
         echo "  Push gateway dependencies already bundled in node_modules, skipping npm install."
-    else
+    elif ! is_offline; then
         npm install --production --prefix "$PUSH_GATEWAY_DIR" 2>/dev/null || true
+    else
+        echo "  Notice: push gateway node_modules missing from offline bundle; skipping online npm install."
     fi
 
 FCM_SOURCE="${FCM_CREDENTIALS_FILE:-$SCRIPT_DIR/installer-bundle/secrets/firebase-service-account.json}"
@@ -1939,6 +1988,7 @@ same => n,Goto(s,process)
 exten => s,1,Goto(s,process)
 same => n(process),NoOp(--- Incoming call from Dongle ${DONGLENAME} (EXTEN: ${EXTEN}) ---)
 same => n,Set(DONGLE_TARGET=${DONGLENAME})
+same => n,Set(__SOKRAT_INBOUND_DONGLE=${DONGLENAME})
 same => n,Set(CHANNEL(hangup_handler_push)=cdr-cause-capture,s,1)
 same => n,ExecIf($["${MY_SIM_NUMBER}" = "" | "${MY_SIM_NUMBER}" = "+1234567890"]?Set(MY_SIM_NUMBER=))
 same => n,ExecIf($["${DB(DONGLE_SETTINGS/${DONGLENAME})}" != "1"]?Goto(skip_dynamic))
@@ -2019,8 +2069,6 @@ same => n,Set(U_HANG=${DB(AUDIO_GLOBALS/vad_hangover)})
 same => n,ExecIf($["${U_HANG}" = ""]?Set(U_HANG=250))
 same => n,ExecIf($["${CALLER_VAD}" = "0"]?Set(VAD_OPT=gate=off):Set(VAD_OPT=gate=on,threshold=${U_THRESH},hangover=${U_HANG},mindb=${CALLER_VAD_DB}))
 same => n,ExecIf($["${CALLER_DENOISE}" != "off"]?Set(RNNOISE(${CALLER_DENOISE},${VAD_OPT})=on))
-; Enable adaptive jitter buffer for SIP audio
-same => n,Set(JITTERBUFFER(adaptive)=default)
 same => n,Set(CALLER_AGC=${DB(AMPUSER/${REALCALLERIDNUM}/agc)})
 same => n,ExecIf($["${CALLER_AGC}" = ""]?Set(CALLER_AGC=${DB(AMPUSER/${CALLERID(num)}/agc)}))
 same => n,ExecIf($["${CALLER_AGC}" = ""]?Set(CALLER_AGC=off))
@@ -2029,6 +2077,7 @@ same => n,ExecIf($["${CALLER_AGC}" != "off" & "${CALLER_AGC}" != "0"]?Set(AGC(tx
 same => n,Set(RAW_TARGET=${CUT(OUT_${DIAL_TRUNK},/,2)})
 same => n,Set(DONGLE_TARGET=${DB(DONGLE_DEVICE_MAP/${RAW_TARGET})})
 same => n,ExecIf($["${DONGLE_TARGET}"=""]?Set(DONGLE_TARGET=${RAW_TARGET}))
+same => n,Gosub(sokrat-jb,s,1(${REALCALLERIDNUM},${DONGLE_TARGET}))
 same => n,Set(CHANNEL(hangup_handler_push)=cdr-cause-capture,s,1)
 same => n,MacroExit()
 MACRO
@@ -2084,6 +2133,7 @@ append_context '[macro-dialout-one-predial-hook]' '[macro-dialout-one-predial-ho
 
 [macro-dialout-one-predial-hook]
 exten => s,1,NoOp(--- Dynamic Adaptive Jitter Buffer & RNNoise Filter for Outbound Extension Leg ---)
+same => n,Gosub(sokrat-jb,s,1(${CALLERID(num)},))
 same => n,Set(CALLER_DENOISE=${DB(AMPUSER/${CALLERID(num)}/ai_denoise)})
 same => n,ExecIf($["${CALLER_DENOISE}" = ""]?Set(CALLER_DENOISE=off))
 same => n,Set(CALLER_VAD=${DB(AMPUSER/${CALLERID(num)}/vad_gate)})
@@ -2096,8 +2146,6 @@ same => n,Set(U_HANG=${DB(AUDIO_GLOBALS/vad_hangover)})
 same => n,ExecIf($["${U_HANG}" = ""]?Set(U_HANG=250))
 same => n,ExecIf($["${CALLER_VAD}" = "0"]?Set(VAD_OPT=gate=off):Set(VAD_OPT=gate=on,threshold=${U_THRESH},hangover=${U_HANG},mindb=${CALLER_VAD_DB}))
 same => n,ExecIf($["${CALLER_DENOISE}" != "off"]?Set(RNNOISE(${CALLER_DENOISE},${VAD_OPT})=on))
-; Enable adaptive jitter buffer for SIP audio
-same => n,Set(JITTERBUFFER(adaptive)=default)
 same => n,Set(CALLER_AGC=${DB(AMPUSER/${CALLERID(num)}/agc)})
 same => n,ExecIf($["${CALLER_AGC}" = ""]?Set(CALLER_AGC=off))
 same => n,ExecIf($["${CALLER_AGC}" != "off" & "${CALLER_AGC}" != "0"]?Set(AGC(rx)=${CALLER_AGC}))
@@ -2557,6 +2605,88 @@ same => n,ExecIf($["${CALLERID(name)}" != "" & "${CALLERID(name)}" != "${RAW_NUM
 same => n(done),Return()
 SIPHEADER
 
+# Strip old [sokrat-jb] before appending the per-extension resolver
+echo "  Stripping old [sokrat-jb]..."
+python3 -c "import re;f=open('/etc/asterisk/extensions_custom.conf').read();f=re.sub(r'\[sokrat-jb\].*?(?=\n\[|\Z)', '', f, flags=re.DOTALL);open('/etc/asterisk/extensions_custom.conf','w').write(f)"
+echo "  Stripped."
+
+# Append per-extension jitter-buffer resolver
+append_context '[sokrat-jb]' '[sokrat-jb]' << 'SOKRATJB'
+
+[sokrat-jb]
+; Resolve one extension's jitter-buffer decision in this order:
+; explicit extension mode > per-dongle DONGLE_AUDIO/<dongle>/jb >
+; AUDIO_GLOBALS/cellular_jitterbuffer > adaptive default.
+; mode=off executes no JITTERBUFFER Set at all. Global disabled suppresses
+; inherit only; explicit adaptive/fixed still apply.
+exten => s,1,NoOp(--- Sokrat jitter buffer for extension ${ARG1} dongle ${ARG2} ---)
+same => n,Set(JB_EXT=${IF($["${ARG1}" != ""]?${ARG1}:${CALLERID(num)})})
+same => n,GotoIf($["${CHANNEL(name):0:5}" = "PJSIP" | "${CHANNEL(name):0:3}" = "SIP"]?channel_ok)
+same => n,Goto(done)
+same => n(channel_ok),GotoIf($["${DB_EXISTS(AMPUSER/${JB_EXT}/cidname)}" != "1"]?done)
+same => n,Set(JB_DONGLE=${ARG2})
+same => n,Set(JB_MODE=${DB(AMPUSER/${JB_EXT}/jb_mode)})
+same => n,GotoIf($["${JB_MODE}" = "adaptive" | "${JB_MODE}" = "fixed" | "${JB_MODE}" = "off"]?explicit)
+same => n,Set(JB_GLOBAL=${DB(AUDIO_GLOBALS/dialplan_jitterbuffer_enabled)})
+same => n,ExecIf($["${JB_GLOBAL}" = ""]?Set(JB_GLOBAL=1))
+same => n,GotoIf($["${JB_GLOBAL}" != "1"]?done)
+same => n,Set(JB_KIND=)
+same => n,GotoIf($["${JB_DONGLE}" = ""]?inherit_default)
+same => n,GotoIf($["${DB_EXISTS(DONGLE_SETTINGS/${JB_DONGLE})}" != "1"]?inherit_default)
+same => n,Set(JB_KIND=${DB(DONGLE_AUDIO/${JB_DONGLE}/jb)})
+same => n,ExecIf($["${JB_KIND}" = ""]?Set(JB_KIND=${DB(AUDIO_GLOBALS/cellular_jitterbuffer)}))
+same => n,ExecIf($["${JB_KIND}" = ""]?Set(JB_KIND=${DB(AUDIO_GLOBALS/cellular_jb)}))
+same => n,GotoIf($["${JB_KIND}" = ""]?inherit_default)
+same => n,GotoIf($["${JB_KIND}" = "off"]?done)
+same => n,GotoIf($["${JB_KIND}" = "fixed"]?inherit_fixed:inherit_adaptive)
+same => n(inherit_default),Set(JB_KIND=adaptive)
+same => n,Goto(inherit_adaptive)
+same => n(inherit_fixed),Set(JB_VALUE=default)
+same => n,Goto(apply_fixed)
+same => n(inherit_adaptive),Set(JB_VALUE=default)
+same => n,Goto(apply_adaptive)
+same => n(explicit),GotoIf($["${JB_MODE}" = "off"]?done)
+same => n,Set(JB_MAX=${DB(AMPUSER/${JB_EXT}/jb_max_ms)})
+same => n,ExecIf($["${JB_MAX}" = ""]?Set(JB_MAX=200))
+same => n,Set(JB_RESYNC=${DB(AMPUSER/${JB_EXT}/jb_resync_ms)})
+same => n,ExecIf($["${JB_RESYNC}" = ""]?Set(JB_RESYNC=1000))
+same => n,Set(JB_TARGET=${DB(AMPUSER/${JB_EXT}/jb_target_extra_ms)})
+same => n,ExecIf($["${JB_TARGET}" = ""]?Set(JB_TARGET=40))
+same => n,GotoIf($["${JB_MODE}" = "fixed"]?explicit_fixed)
+same => n,Set(JB_VALUE=${JB_MAX},${JB_RESYNC},${JB_TARGET})
+same => n,Goto(apply_adaptive)
+same => n(explicit_fixed),Set(JB_VALUE=${JB_MAX},${JB_RESYNC})
+same => n,Goto(apply_fixed)
+same => n(apply_adaptive),Set(JITTERBUFFER(adaptive)=${JB_VALUE})
+same => n,Goto(done)
+same => n(apply_fixed),Set(JITTERBUFFER(fixed)=${JB_VALUE})
+same => n(done),Return()
+SOKRATJB
+
+
+# Ensure the callee PJSIP channel runs the per-extension resolver before the
+# native func-apply-sipheaders priorities. This override file is loaded before
+# the generated extensions_additional.conf, so only s,1 is replaced and the
+# native SIP-header priorities 2..13 continue to execute.
+OVERRIDE_CONF=/etc/asterisk/extensions_override_issabelpbx.conf
+touch "$OVERRIDE_CONF"
+python3 - "$OVERRIDE_CONF" <<'PY_JB_OVERRIDE'
+import sys
+from pathlib import Path
+path = Path(sys.argv[1])
+text = path.read_text()
+begin = '; BEGIN SOKRAT PER-EXTENSION JITTER BUFFER CALLEE HOOK'
+end = '; END SOKRAT PER-EXTENSION JITTER BUFFER CALLEE HOOK'
+if begin in text:
+    import re
+    text = re.sub(re.escape(begin) + r'.*?' + re.escape(end) + r'\n?', '', text, flags=re.DOTALL)
+text = text.rstrip() + '\n\n' + begin + '\n'
+text += '[func-apply-sipheaders]\n'
+text += 'exten => s,1,Gosub(sokrat-jb,s,1(${CUT(CUT(CHANNEL(name),-,1),/,2)},${SOKRAT_INBOUND_DONGLE}))\n'
+text += end + '\n'
+path.write_text(text)
+PY_JB_OVERRIDE
+
 # Strip old [ext-external-failover] and [sub-failover-screen] before appending
 python3 -c "import re;f=open('/etc/asterisk/extensions_custom.conf').read();f=re.sub(r'\[ext-external-failover\].*?(?=\n\[|\Z)', '', f, flags=re.DOTALL);f=re.sub(r'\[sub-failover-screen\].*?(?=\n\[|\Z)', '', f, flags=re.DOTALL);open('/etc/asterisk/extensions_custom.conf','w').write(f)"
 
@@ -2681,7 +2811,21 @@ echo "[10/14] Setting up GSM dongles & chan_dongle..."
 # 10a — Install Build Dependencies
 echo "  [10a] Installing build dependencies..."
 if ! command -v gcc &>/dev/null || ! command -v make &>/dev/null; then
-    yum -y install gcc gcc-c++ make automake autoconf libtool sqlite-devel usbutils usb_modeswitch minicom wget curl tar patch asterisk18-devel 2>/dev/null || true
+    if ! is_offline; then
+        yum -y install gcc gcc-c++ make automake autoconf libtool sqlite-devel usbutils usb_modeswitch minicom wget curl tar patch asterisk18-devel 2>/dev/null || true
+    else
+        echo "  Warning: build toolchain missing from the offline bundle; precompiled modules will be used."
+    fi
+fi
+
+# Load shared dongle helpers before optional module validation.
+DONGLE_HELPER="$INSTALL_DIR/scripts/dongle-module.sh"
+if [ ! -f "$DONGLE_HELPER" ] && [ -f "$SCRIPT_DIR/../scripts/dongle-module.sh" ]; then
+    DONGLE_HELPER="$SCRIPT_DIR/../scripts/dongle-module.sh"
+fi
+if [ -f "$DONGLE_HELPER" ]; then
+    # shellcheck source=scripts/dongle-module.sh
+    . "$DONGLE_HELPER"
 fi
 
 # 10b — Compile and Install librnnoise & func_rnnoise.so
@@ -2705,9 +2849,11 @@ if [ -n "$RNNOISE_BIN_DIR" ]; then
         mkdir -p /usr/lib64/asterisk/modules
         cp "$RNNOISE_BIN_DIR/func_rnnoise.so" /usr/lib64/asterisk/modules/func_rnnoise.so
         chmod 755 /usr/lib64/asterisk/modules/func_rnnoise.so
-        asterisk -rx "module load func_rnnoise.so" 2>/dev/null || asterisk -rx "module reload func_rnnoise.so" 2>/dev/null || true
-        echo "  func_rnnoise.so installed from bundle and loaded into Asterisk"
+        dongle_module_ensure_func_rnnoise asterisk || true
+        echo "  func_rnnoise.so prepared from bundle"
     fi
+elif is_offline; then
+    echo "  Notice: RNNoise source build skipped in offline mode; using bundled/preinstalled libraries."
 elif [ ! -f /usr/lib64/librnnoise.so ] || [ ! -f /usr/include/rnnoise.h ]; then
     echo "  Attempting librnnoise compilation with timeout fallback..."
     cd /tmp
@@ -2746,8 +2892,8 @@ elif [ -f "$INSTALL_DIR/asterisk/func_rnnoise.c" ] && [ -f /usr/lib64/librnnoise
         strip /usr/lib64/asterisk/modules/func_rnnoise.so.tmp 2>/dev/null || true
         chmod 755 /usr/lib64/asterisk/modules/func_rnnoise.so.tmp
         mv -f /usr/lib64/asterisk/modules/func_rnnoise.so.tmp /usr/lib64/asterisk/modules/func_rnnoise.so
-        asterisk -rx "module load func_rnnoise.so" 2>/dev/null || asterisk -rx "module reload func_rnnoise.so" 2>/dev/null || true
-        echo "  func_rnnoise.so compiled and loaded into Asterisk"
+        dongle_module_ensure_func_rnnoise asterisk || true
+        echo "  func_rnnoise.so compiled and prepared for Asterisk"
     fi
 fi
 # 10c — Compile and Install chan_dongle (with Sokrat decline detection, 20ms audio frame accumulator, modem cooldown pacing, Call Waiting rejection, CRING ring detection, and SMS/PDU memory safety)
@@ -2951,7 +3097,9 @@ install_overlay_vpn_clients() {
             rpm -Uvh --replacepkgs --nodeps --oldpackage "$ZEROTIER_RPM" 2>/dev/null || true
         fi
         if ! command -v zerotier-cli >/dev/null 2>&1; then
-            if $pkg_mgr install -y zerotier-one >/dev/null 2>&1; then
+            if is_offline; then
+                echo "  WARNING: zerotier-one is not in the offline bundle (continuing)"
+            elif $pkg_mgr install -y zerotier-one >/dev/null 2>&1; then
                 echo "  zerotier-one installed"
             else
                 echo "  WARNING: could not install zerotier-one (continuing)"
@@ -2977,15 +3125,18 @@ install_overlay_vpn_clients() {
             rpm -Uvh --replacepkgs --nodeps --oldpackage "$TAILSCALE_RPM" 2>/dev/null || true
         fi
         if ! command -v tailscale >/dev/null 2>&1; then
-            local os_major="8"
-            if [ -r /etc/os-release ]; then
-                os_major=$(awk -F= '/^VERSION_ID=/{gsub(/"/,"",$2); split($2,v,"."); print v[1]; exit}' /etc/os-release)
-            fi
-            if $pkg_mgr config-manager --add-repo "https://pkgs.tailscale.com/stable/rhel/${os_major}/tailscale.repo" >/dev/null 2>&1; then
-                echo "  tailscale repository added"
+            if is_offline; then
+                echo "  WARNING: tailscale is not in the offline bundle (continuing)"
             else
-                mkdir -p /etc/yum.repos.d
-                cat > /etc/yum.repos.d/sokrat-tailscale.repo << REPOEOF
+                local os_major="8"
+                if [ -r /etc/os-release ]; then
+                    os_major=$(awk -F= '/^VERSION_ID=/{gsub(/"/,"",$2); split($2,v,"."); print v[1]; exit}' /etc/os-release)
+                fi
+                if $pkg_mgr config-manager --add-repo "https://pkgs.tailscale.com/stable/rhel/${os_major}/tailscale.repo" >/dev/null 2>&1; then
+                    echo "  tailscale repository added"
+                else
+                    mkdir -p /etc/yum.repos.d
+                    cat > /etc/yum.repos.d/sokrat-tailscale.repo << REPOEOF
 [tailscale]
 name=tailscale
 baseurl=https://pkgs.tailscale.com/stable/rhel/${os_major}
@@ -2994,12 +3145,13 @@ gpgcheck=1
 repo_gpgcheck=1
 gpgkey=https://pkgs.tailscale.com/stable/rhel/${os_major}/tailscale.gpg
 REPOEOF
-                echo "  tailscale repository file written"
-            fi
-            if $pkg_mgr install -y tailscale >/dev/null 2>&1; then
-                echo "  tailscale installed"
-            else
-                echo "  WARNING: could not install tailscale (continuing)"
+                    echo "  tailscale repository file written"
+                fi
+                if $pkg_mgr install -y tailscale >/dev/null 2>&1; then
+                    echo "  tailscale installed"
+                else
+                    echo "  WARNING: could not install tailscale (continuing)"
+                fi
             fi
         else
             echo "  tailscale installed"
@@ -3065,6 +3217,8 @@ install_wireguard_server
 echo "  [10y] Checking NetworkManager..."
 if command -v nmcli >/dev/null 2>&1; then
     echo "  NetworkManager already installed"
+elif is_offline; then
+    echo "  WARNING: NetworkManager is not in the offline bundle; network manager features will be limited"
 elif command -v dnf >/dev/null 2>&1; then
     if dnf install -y NetworkManager >/dev/null 2>&1; then
         echo "  NetworkManager installed"
@@ -3129,6 +3283,11 @@ fi
 
 # 10h — Initialize AstDB Noise & Audio Defaults
 echo "  [10h] Initializing AstDB Noise and Audio defaults..."
+# Global dialplan jitter-buffer default. Preserve an explicit prior choice;
+# only initialize the marker on installations that do not have one yet.
+if ! asterisk -rx "database get AUDIO_GLOBALS dialplan_jitterbuffer_enabled" 2>/dev/null | grep -q "Value:"; then
+    asterisk -rx "database put AUDIO_GLOBALS dialplan_jitterbuffer_enabled 1" 2>/dev/null || true
+fi
 asterisk -rx "database put AUDIO_GLOBALS vad_threshold 0.20" 2>/dev/null || true
 asterisk -rx "database put AUDIO_GLOBALS vad_hangover 250" 2>/dev/null || true
 asterisk -rx "database put AUDIO_GLOBALS vad_db_threshold -90" 2>/dev/null || true
@@ -3165,8 +3324,10 @@ if ! rpm -q mod_ssl &>/dev/null; then
             break
         fi
     done
-    if [ "$MOD_SSL_INSTALLED" -eq 0 ]; then
+    if [ "$MOD_SSL_INSTALLED" -eq 0 ] && ! is_offline; then
         yum install -y mod_ssl 2>/dev/null || true
+    elif [ "$MOD_SSL_INSTALLED" -eq 0 ]; then
+        echo "  Warning: mod_ssl is missing from the offline bundle; HTTPS may not start."
     fi
 fi
 
@@ -3407,6 +3568,7 @@ fi
 
 # Provision Sokrat Cloud Speech-To-Text queue worker.
 echo "  Provisioning Sokrat Cloud Speech-To-Text worker..."
+# Legacy cleanup only: remove the old local Whisper unit from prior installs.
 systemctl stop sokrat-whisper.service 2>/dev/null || true
 systemctl disable sokrat-whisper.service 2>/dev/null || true
 rm -f /etc/systemd/system/sokrat-whisper.service 2>/dev/null || true

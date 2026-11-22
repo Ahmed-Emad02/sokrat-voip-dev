@@ -489,7 +489,7 @@ fi
 # Decommission local whisper and migrate STT settings to Cloud AI
 mysql "${MYSQL_AUTH[@]}" asterisk -e "
     UPDATE stt_settings
-    SET engine='cloud_api', provider='munsit', api_url='https://api.munsit.com/api/v1/audio/transcribe', model_name='munsit'
+    SET engine='cloud_api', provider='elevenlabs', api_url='https://api.elevenlabs.io/v1/speech-to-text', model_name='scribe_v3'
     WHERE engine='local_whisper' OR provider='local';
 " 2>/dev/null || true
 
@@ -828,19 +828,59 @@ elif [ -f "$INSTALL_DIR/asterisk/func_rnnoise.c" ] && [ -f /usr/lib64/librnnoise
 fi
 
 # 5. Sanitize Dialplans & Protect Call Transfers
-# 5.0 Ensure adaptive jitter buffer remains enabled
-    # Restore legacy hardcoded JITTERBUFFER calls in managed dialplan files
-    sed -i 's/^;\s*same => n,Set(JITTERBUFFER(adaptive)=default)/same => n,Set(JITTERBUFFER(adaptive)=default)/g' /etc/asterisk/extensions_custom.conf 2>/dev/null || true
-    for audio_conf in /etc/asterisk/extensions_custom.conf /etc/asterisk/extensions_override_issabel.conf; do
-        [ -f "$audio_conf" ] || continue
-        python3 - "$audio_conf" <<'PY_AUDIO'
+# 5.0 Resolve the global jitter-buffer state and install the per-extension
+# resolver. Legacy literal/parameterized global lines are removed from managed
+# hooks; inherit now reads the AstDB marker through [sokrat-jb].
+JB_LEGACY_ENABLED=0
+if python3 - <<'PY_JB_STATE'
+from pathlib import Path
+import re, sys
+path = Path('/etc/asterisk/extensions_custom.conf')
+if not path.exists():
+    print(0); sys.exit(0)
+targets = {'macro-dialout-trunk-predial-hook', 'macro-dialout-one-predial-hook', 'from-dongle-custom'}
+current = None
+found = 0
+for line in path.read_text().splitlines():
+    m = re.match(r'^\s*\[([^\]]+)\]', line)
+    if m:
+        current = m.group(1).strip()
+        continue
+    if current in targets and re.match(r'^\s*(?:same\s*=>\s*[^,]+|exten\s*=>\s*[^,]+),[^,]*\bSet\(JITTERBUFFER\((?:adaptive|fixed)\)=', line):
+        found = 1
+print(found)
+PY_JB_STATE
+then
+    JB_LEGACY_ENABLED=1
+fi
+if ! asterisk -rx "database get AUDIO_GLOBALS dialplan_jitterbuffer_enabled" 2>/dev/null | grep -q "Value:"; then
+    asterisk -rx "database put AUDIO_GLOBALS dialplan_jitterbuffer_enabled $JB_LEGACY_ENABLED" 2>/dev/null || true
+fi
+
+for audio_conf in /etc/asterisk/extensions_custom.conf /etc/asterisk/extensions_override_issabel.conf; do
+    [ -f "$audio_conf" ] || continue
+    python3 - "$audio_conf" <<'PY_AUDIO'
+import re
 import sys
 from pathlib import Path
+
 path = Path(sys.argv[1])
 text = path.read_text()
-# Restore adaptive jitter buffer.
-text = text.replace('; same => n,Set(JITTERBUFFER(adaptive)=default)', 'same => n,Set(JITTERBUFFER(adaptive)=default)')
-text = text.replace('ExecIf($["${D_JB}" != ""]?Set(JITTERBUFFER(${D_JB})=default))', 'ExecIf($["${D_JB}" != "" & "${D_JB}" != "off"]?Set(JITTERBUFFER(${D_JB})=default))')
+targets = {'macro-dialout-trunk-predial-hook', 'macro-dialout-one-predial-hook', 'from-dongle-custom'}
+
+# Remove every legacy/global JITTERBUFFER line from managed hooks, whether it
+# is literal, parameterized, commented, or the old per-dongle line.
+out = []
+current = None
+for line in text.split('\n'):
+    m = re.match(r'^\s*\[([^\]]+)\]', line)
+    if m:
+        current = m.group(1).strip()
+    if current in targets and re.match(r'^\s*(?:same\s*=>\s*[^,]+|exten\s*=>\s*[^,]+),[^,]*\bSet\(JITTERBUFFER\((?:adaptive|fixed)\)=', line):
+        continue
+    out.append(line)
+text = '\n'.join(out)
+
 # Enable carrier early media. Capital R keeps ringback but passes early media;
 # remove any lower-case r that suppresses it.
 marker = 'exten => s,1,NoOp(--- Outbound call via Dongle (CID auto-set by trunk outcid & Extension RNNoise Filter) ---)'
@@ -849,9 +889,114 @@ legacy_ringback = 'same => n,Set(DIAL_TRUNK_OPTIONS=${DIAL_TRUNK_OPTIONS}r)'
 text = text.replace(legacy_ringback, '')
 if marker in text and early_media not in text:
     text = text.replace(marker, marker + '\n' + early_media, 1)
+
+# The resolver and its call sites belong in extensions_custom.conf.
+if path.name == 'extensions_custom.conf':
+    resolver = r"""[sokrat-jb]
+; Resolve one extension's jitter-buffer decision in this order:
+; explicit extension mode > per-dongle DONGLE_AUDIO/<dongle>/jb >
+; AUDIO_GLOBALS/cellular_jitterbuffer > adaptive default.
+; mode=off executes no JITTERBUFFER Set at all. Global disabled suppresses
+; inherit only; explicit adaptive/fixed still apply.
+exten => s,1,NoOp(--- Sokrat jitter buffer for extension ${ARG1} dongle ${ARG2} ---)
+same => n,Set(JB_EXT=${IF($["${ARG1}" != ""]?${ARG1}:${CALLERID(num)})})
+same => n,GotoIf($["${CHANNEL(name):0:5}" = "PJSIP" | "${CHANNEL(name):0:3}" = "SIP"]?channel_ok)
+same => n,Goto(done)
+same => n(channel_ok),GotoIf($["${DB_EXISTS(AMPUSER/${JB_EXT}/cidname)}" != "1"]?done)
+same => n,Set(JB_DONGLE=${ARG2})
+same => n,Set(JB_MODE=${DB(AMPUSER/${JB_EXT}/jb_mode)})
+same => n,GotoIf($["${JB_MODE}" = "adaptive" | "${JB_MODE}" = "fixed" | "${JB_MODE}" = "off"]?explicit)
+same => n,Set(JB_GLOBAL=${DB(AUDIO_GLOBALS/dialplan_jitterbuffer_enabled)})
+same => n,ExecIf($["${JB_GLOBAL}" = ""]?Set(JB_GLOBAL=1))
+same => n,GotoIf($["${JB_GLOBAL}" != "1"]?done)
+same => n,Set(JB_KIND=)
+same => n,GotoIf($["${JB_DONGLE}" = ""]?inherit_default)
+same => n,GotoIf($["${DB_EXISTS(DONGLE_SETTINGS/${JB_DONGLE})}" != "1"]?inherit_default)
+same => n,Set(JB_KIND=${DB(DONGLE_AUDIO/${JB_DONGLE}/jb)})
+same => n,ExecIf($["${JB_KIND}" = ""]?Set(JB_KIND=${DB(AUDIO_GLOBALS/cellular_jitterbuffer)}))
+same => n,ExecIf($["${JB_KIND}" = ""]?Set(JB_KIND=${DB(AUDIO_GLOBALS/cellular_jb)}))
+same => n,GotoIf($["${JB_KIND}" = ""]?inherit_default)
+same => n,GotoIf($["${JB_KIND}" = "off"]?done)
+same => n,GotoIf($["${JB_KIND}" = "fixed"]?inherit_fixed:inherit_adaptive)
+same => n(inherit_default),Set(JB_KIND=adaptive)
+same => n,Goto(inherit_adaptive)
+same => n(inherit_fixed),Set(JB_VALUE=default)
+same => n,Goto(apply_fixed)
+same => n(inherit_adaptive),Set(JB_VALUE=default)
+same => n,Goto(apply_adaptive)
+same => n(explicit),GotoIf($["${JB_MODE}" = "off"]?done)
+same => n,Set(JB_MAX=${DB(AMPUSER/${JB_EXT}/jb_max_ms)})
+same => n,ExecIf($["${JB_MAX}" = ""]?Set(JB_MAX=200))
+same => n,Set(JB_RESYNC=${DB(AMPUSER/${JB_EXT}/jb_resync_ms)})
+same => n,ExecIf($["${JB_RESYNC}" = ""]?Set(JB_RESYNC=1000))
+same => n,Set(JB_TARGET=${DB(AMPUSER/${JB_EXT}/jb_target_extra_ms)})
+same => n,ExecIf($["${JB_TARGET}" = ""]?Set(JB_TARGET=40))
+same => n,GotoIf($["${JB_MODE}" = "fixed"]?explicit_fixed)
+same => n,Set(JB_VALUE=${JB_MAX},${JB_RESYNC},${JB_TARGET})
+same => n,Goto(apply_adaptive)
+same => n(explicit_fixed),Set(JB_VALUE=${JB_MAX},${JB_RESYNC})
+same => n,Goto(apply_fixed)
+same => n(apply_adaptive),Set(JITTERBUFFER(adaptive)=${JB_VALUE})
+same => n,Goto(done)
+same => n(apply_fixed),Set(JITTERBUFFER(fixed)=${JB_VALUE})
+same => n(done),Return()"""
+    if '[sokrat-jb]' not in text:
+        insert_at = text.find('[from-dongle-custom]')
+        if insert_at == -1:
+            text = text.rstrip() + '\n\n' + resolver + '\n'
+        else:
+            text = text[:insert_at] + resolver + '\n\n' + text[insert_at:]
+
+    # Inbound dongle name is inherited by the callee PJSIP channel.
+    if 'Set(__SOKRAT_INBOUND_DONGLE=${DONGLENAME})' not in text:
+        text = text.replace(
+            'same => n,Set(DONGLE_TARGET=${DONGLENAME})\n',
+            'same => n,Set(DONGLE_TARGET=${DONGLENAME})\nsame => n,Set(__SOKRAT_INBOUND_DONGLE=${DONGLENAME})\n',
+            1
+        )
+    # Outbound caller leg (trunk predial hook runs on the caller PJSIP channel).
+    if 'Gosub(sokrat-jb,s,1(${REALCALLERIDNUM},${DONGLE_TARGET}))' not in text:
+        text = text.replace(
+            'same => n,ExecIf($["${DONGLE_TARGET}"=""]?Set(DONGLE_TARGET=${RAW_TARGET}))\n',
+            'same => n,ExecIf($["${DONGLE_TARGET}"=""]?Set(DONGLE_TARGET=${RAW_TARGET}))\nsame => n,Gosub(sokrat-jb,s,1(${REALCALLERIDNUM},${DONGLE_TARGET}))\n',
+            1
+        )
+    # The legacy one-predial hook is not called on this FreePBX build, but keep
+    # it correct for installations where it is.
+    if 'Gosub(sokrat-jb,s,1(${CALLERID(num)}' not in text:
+        text = text.replace(
+            '[macro-dialout-one-predial-hook]\nexten => s,1,NoOp(--- Dynamic Adaptive Jitter Buffer & RNNoise Filter for Outbound Extension Leg ---)\n',
+            '[macro-dialout-one-predial-hook]\nexten => s,1,NoOp(--- Dynamic Adaptive Jitter Buffer & RNNoise Filter for Outbound Extension Leg ---)\nsame => n,Gosub(sokrat-jb,s,1(${CALLERID(num)},))\n',
+            1
+        )
+
 path.write_text(text)
 PY_AUDIO
-    done
+done
+
+
+# The callee PJSIP channel needs the resolver before the native SIP-header
+# priorities. extensions_override_issabelpbx.conf is loaded before the
+# generated file, so this replaces only func-apply-sipheaders s,1; native
+# priorities 2..13 still run.
+OVERRIDE_CONF=/etc/asterisk/extensions_override_issabelpbx.conf
+touch "$OVERRIDE_CONF"
+python3 - "$OVERRIDE_CONF" <<'PY_JB_OVERRIDE'
+import re
+import sys
+from pathlib import Path
+path = Path(sys.argv[1])
+text = path.read_text()
+begin = '; BEGIN SOKRAT PER-EXTENSION JITTER BUFFER CALLEE HOOK'
+end = '; END SOKRAT PER-EXTENSION JITTER BUFFER CALLEE HOOK'
+if begin in text:
+    text = re.sub(re.escape(begin) + r'.*?' + re.escape(end) + r'\n?', '', text, flags=re.DOTALL)
+text = text.rstrip() + '\n\n' + begin + '\n'
+text += '[func-apply-sipheaders]\n'
+text += 'exten => s,1,Gosub(sokrat-jb,s,1(${CUT(CUT(CHANNEL(name),-,1),/,2)},${SOKRAT_INBOUND_DONGLE}))\n'
+text += end + '\n'
+path.write_text(text)
+PY_JB_OVERRIDE
 
 # Migrate only the legacy generated audio-default pair (both/1/8000) to safe
 # opt-in defaults. Explicit non-default values are left untouched.
@@ -1797,7 +1942,7 @@ elif command -v asterisk &>/dev/null && pgrep -x asterisk >/dev/null 2>&1; then
         echo "  ERROR: chan_dongle.so failed to load" >&2
         exit 1
     }
-    asterisk -rx "module load func_rnnoise.so" >/dev/null 2>&1 || true
+    dongle_module_ensure_func_rnnoise asterisk || true
 fi
 dongle_module_wait_running 20 || {
     echo "  ERROR: chan_dongle.so is not running after the reload" >&2

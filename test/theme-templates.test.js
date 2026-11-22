@@ -34,24 +34,6 @@ test('views/users.ejs uses theme-aware CSS custom properties for tab permission 
     assert.ok(html.includes('text-[var(--text-primary)]'), 'Rendered tab labels should contain text-[var(--text-primary)]');
 });
 
-test('views/groups.ejs uses theme-aware CSS custom properties for tab permission labels', async () => {
-    const groupsEjsPath = path.join(__dirname, '../views/groups.ejs');
-    const content = fs.readFileSync(groupsEjsPath, 'utf8');
-
-    assert.ok(content.includes('bg-[var(--bg-primary)]'), 'groups.ejs tab permission labels should use bg-[var(--bg-primary)]');
-    assert.ok(content.includes('text-[var(--text-primary)]'), 'groups.ejs tab permission labels should use text-[var(--text-primary)]');
-
-    const html = await ejs.renderFile(groupsEjsPath, {
-        currentLang: 'en',
-        isRtl: false,
-        groups: [{ id: 2, name: 'operators', permissions: ['cdr'] }],
-        allTabs: ['dashboard', 'users', 'cdr', 'queues']
-    });
-
-    assert.ok(html.includes('bg-[var(--bg-primary)]'), 'Rendered groups tab labels should contain bg-[var(--bg-primary)]');
-    assert.ok(html.includes('text-[var(--text-primary)]'), 'Rendered groups tab labels should contain text-[var(--text-primary)]');
-});
-
 test('views/sidebar.ejs includes light theme overrides for fallback classes', () => {
     const sidebarEjsPath = path.join(__dirname, '../views/sidebar.ejs');
     const content = fs.readFileSync(sidebarEjsPath, 'utf8');

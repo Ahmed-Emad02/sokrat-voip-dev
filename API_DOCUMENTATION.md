@@ -96,16 +96,19 @@ Sokrat VoIP enforces six distinct security tiers depending on the endpoint categ
   - Request Header: `X-API-Key: sokrat_live_...`
   - Authorization Header: `Authorization: Bearer sokrat_live_...`
   - Query Parameter: `?api_key=sokrat_live_...` (specifically supported for HTML5 `<audio>` media streaming).
-- **Security Bounds**: Supports configurable granted scopes, expiration dates, and IP address whitelisting (supports single IPs, comma-separated lists, subnet wildcards `192.168.1.*`, and CIDR notation `10.0.0.0/16`).
+- **Security Bounds**: Supports configurable granted scopes, expiration dates, and IP address whitelisting (single IPs, comma-separated lists, subnet wildcards `192.168.1.*`, CIDR notation `10.0.0.0/16`, and DNS hostnames resolved to A/AAAA records).
+- **Read-only scopes**: `calls:read`, `recordings:read`, `extensions:read`, `stats:read`, `cdr`, `cdr-export`, `live:read`. A key whose scopes are all read scopes is restricted to GET/HEAD/OPTIONS, except `POST /api/integrations/v1/embed-tickets` for read-only live embedding. `*` is full access and is not read-only.
+- **Rate limiting**: Static keys are limited per key+client IP by `API_KEY_RATE_LIMIT_PER_MINUTE` (default 300/minute). Responses include `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`, and `Retry-After` on HTTP 429.
 
-### 4. CRM Integration Bearer Authentication
-- Endpoints under `/api/integrations/crm/v1/*` require an HTTP `Authorization: Bearer <token>` header.
-- Tokens are provisioned by pairing a 6-digit cryptographic PIN via `POST /api/integrations/crm/v1/pair`.
-- Enforces OAuth-style scopes: `calls:read`, `recordings:read`, `extensions:read`, `embed:live`.
+### 4. Integration Bearer Authentication
+- Endpoints under `/api/integrations/v1/*` require an HTTP `Authorization: Bearer <token>` header.
+- Tokens are provisioned by pairing a 6-digit cryptographic PIN via `POST /api/integrations/v1/pair`.
+- Enforces OAuth-style scopes: `calls:read`, `recordings:read`, `extensions:read`, `stats:read`, `live:read`, `softphone:use`, plus optional live control scopes.
+- Static API keys with the same read scopes may be sent in `X-API-Key` and are accepted by the CRM routes.
 
 ### 5. Single-Use Embed Tickets
-- Endpoint `/embed/crm/live` renders the embedded softphone widget inside third-party iframes.
-- Authenticated via single-use signed tokens (`?ticket=emb_...`) issued by `/api/integrations/crm/v1/embed-tickets` (15-minute validity window).
+- Endpoint `/embed/live` renders the embedded softphone widget inside third-party iframes.
+- Authenticated via single-use signed tokens (`?ticket=emb_...`) issued by `/api/integrations/v1/embed-tickets` (15-minute validity window).
 
 ### 6. Multi-Site Federation Secret
 - Inter-node clustering endpoints (`/api/federation/v1/*`) validate the header `X-Federation-Secret: <cluster_secret>` to allow secure inter-branch data synchronization.
@@ -150,8 +153,8 @@ The 264 API endpoints are organized into 31 functional modules:
   - [`GET` /dialer](#get-dialer)
   - [`GET` /storage](#get-storage)
   - [`GET` /config](#get-config)
-  - [`GET` /integrations/crm](#get-integrationscrm)
-  - [`GET` /embed/crm/live](#get-embedcrmlive)
+  - [`GET` /integrations](#get-integrations)
+  - [`GET` /embed/live](#get-embedlive)
   - [`GET` /401](#get-401)
   - [`GET` /403](#get-403)
   - [`GET` /404](#get-404)
@@ -281,8 +284,6 @@ The 264 API endpoints are organized into 31 functional modules:
   - [`DELETE` /api/config/modem/dongle-slot/:dongleName?](#delete-apiconfigmodemdongle-slotdonglename)
   - [`GET` /api/config/modem/jitterbuffer](#get-apiconfigmodemjitterbuffer)
   - [`POST` /api/config/modem/jitterbuffer](#post-apiconfigmodemjitterbuffer)
-  - [`GET` /api/config/modem/denoise](#get-apiconfigmodemdenoise)
-  - [`POST` /api/config/modem/denoise](#post-apiconfigmodemdenoise)
   - [`GET` /api/config/dongle-mappings](#get-apiconfigdongle-mappings)
   - [`POST` /api/config/dongle-mappings/:dongleName/toggle](#post-apiconfigdongle-mappingsdonglenametoggle)
 - [**22. Hardware GSM Dongles, Cellular Gateways, USSD & SMS**](#gsm-dongles) *(20 endpoints)*
@@ -326,19 +327,21 @@ The 264 API endpoints are organized into 31 functional modules:
   - [`GET` /api/dialer/dnc](#get-apidialerdnc)
   - [`POST` /api/dialer/dnc](#post-apidialerdnc)
   - [`DELETE` /api/dialer/dnc/:phone](#delete-apidialerdncphone)
-- [**24. CRM Integration REST API v1 & WebSocket Stream**](#crm-integration) *(12 endpoints)*
-  - [`GET` /api/integrations/crm/v1/health](#get-apiintegrationscrmv1health)
-  - [`POST` /api/integrations/crm/v1/pair](#post-apiintegrationscrmv1pair)
-  - [`GET` /api/integrations/crm/v1/capabilities](#get-apiintegrationscrmv1capabilities)
-  - [`GET` /api/integrations/crm/v1/extensions](#get-apiintegrationscrmv1extensions)
-  - [`GET` /api/integrations/crm/v1/calls](#get-apiintegrationscrmv1calls)
-  - [`GET` /api/integrations/crm/v1/recordings/:mediaId](#get-apiintegrationscrmv1recordingsmediaid)
-  - [`GET` /api/integrations/crm/v1/extensions/:extension/stats](#get-apiintegrationscrmv1extensionsextensionstats)
-  - [`POST` /api/integrations/crm/v1/embed-tickets](#post-apiintegrationscrmv1embed-tickets)
-  - [`POST` /integrations/crm/pairing-code](#post-integrationscrmpairing-code)
-  - [`POST` /integrations/crm/clients/:id/revoke](#post-integrationscrmclientsidrevoke)
-  - [`POST` /integrations/crm/clients/:id/rotate](#post-integrationscrmclientsidrotate)
-  - [`POST` /integrations/crm/clients/:id/update](#post-integrationscrmclientsidupdate)
+- [**24. Integration REST API v1 & WebSocket Stream**](\#integration-api) *(14 endpoints)*
+  - [`GET` /api/integrations/v1/health](#get-apiintegrationsv1health)
+  - [`POST` /api/integrations/v1/pair](#post-apiintegrationsv1pair)
+  - [`GET` /api/integrations/v1/capabilities](#get-apiintegrationsv1capabilities)
+  - [`GET` /api/integrations/v1/events](#get-apiintegrationsv1events)
+  - [`GET` /api/integrations/v1/extensions](#get-apiintegrationsv1extensions)
+  - [`GET` /api/integrations/v1/calls](#get-apiintegrationsv1calls)
+  - [`GET` /api/integrations/v1/recordings/:mediaId](#get-apiintegrationsv1recordingsmediaid)
+  - [`GET` /api/integrations/v1/recordings/:mediaId/transcript](#get-apiintegrationsv1recordingstranscript)
+  - [`GET` /api/integrations/v1/extensions/:extension/stats](#get-apiintegrationsv1extensionsextensionstats)
+  - [`POST` /api/integrations/v1/embed-tickets](#post-apiintegrationsv1embed-tickets)
+  - [`POST` /integrations/pairing-code](#post-integrationspairing-code)
+  - [`POST` /integrations/clients/:id/revoke](#post-integrationsclientsidrevoke)
+  - [`POST` /integrations/clients/:id/rotate](#post-integrationsclientsidrotate)
+  - [`POST` /integrations/clients/:id/update](#post-integrationsclientsidupdate)
 - [**25. Speech-to-Text (STT) AI Transcription Engine**](#stt-transcription) *(8 endpoints)*
   - [`GET` /api/transcripts/call/:uniqueid](#get-apitranscriptscalluniqueid)
   - [`POST` /api/transcripts/call/:uniqueid/transcribe](#post-apitranscriptscalluniqueidtranscribe)
@@ -1398,10 +1401,10 @@ Content-Type: text/html
 
 ---
 
-<a id="get-integrationscrm"></a>
-### `GET` /integrations/crm
+<a id="get-integrations"></a>
+### `GET` /integrations
 
-**Description**: Renders the CRM Integration Administration Console where pairing codes are generated, API client tokens are rotated or revoked, and embed widgets are managed.
+**Description**: Renders the Integration Administration Console where pairing codes are generated, API client tokens are rotated or revoked, and embed widgets are managed.
 
 - **Authentication**: Session Cookie (`crm_integration` action permission or SuperAdmin)
 - **Headers**: Cookie: connect.sid=<session_cookie>
@@ -1410,7 +1413,7 @@ Content-Type: text/html
 #### Example Request
 
 ```bash
-curl -X GET http://localhost:8080/integrations/crm -b cookie.txt
+curl -X GET http://localhost:8080/integrations -b cookie.txt
 ```
 
 #### Example Response
@@ -1422,8 +1425,8 @@ Content-Type: text/html
 
 ---
 
-<a id="get-embedcrmlive"></a>
-### `GET` /embed/crm/live
+<a id="get-embedlive"></a>
+### `GET` /embed/live
 
 **Description**: Renders the standalone embeddable CRM Live Softphone & Call Control Widget designed for iframe integration inside third-party CRM platforms (Salesforce, HubSpot, Zoho, Bitrix24). Authenticated via single-use embed ticket.
 
@@ -1435,12 +1438,12 @@ Content-Type: text/html
 
 | Name | Location | Type | Required | Description |
 | :--- | :--- | :--- | :---: | :--- |
-| `ticket` | `query` | `string` | **Yes** | Cryptographic embed ticket issued by `/api/integrations/crm/v1/embed-tickets` |
+| `ticket` | `query` | `string` | **Yes** | Cryptographic embed ticket issued by `/api/integrations/v1/embed-tickets` |
 
 #### Example Request
 
 ```bash
-curl -X GET 'http://localhost:8080/embed/crm/live?ticket=emb_abc123...'
+curl -X GET 'http://localhost:8080/embed/live?ticket=emb_abc123...'
 ```
 
 #### Example Response
@@ -1580,11 +1583,11 @@ Content-Type: image/png
 <a id="get-apicdruniqueid"></a>
 ### `GET` /api/cdr/:uniqueid
 
-**Description**: Fetches the complete call detail record matching a specific Asterisk Unique ID (e.g., `1790496202.18`). Open endpoint requiring **no authentication or authorization headers**. Bundles all primary metadata, caller (`src`, `cnum`, `cnam`) and callee (`dst`, `dst_cnam`, `did`) details, timing (`calldate`, `duration`, `billsec`), disposition, direction (`INBOUND`, `OUTBOUND`, `INTERNAL`), call scope (`EXTERNAL`, `INTERNAL`, `FAILOVER`), channel information, multi-leg call history, speech-to-text transcript if available, and audio recording status with direct stream and download URLs.
+**Description**: Fetches the complete call detail record matching a specific Asterisk Unique ID (e.g., `1790496202.18`). Requires a valid `X-API-Key` API key or an authenticated dashboard session. Bundles all primary metadata, caller (`src`, `cnum`, `cnam`) and callee (`dst`, `dst_cnam`, `did`) details, timing (`calldate`, `duration`, `billsec`), disposition, direction (`INBOUND`, `OUTBOUND`, `INTERNAL`), call scope (`EXTERNAL`, `INTERNAL`, `FAILOVER`), channel information, multi-leg call history, speech-to-text transcript if available, and audio recording status with direct stream and download URLs.
 
 - **Aliases**: `GET /api/calls/:uniqueid`, `GET /api/cdr?uniqueid=:uniqueid`
-- **Authentication**: None (Open Access)
-- **Headers**: None required
+- **Authentication**: `X-API-Key` (API key) or dashboard session
+- **Headers**: `X-API-Key: sokrat_live_...` or `Cookie: connect.sid=<session_cookie>`
 - **System Impact**: Reads `asteriskcdrdb.cdr`, `asterisk.users`, `asteriskcdrdb.cdr_transcriptions`, and verifies recording file presence on disk under `/var/spool/asterisk/monitor/`.
 
 #### Request Parameters
@@ -1650,10 +1653,10 @@ curl -X GET http://localhost:8080/api/cdr/1790496202.18
 <a id="get-apicdrphonephone"></a>
 ### `GET` /api/cdr/phone/:phone
 
-**Description**: Fetches all call records involving a specific phone number or extension (where the number appears in `src`, `dst`, `cnum`, `did`, or `clid`). Open endpoint requiring **no authentication or authorization headers**. Automatically normalizes the phone number and computes international/national variants (e.g. `01011719380`, `+201011719380`, `201011719380`, raw digits) to guarantee comprehensive matching across inbound, outbound, and internal calls.
+**Description**: Fetches all call records involving a specific phone number or extension (where the number appears in `src`, `dst`, `cnum`, `did`, or `clid`). Requires a valid `X-API-Key` API key or an authenticated dashboard session. Automatically normalizes the phone number and computes international/national variants (e.g. `01011719380`, `+201011719380`, `201011719380`, raw digits) to guarantee comprehensive matching across inbound, outbound, and internal calls.
 
 - **Aliases**: `GET /api/calls/phone/:phone`, `GET /api/cdr/by-phone/:phone`, `GET /api/cdr?phone=:phone`
-- **Authentication**: None (Open Access)
+- **Authentication**: `X-API-Key` (API key) or dashboard session
 - **Headers**: None required
 - **System Impact**: Queries `asteriskcdrdb.cdr` with indexed variant matching and returns paginated call history with recording stream URLs.
 
@@ -1730,10 +1733,10 @@ curl -X GET 'http://localhost:8080/api/cdr/phone/01011719380?limit=25&direction=
 <a id="get-apicdradiousuniqueid"></a>
 ### `GET` /api/cdr/audio/:uniqueid
 
-**Description**: Streams the audio recording of a call record by its Unique ID. Open endpoint requiring **no authentication or authorization headers**. Supports HTTP Byte-Range requests (`206 Partial Content`) for browser audio player scrubbing and seeking, and accepts `?download=1` to force file download as an attachment.
+**Description**: Streams the audio recording of a call record by its Unique ID. Requires a valid `X-API-Key` API key or an authenticated dashboard session. Supports HTTP Byte-Range requests (`206 Partial Content`) for browser audio player scrubbing and seeking, and accepts `?download=1` to force file download as an attachment.
 
 - **Aliases**: `GET /api/cdr/:uniqueid/audio`, `GET /api/calls/audio/:uniqueid`, `GET /api/calls/:uniqueid/audio`
-- **Authentication**: None (Open Access)
+- **Authentication**: `X-API-Key` (API key) or dashboard session
 - **Headers**: Optional `Range: bytes=<start>-<end>`
 - **System Impact**: Dynamically locates the recording file inside `/var/spool/asterisk/monitor/YYYY/MM/DD/` and streams chunks directly to the HTTP response.
 
@@ -1771,10 +1774,10 @@ Content-Disposition: inline
 <a id="get-apicdr"></a>
 ### `GET` /api/cdr
 
-**Description**: Unified CDR query root endpoint. Dispatches to single call record lookup when `?uniqueid=` is specified, or to phone records lookup when `?phone=` is specified. Open endpoint requiring **no authentication or authorization headers**.
+**Description**: Unified CDR query root endpoint. Dispatches to single call record lookup when `?uniqueid=` is specified, or to phone records lookup when `?phone=` is specified. Requires a valid `X-API-Key` API key or an authenticated dashboard session.
 
 - **Aliases**: `GET /api/calls`
-- **Authentication**: None (Open Access)
+- **Authentication**: `X-API-Key` (API key) or dashboard session
 - **Headers**: None required
 
 #### Request Parameters
@@ -1797,9 +1800,9 @@ curl -X GET 'http://localhost:8080/api/cdr?phone=01011719380&limit=10'
 
 **Description**: Generates and streams a high-performance native Excel workbook (.xlsx) containing filtered Call Detail Records. Uses streaming workbook compilation to handle large datasets without memory spikes.
 
-- **Authentication**: Session Cookie (`call_history` permission)
-- **Headers**: Cookie: connect.sid=<session_cookie>
-- **System Impact**: Queries `asteriskcdrdb.cdr` and streams `.xlsx` binary directly to client with `Content-Disposition: attachment`.
+- **Authentication**: Session Cookie (`call_history` permission) or `X-API-Key` with the `cdr-export` scope
+- **Headers**: `Cookie: connect.sid=<session_cookie>` or `X-API-Key: sokrat_live_...`
+- **System Impact**: Queries `asteriskcdrdb.cdr` and streams `.xlsx` binary directly to client with `Content-Disposition: attachment`. The workbook includes a `Unique ID` column; CSV is returned if the XLSX module is unavailable.
 
 #### Request Parameters
 
@@ -2937,18 +2940,18 @@ curl -X POST http://localhost:8080/api/employee/photo -b cookie.txt \
 ---
 
 <a id="pbx-extensions"></a>
-## 10. PBX Configuration: Extensions & AGC Audio Tuning
+## 10. PBX Configuration: Extensions, AGC & Jitter Buffers
 
-*Endpoints managing SIP/PJSIP/IAX2 extension endpoints, credentials, voicemail attachments, and per-extension Automatic Gain Control (AGC) volume leveling.*
+*Endpoints managing SIP/PJSIP/IAX2 extension endpoints, credentials, voicemail attachments, per-extension Automatic Gain Control (AGC), and per-extension Asterisk jitter buffers.*
 
 <a id="get-apiconfigextensions"></a>
 ### `GET` /api/config/extensions
 
-**Description**: Retrieves all PBX extensions with their assigned caller IDs, technology (PJSIP/SIP/IAX2), voicemail statuses, and AstDB AGC gain levels.
+**Description**: Retrieves all PBX extensions with caller IDs, technology, voicemail status, AstDB AGC, and resolved per-extension jitter-buffer fields. Missing jitter-buffer keys report `inherit` with 200/1000/40 defaults.
 
 - **Authentication**: Session Cookie (`config` or `config-extensions` permission)
 - **Headers**: Cookie: connect.sid=<session_cookie>
-- **System Impact**: Queries `asterisk.users`, `asterisk.devices`, `asterisk.sip` and reads `/AMPUSER/<ext>/agc` from AstDB.
+- **System Impact**: Queries `asterisk.users`, `asterisk.devices`, `asterisk.sip` and reads `/AMPUSER/<ext>/agc` plus `/AMPUSER/<ext>/jb_*` from AstDB.
 
 #### Example Request
 
@@ -2969,6 +2972,10 @@ curl -X GET http://localhost:8080/api/config/extensions -b cookie.txt
       "secret": "Secret123",
       "callerid": "Alice <101>",
       "agc": "8000",
+      "jb_mode": "inherit",
+      "jb_max_ms": 200,
+      "jb_resync_ms": 1000,
+      "jb_target_extra_ms": 40,
       "voicemail": true
     }
   ]
@@ -2980,11 +2987,11 @@ curl -X GET http://localhost:8080/api/config/extensions -b cookie.txt
 <a id="post-apiconfigextensions"></a>
 ### `POST` /api/config/extensions
 
-**Description**: Provisions a new PBX extension across Asterisk databases, creates SIP credentials, initializes voicemail, and seeds AstDB AGC configuration.
+**Description**: Provisions a new PBX extension across Asterisk databases, creates SIP credentials, initializes voicemail, seeds AstDB AGC, and optionally stores an explicit jitter-buffer profile. New extensions default to `inherit`; inherit removes the four jitter-buffer keys instead of mass-writing defaults.
 
 - **Authentication**: Session Cookie (`config` or `config-extensions` permission)
 - **Headers**: Cookie: connect.sid=<session_cookie>, Content-Type: application/json
-- **System Impact**: Inserts records into `asterisk.users`, `asterisk.devices`, `asterisk.sip`. Writes AstDB keys `/AMPUSER/<ext>/agc`, `/AMPUSER/<ext>/cidname`, `/AMPUSER/<ext>/cidnum`, and `/CW/<ext>`.
+- **System Impact**: Inserts records into `asterisk.users`, `asterisk.devices`, `asterisk.sip`. Writes AstDB keys `/AMPUSER/<ext>/agc`, `/AMPUSER/<ext>/cidname`, `/AMPUSER/<ext>/cidnum`, `/CW/<ext>`, and, when explicit, `/AMPUSER/<ext>/jb_mode`, `jb_max_ms`, `jb_resync_ms`, `jb_target_extra_ms`.
 
 #### Request Parameters
 
@@ -2996,6 +3003,10 @@ curl -X GET http://localhost:8080/api/config/extensions -b cookie.txt
 | `secret` | `body` | `string` | **Yes** | SIP authentication password |
 | `callerid` | `body` | `string` | No | Outbound caller ID name/number |
 | `agc` | `body` | `string` | No | Automatic Gain Control level ('8000' default, '6000', '10000', '12000', or 'off') |
+| `jb_mode` | `body` | `string` | No | `inherit` (default), `adaptive`, `fixed`, or `off` |
+| `jb_max_ms` | `body` | `integer` | No | Maximum buffer, 20–1000 ms (default 200) |
+| `jb_resync_ms` | `body` | `integer` | No | Resync interval, 100–5000 ms (default 1000) |
+| `jb_target_extra_ms` | `body` | `integer` | No | Adaptive target extra, 0–200 ms (default 40; ignored for fixed) |
 | `callwaiting` | `body` | `boolean` | No | Enable call waiting |
 | `voicemail_enable` | `body` | `boolean` | No | Enable voicemail box |
 | `voicemail_pin` | `body` | `string` | No | Voicemail security PIN |
@@ -3006,7 +3017,7 @@ curl -X GET http://localhost:8080/api/config/extensions -b cookie.txt
 ```bash
 curl -X POST http://localhost:8080/api/config/extensions -b cookie.txt \
   -H 'Content-Type: application/json' \
-  -d '{"extension":"115","name":"Mark","tech":"pjsip","secret":"MarkPass@2026","agc":"8000","voicemail_enable":true,"voicemail_pin":"1234"}'
+  -d '{"extension":"115","name":"Mark","tech":"pjsip","secret":"MarkPass@2026","agc":"8000","jb_mode":"adaptive","jb_max_ms":400,"jb_resync_ms":2000,"jb_target_extra_ms":80,"voicemail_enable":true,"voicemail_pin":"1234"}'
 ```
 
 #### Example Response
@@ -3042,13 +3053,17 @@ curl -X POST http://localhost:8080/api/config/extensions -b cookie.txt \
 | `vad_gate` | `body` | `string` | No | `0` (default) or `1` |
 | `vad_db` | `body` | `string` | No | `off` or a dBFS threshold such as `-45` |
 | `agc` | `body` | `string` | No | `off`, `6000`, `8000`, `10000`, or `12000` |
+| `jb_mode` | `body` | `string` | No | `inherit` (default), `adaptive`, `fixed`, or `off` |
+| `jb_max_ms` | `body` | `integer` | No | Maximum buffer, 20–1000 ms (default 200) |
+| `jb_resync_ms` | `body` | `integer` | No | Resync interval, 100–5000 ms (default 1000) |
+| `jb_target_extra_ms` | `body` | `integer` | No | Adaptive target extra, 0–200 ms (default 40; ignored for fixed) |
 
 #### Example Request
 
 ```bash
 curl -X POST http://localhost:8080/api/config/extensions/bulk -b cookie.txt \
   -H 'Content-Type: application/json' \
-  -d '{"start_extension":"200","count":5,"secret":"SharedPass@2026","tech":"sip","voicemail":"disabled","denoise":"off","vad_gate":"0","vad_db":"off","agc":"off"}'
+  -d '{"start_extension":"200","count":5,"secret":"SharedPass@2026","tech":"sip","voicemail":"disabled","denoise":"off","vad_gate":"0","vad_db":"off","agc":"off","jb_mode":"inherit"}'
 ```
 
 #### Example Response
@@ -3071,11 +3086,11 @@ curl -X POST http://localhost:8080/api/config/extensions/bulk -b cookie.txt \
 <a id="put-apiconfigextensionsextension"></a>
 ### `PUT` /api/config/extensions/:extension
 
-**Description**: Modifies an existing PBX extension's name, password, caller ID, technology, voicemail settings, and per-extension AGC level.
+**Description**: Modifies an existing PBX extension's name, password, caller ID, technology, voicemail settings, AGC, and jitter-buffer profile. Omitted `jb_*` fields preserve existing values; an explicit `inherit` deletes the four keys.
 
 - **Authentication**: Session Cookie (`config` or `config-extensions` permission)
 - **Headers**: Cookie: connect.sid=<session_cookie>, Content-Type: application/json
-- **System Impact**: Updates `asterisk.users`, `asterisk.devices`, `asterisk.sip` and AstDB `/AMPUSER/<ext>/agc`.
+- **System Impact**: Updates `asterisk.users`, `asterisk.devices`, `asterisk.sip` and AstDB `/AMPUSER/<ext>/agc`, `/AMPUSER/<ext>/jb_*`. Invalid modes or non-integer/out-of-range values return HTTP 400 before any PBX changes.
 
 #### Request Parameters
 
@@ -3086,6 +3101,10 @@ curl -X POST http://localhost:8080/api/config/extensions/bulk -b cookie.txt \
 | `secret` | `body` | `string` | No | Updated SIP password |
 | `callerid` | `body` | `string` | No | Updated caller ID |
 | `agc` | `body` | `string` | No | Updated AGC gain ('8000', '6000', '10000', '12000', 'off') |
+| `jb_mode` | `body` | `string` | No | `inherit` (default), `adaptive`, `fixed`, or `off` |
+| `jb_max_ms` | `body` | `integer` | No | Maximum buffer, 20–1000 ms (default 200) |
+| `jb_resync_ms` | `body` | `integer` | No | Resync interval, 100–5000 ms (default 1000) |
+| `jb_target_extra_ms` | `body` | `integer` | No | Adaptive target extra, 0–200 ms (default 40; ignored for fixed) |
 | `callwaiting` | `body` | `boolean` | No | Call waiting state |
 | `voicemail_enable` | `body` | `boolean` | No | Voicemail state |
 | `voicemail_pin` | `body` | `string` | No | Voicemail PIN |
@@ -3096,7 +3115,7 @@ curl -X POST http://localhost:8080/api/config/extensions/bulk -b cookie.txt \
 ```bash
 curl -X PUT http://localhost:8080/api/config/extensions/115 -b cookie.txt \
   -H 'Content-Type: application/json' \
-  -d '{"name":"Mark Spencer","agc":"10000"}'
+  -d '{"name":"Mark Spencer","agc":"10000","jb_mode":"adaptive","jb_max_ms":400,"jb_resync_ms":2000,"jb_target_extra_ms":80}'
 ```
 
 #### Example Response
@@ -3104,9 +3123,24 @@ curl -X PUT http://localhost:8080/api/config/extensions/115 -b cookie.txt \
 ```json
 {
   "success": true,
-  "message": "Extension 115 updated successfully."
+  "message": "Extension 115 updated successfully.",
+  "jitter_buffer": {
+    "jb_mode": "adaptive",
+    "jb_max_ms": 400,
+    "jb_resync_ms": 2000,
+    "jb_target_extra_ms": 80
+  }
 }
 ```
+
+**Jitter-buffer semantics**
+
+- `inherit`: no `jb_*` AstDB keys are stored; the dialplan uses the global toggle, per-dongle `DONGLE_AUDIO/<dongle>/jb`, then `AUDIO_GLOBALS/cellular_jitterbuffer`, defaulting to adaptive.
+- `adaptive`: exact `JITTERBUFFER(adaptive)=max,resync,target`.
+- `fixed`: exact `JITTERBUFFER(fixed)=max,resync`; target is ignored.
+- `off`: no `JITTERBUFFER` Set is executed for that extension.
+- Explicit adaptive/fixed still applies when the global toggle is disabled; inherit stays disabled.
+- Validation is strict: unknown modes, non-integers, and values outside the documented ranges are rejected. Camel-case aliases (`jbMode`, `jbMaxMs`, `jbResyncMs`, `jbTargetExtraMs`) are accepted on write.
 
 ---
 
@@ -5297,11 +5331,11 @@ curl -X DELETE http://localhost:8080/api/config/modem/dongle-slot/dongle0 -b coo
 <a id="get-apiconfigmodemjitterbuffer"></a>
 ### `GET` /api/config/modem/jitterbuffer
 
-**Description**: Retrieves the current adaptive jitter buffer configuration parameters.
+**Description**: Reports whether the global/default jitter-buffer policy is enabled. The authoritative state is the AstDB marker `AUDIO_GLOBALS/dialplan_jitterbuffer_enabled`; the endpoint also recognizes legacy literal/parameterized managed lines for pre-marker installations.
 
 - **Authentication**: Session Cookie (`config` or `config-modem` permission)
 - **Headers**: Cookie: connect.sid=<session_cookie>
-- **System Impact**: Reads Asterisk jitter buffer dialplan variables.
+- **System Impact**: Reads the AstDB marker and, if absent, inspects `macro-dialout-trunk-predial-hook` and `macro-dialout-one-predial-hook` in `/etc/asterisk/extensions_custom.conf`.
 
 #### Example Request
 
@@ -5314,12 +5348,7 @@ curl -X GET http://localhost:8080/api/config/modem/jitterbuffer -b cookie.txt
 ```json
 {
   "success": true,
-  "jitterbuffer": {
-    "enabled": true,
-    "type": "adaptive",
-    "maxSizeMs": 200,
-    "resyncThreshold": 1000
-  }
+  "enabled": true
 }
 ```
 
@@ -5328,19 +5357,17 @@ curl -X GET http://localhost:8080/api/config/modem/jitterbuffer -b cookie.txt
 <a id="post-apiconfigmodemjitterbuffer"></a>
 ### `POST` /api/config/modem/jitterbuffer
 
-**Description**: Updates adaptive jitter buffer settings (max size, drop threshold, resynchronization limits) to eliminate audio stutter on high-latency links.
+**Description**: Enables or disables the global/default jitter-buffer policy. Enabling/disabling writes the AstDB marker and removes any legacy/global `JITTERBUFFER` lines from managed hooks so they cannot override a per-extension `off`. It never adds a raw global line and never deletes `[sokrat-jb]` or per-extension decisions.
 
 - **Authentication**: Session Cookie (`config` or `config-modem` permission)
 - **Headers**: Cookie: connect.sid=<session_cookie>, Content-Type: application/json
-- **System Impact**: Updates Asterisk dialplan hook `/etc/asterisk/extensions_custom.conf` under `[from-pstn-dongle]`.
+- **System Impact**: Updates `AUDIO_GLOBALS/dialplan_jitterbuffer_enabled` and sanitizes legacy `JITTERBUFFER` lines from `macro-dialout-trunk-predial-hook`, `macro-dialout-one-predial-hook`, and `from-dongle-custom`; then reloads the dialplan.
 
 #### Request Parameters
 
 | Name | Location | Type | Required | Description |
 | :--- | :--- | :--- | :---: | :--- |
-| `enabled` | `body` | `boolean` | **Yes** | Enable adaptive jitter buffer |
-| `type` | `body` | `string` | No | Buffer algorithm ('adaptive' or 'fixed') |
-| `maxSizeMs` | `body` | `integer` | No | Maximum buffer capacity in ms (default: 200) |
+| `enabled` | `body` | `boolean` | **Yes** | Enable/disable the global/default jitter-buffer policy. Explicit per-extension adaptive/fixed modes still apply when disabled. |
 
 #### Example Request
 
@@ -5355,74 +5382,14 @@ curl -X POST http://localhost:8080/api/config/modem/jitterbuffer -b cookie.txt \
 ```json
 {
   "success": true,
-  "message": "Jitter buffer configuration saved."
+  "enabled": true,
+  "message": "Global jitter-buffer default enabled and dialplan reloaded."
 }
 ```
 
 ---
 
 <a id="get-apiconfigmodemdenoise"></a>
-### `GET` /api/config/modem/denoise
-
-**Description**: Retrieves digital background noise reduction and acoustic echo cancellation status for cellular calls.
-
-- **Authentication**: Session Cookie (`config` or `config-modem` permission)
-- **Headers**: Cookie: connect.sid=<session_cookie>
-- **System Impact**: Queries Asterisk `DENOISE()` dialplan function configuration.
-
-#### Example Request
-
-```bash
-curl -X GET http://localhost:8080/api/config/modem/denoise -b cookie.txt
-```
-
-#### Example Response
-
-```json
-{
-  "success": true,
-  "denoise": {"enabled": true, "direction": "both"}
-}
-```
-
----
-
-<a id="post-apiconfigmodemdenoise"></a>
-### `POST` /api/config/modem/denoise
-
-**Description**: Enables or disables real-time DSP background noise filtering (`DENOISE()`) on incoming and outgoing cellular voice streams.
-
-- **Authentication**: Session Cookie (`config` or `config-modem` permission)
-- **Headers**: Cookie: connect.sid=<session_cookie>, Content-Type: application/json
-- **System Impact**: Updates dialplan macro in `/etc/asterisk/extensions_custom.conf`.
-
-#### Request Parameters
-
-| Name | Location | Type | Required | Description |
-| :--- | :--- | :--- | :---: | :--- |
-| `enabled` | `body` | `boolean` | **Yes** | Enable DENOISE DSP |
-| `direction` | `body` | `string` | No | Audio direction ('rx', 'tx', or 'both') |
-
-#### Example Request
-
-```bash
-curl -X POST http://localhost:8080/api/config/modem/denoise -b cookie.txt \
-  -H 'Content-Type: application/json' \
-  -d '{"enabled":true,"direction":"both"}'
-```
-
-#### Example Response
-
-```json
-{
-  "success": true,
-  "message": "Modem denoise DSP settings updated."
-}
-```
-
----
-
-<a id="get-apiconfigdongle-mappings"></a>
 ### `GET` /api/config/dongle-mappings
 
 **Description**: Lists logical dongle to outbound trunk and SIM card phone number mappings.
@@ -6782,13 +6749,15 @@ curl -X DELETE http://localhost:8080/api/dialer/dnc/01011112222 -b cookie.txt
 
 ---
 
-<a id="crm-integration"></a>
-## 24. CRM Integration REST API v1 & WebSocket Stream
+<a id="integration-api"></a>
+## 24. Integration REST API v1 & WebSocket Stream
 
-*High-security REST API and WebSocket interfaces engineered for third-party CRM systems (Salesforce, HubSpot, Zoho, Bitrix24, ERPNext). Supports token pairing, scoped Bearer token auth, real-time extension presence, customer CDR history, audio stream retrieval, and single-use iframe embed tickets.*
+*High-security REST API and WebSocket interfaces engineered for third-party CRM systems (Salesforce, HubSpot, Zoho, Bitrix24, ERPNext). Supports token pairing, scoped Bearer token auth, real-time extension presence, customer CDR history, audio stream retrieval, transcripts, SIP/PJSIP lifecycle SSE events, and single-use iframe embed tickets.*
 
-<a id="get-apiintegrationscrmv1health"></a>
-### `GET` /api/integrations/crm/v1/health
+Static API keys with the matching read scopes (`calls:read`, `recordings:read`, `extensions:read`, `stats:read`, `live:read`) are accepted on the same routes and use the `X-API-Key` header.
+
+<a id="get-apiintegrationsv1health"></a>
+### `GET` /api/integrations/v1/health
 
 **Description**: Public health check endpoint validating CRM integration service availability and API version.
 
@@ -6799,7 +6768,7 @@ curl -X DELETE http://localhost:8080/api/dialer/dnc/01011112222 -b cookie.txt
 #### Example Request
 
 ```bash
-curl -X GET http://localhost:8080/api/integrations/crm/v1/health
+curl -X GET http://localhost:8080/api/integrations/v1/health
 ```
 
 #### Example Response
@@ -6816,8 +6785,8 @@ curl -X GET http://localhost:8080/api/integrations/crm/v1/health
 
 ---
 
-<a id="post-apiintegrationscrmv1pair"></a>
-### `POST` /api/integrations/crm/v1/pair
+<a id="post-apiintegrationsv1pair"></a>
+### `POST` /api/integrations/v1/pair
 
 **Description**: Exchanges a temporary 6-digit cryptographic pairing code generated in the Sokrat GUI for an API access token, client ID, and webhook secret.
 
@@ -6837,7 +6806,7 @@ curl -X GET http://localhost:8080/api/integrations/crm/v1/health
 #### Example Request
 
 ```bash
-curl -X POST http://localhost:8080/api/integrations/crm/v1/pair \
+curl -X POST http://localhost:8080/api/integrations/v1/pair \
   -H 'Content-Type: application/json' \
   -d '{"pairing_code":"839104","crm_name":"Zoho Production"}'
 ```
@@ -6856,8 +6825,8 @@ curl -X POST http://localhost:8080/api/integrations/crm/v1/pair \
 
 ---
 
-<a id="get-apiintegrationscrmv1capabilities"></a>
-### `GET` /api/integrations/crm/v1/capabilities
+<a id="get-apiintegrationsv1capabilities"></a>
+### `GET` /api/integrations/v1/capabilities
 
 **Description**: Returns supported API scopes, telephony features, and WebSocket endpoints available to the authenticated integration client.
 
@@ -6868,7 +6837,7 @@ curl -X POST http://localhost:8080/api/integrations/crm/v1/pair \
 #### Example Request
 
 ```bash
-curl -X GET http://localhost:8080/api/integrations/crm/v1/capabilities \
+curl -X GET http://localhost:8080/api/integrations/v1/capabilities \
   -H 'Authorization: Bearer crm_tok_live_9f8e7d...'
 ```
 
@@ -6887,8 +6856,8 @@ curl -X GET http://localhost:8080/api/integrations/crm/v1/capabilities \
 
 ---
 
-<a id="get-apiintegrationscrmv1extensions"></a>
-### `GET` /api/integrations/crm/v1/extensions
+<a id="get-apiintegrationsv1extensions"></a>
+### `GET` /api/integrations/v1/extensions
 
 **Description**: Retrieves real-time status of all extensions: online state, call status, duration, and call partner party.
 
@@ -6899,7 +6868,7 @@ curl -X GET http://localhost:8080/api/integrations/crm/v1/capabilities \
 #### Example Request
 
 ```bash
-curl -X GET http://localhost:8080/api/integrations/crm/v1/extensions \
+curl -X GET http://localhost:8080/api/integrations/v1/extensions \
   -H 'Authorization: Bearer crm_tok_live_9f8e7d...'
 ```
 
@@ -6926,8 +6895,8 @@ curl -X GET http://localhost:8080/api/integrations/crm/v1/extensions \
 
 ---
 
-<a id="get-apiintegrationscrmv1calls"></a>
-### `GET` /api/integrations/crm/v1/calls
+<a id="get-apiintegrationsv1calls"></a>
+### `GET` /api/integrations/v1/calls
 
 **Description**: Retrieves normalized call history for a customer telephone number matching international formats (e.g. +2010..., 010..., 002010...).
 
@@ -6945,7 +6914,7 @@ curl -X GET http://localhost:8080/api/integrations/crm/v1/extensions \
 #### Example Request
 
 ```bash
-curl -X GET 'http://localhost:8080/api/integrations/crm/v1/calls?phone=01012345678' \
+curl -X GET 'http://localhost:8080/api/integrations/v1/calls?phone=01012345678' \
   -H 'Authorization: Bearer crm_tok_live_9f8e7d...'
 ```
 
@@ -6970,8 +6939,8 @@ curl -X GET 'http://localhost:8080/api/integrations/crm/v1/calls?phone=010123456
 
 ---
 
-<a id="get-apiintegrationscrmv1recordingsmediaid"></a>
-### `GET` /api/integrations/crm/v1/recordings/:mediaId
+<a id="get-apiintegrationsv1recordingsmediaid"></a>
+### `GET` /api/integrations/v1/recordings/:mediaId
 
 **Description**: Streams a call recording audio file directly to the CRM interface with byte-range support.
 
@@ -6988,7 +6957,7 @@ curl -X GET 'http://localhost:8080/api/integrations/crm/v1/calls?phone=010123456
 #### Example Request
 
 ```bash
-curl -X GET http://localhost:8080/api/integrations/crm/v1/recordings/1727440000.12 \
+curl -X GET http://localhost:8080/api/integrations/v1/recordings/1727440000.12 \
   -H 'Authorization: Bearer crm_tok_live_9f8e7d...'
 ```
 
@@ -7002,8 +6971,46 @@ Accept-Ranges: bytes
 
 ---
 
-<a id="get-apiintegrationscrmv1extensionsextensionstats"></a>
-### `GET` /api/integrations/crm/v1/extensions/:extension/stats
+<a id="get-apiintegrationsv1recordingstranscript"></a>
+### `GET` /api/integrations/v1/recordings/:mediaId/transcript
+
+**Description**: Returns the stored speech-to-text transcript for a call recording.
+
+- **Authentication**: Static `X-API-Key` with `recordings:read` or `calls:read`, or a CRM Bearer token with one of those scopes.
+- **Headers**: `X-API-Key: sokrat_live_...` or `Authorization: Bearer <token>`
+- **System Impact**: Reads `asteriskcdrdb.cdr_transcriptions`; returns HTTP 404 when no transcript row exists.
+
+#### Example Request
+
+```bash
+curl -X GET http://localhost:8080/api/integrations/v1/recordings/1727440000.12/transcript \
+  -H 'X-API-Key: sokrat_live_...'
+```
+
+---
+
+<a id="get-apiintegrationsv1events"></a>
+### `GET` /api/integrations/v1/events
+
+**Description**: Server-Sent Events stream for inbound SIP/PJSIP trunk calls. Emits `call_ringing`, `call_answered`, and `call_ended`; an initial `snapshot` event includes currently active calls.
+
+- **Authentication**: Static `X-API-Key` with `live:read`, or a CRM Bearer token with `live:read`.
+- **Headers**: `X-API-Key: sokrat_live_...`, `Accept: text/event-stream`
+- **Event payload**: `source: "sip-trunk"`, `direction: "inbound"`, `caller_number`, `called_number`, `uniqueid`, `linkedid`, `channel`, `timestamp`; `call_ended` also includes `duration_seconds` and `cause`.
+- **System Impact**: Long-lived HTTP connection; no retry/backlog. The existing Socket.IO `/crm-live` namespace remains available for softphone/embed clients.
+
+#### Example Request
+
+```bash
+curl -N http://localhost:8080/api/integrations/v1/events \
+  -H 'X-API-Key: sokrat_live_...' \
+  -H 'Accept: text/event-stream'
+```
+
+---
+
+<a id="get-apiintegrationsv1extensionsextensionstats"></a>
+### `GET` /api/integrations/v1/extensions/:extension/stats
 
 **Description**: Retrieves performance analytics for a single extension specifically formatted for CRM agent dashboards.
 
@@ -7020,7 +7027,7 @@ Accept-Ranges: bytes
 #### Example Request
 
 ```bash
-curl -X GET http://localhost:8080/api/integrations/crm/v1/extensions/101/stats \
+curl -X GET http://localhost:8080/api/integrations/v1/extensions/101/stats \
   -H 'Authorization: Bearer crm_tok_live_9f8e7d...'
 ```
 
@@ -7037,8 +7044,8 @@ curl -X GET http://localhost:8080/api/integrations/crm/v1/extensions/101/stats \
 
 ---
 
-<a id="post-apiintegrationscrmv1embed-tickets"></a>
-### `POST` /api/integrations/crm/v1/embed-tickets
+<a id="post-apiintegrationsv1embed-tickets"></a>
+### `POST` /api/integrations/v1/embed-tickets
 
 **Description**: Issues a single-use cryptographically signed embed ticket to securely render the softphone widget inside an iframe.
 
@@ -7056,7 +7063,7 @@ curl -X GET http://localhost:8080/api/integrations/crm/v1/extensions/101/stats \
 #### Example Request
 
 ```bash
-curl -X POST http://localhost:8080/api/integrations/crm/v1/embed-tickets \
+curl -X POST http://localhost:8080/api/integrations/v1/embed-tickets \
   -H 'Authorization: Bearer crm_tok_live_9f8e7d...' \
   -H 'Content-Type: application/json' \
   -d '{"extension":"101"}'
@@ -7068,15 +7075,15 @@ curl -X POST http://localhost:8080/api/integrations/crm/v1/embed-tickets \
 {
   "success": true,
   "ticket": "emb_a1b2c3d4e5f6...",
-  "embed_url": "/embed/crm/live?ticket=emb_a1b2c3d4e5f6...",
+  "embed_url": "/embed/live?ticket=emb_a1b2c3d4e5f6...",
   "expires_in_seconds": 900
 }
 ```
 
 ---
 
-<a id="post-integrationscrmpairing-code"></a>
-### `POST` /integrations/crm/pairing-code
+<a id="post-integrationspairing-code"></a>
+### `POST` /integrations/pairing-code
 
 **Description**: Generates a fresh 6-digit numeric pairing code in the Sokrat GUI to authorize a new CRM system.
 
@@ -7087,7 +7094,7 @@ curl -X POST http://localhost:8080/api/integrations/crm/v1/embed-tickets \
 #### Example Request
 
 ```bash
-curl -X POST http://localhost:8080/integrations/crm/pairing-code -b cookie.txt
+curl -X POST http://localhost:8080/integrations/pairing-code -b cookie.txt
 ```
 
 #### Example Response
@@ -7102,8 +7109,8 @@ curl -X POST http://localhost:8080/integrations/crm/pairing-code -b cookie.txt
 
 ---
 
-<a id="post-integrationscrmclientsidrevoke"></a>
-### `POST` /integrations/crm/clients/:id/revoke
+<a id="post-integrationsclientsidrevoke"></a>
+### `POST` /integrations/clients/:id/revoke
 
 **Description**: Instantly revokes an active CRM API client, invalidating all associated tokens and closing open socket connections.
 
@@ -7120,7 +7127,7 @@ curl -X POST http://localhost:8080/integrations/crm/pairing-code -b cookie.txt
 #### Example Request
 
 ```bash
-curl -X POST http://localhost:8080/integrations/crm/clients/crm_c1a2b3/revoke -b cookie.txt
+curl -X POST http://localhost:8080/integrations/clients/crm_c1a2b3/revoke -b cookie.txt
 ```
 
 #### Example Response
@@ -7134,8 +7141,8 @@ curl -X POST http://localhost:8080/integrations/crm/clients/crm_c1a2b3/revoke -b
 
 ---
 
-<a id="post-integrationscrmclientsidrotate"></a>
-### `POST` /integrations/crm/clients/:id/rotate
+<a id="post-integrationsclientsidrotate"></a>
+### `POST` /integrations/clients/:id/rotate
 
 **Description**: Rotates the access token secret for an active CRM client while preserving client configuration and scopes.
 
@@ -7152,7 +7159,7 @@ curl -X POST http://localhost:8080/integrations/crm/clients/crm_c1a2b3/revoke -b
 #### Example Request
 
 ```bash
-curl -X POST http://localhost:8080/integrations/crm/clients/crm_c1a2b3/rotate -b cookie.txt
+curl -X POST http://localhost:8080/integrations/clients/crm_c1a2b3/rotate -b cookie.txt
 ```
 
 #### Example Response
@@ -7166,8 +7173,8 @@ curl -X POST http://localhost:8080/integrations/crm/clients/crm_c1a2b3/rotate -b
 
 ---
 
-<a id="post-integrationscrmclientsidupdate"></a>
-### `POST` /integrations/crm/clients/:id/update
+<a id="post-integrationsclientsidupdate"></a>
+### `POST` /integrations/clients/:id/update
 
 **Description**: Updates permitted scopes or default country code for an existing CRM integration client.
 
@@ -7186,7 +7193,7 @@ curl -X POST http://localhost:8080/integrations/crm/clients/crm_c1a2b3/rotate -b
 #### Example Request
 
 ```bash
-curl -X POST http://localhost:8080/integrations/crm/clients/crm_c1a2b3/update -b cookie.txt \
+curl -X POST http://localhost:8080/integrations/clients/crm_c1a2b3/update -b cookie.txt \
   -H 'Content-Type: application/json' \
   -d '{"scopes":["calls:read","recordings:read"]}'
 ```
@@ -7355,7 +7362,7 @@ curl -X POST http://localhost:8080/api/transcripts/voicemail/101/msg0000.wav/tra
 <a id="get-apiconfigstt"></a>
 ### `GET` /api/config/stt
 
-**Description**: Retrieves the active Speech-to-Text configuration (engine provider, API endpoint, model size, auto-transcribe rules).
+**Description**: Retrieves the cloud Speech-to-Text provider configuration. The stored API key is never returned; use `has_api_key` to show whether a secret is configured.
 
 - **Authentication**: Session Cookie (`config` or SuperAdmin)
 - **Headers**: Cookie: connect.sid=<session_cookie>
@@ -7372,12 +7379,18 @@ curl -X GET http://localhost:8080/api/config/stt -b cookie.txt
 ```json
 {
   "success": true,
-  "config": {
-    "provider": "whisper-local",
-    "model": "base",
-    "autoTranscribeVoicemail": true,
-    "autoTranscribeCalls": false,
-    "defaultLanguage": "ar"
+  "settings": {
+    "enabled": 1,
+    "engine": "cloud_api",
+    "provider": "elevenlabs",
+    "api_url": "https://api.elevenlabs.io/v1/speech-to-text",
+    "model_name": "scribe_v3",
+    "language": "ar",
+    "prompt": "محادثة هاتفية خدمة عملاء بالعامية المصرية...",
+    "transcribe_calls": 1,
+    "transcribe_voicemails": 1,
+    "min_duration_sec": 3,
+    "has_api_key": true
   }
 }
 ```
@@ -7387,28 +7400,33 @@ curl -X GET http://localhost:8080/api/config/stt -b cookie.txt
 <a id="put-apiconfigstt"></a>
 ### `PUT` /api/config/stt
 
-**Description**: Updates Speech-to-Text provider credentials, local engine parameters, or auto-transcription toggles.
+**Description**: Updates the cloud Speech-to-Text provider. Send `api_key` only when changing the secret; an empty value keeps the existing key. Send `clear_api_key: true` to remove it.
 
 - **Authentication**: Session Cookie (`config` or SuperAdmin)
 - **Headers**: Cookie: connect.sid=<session_cookie>, Content-Type: application/json
-- **System Impact**: Updates `asterisk.stt_settings`.
+- **System Impact**: Upserts `asterisk.stt_settings`.
 
 #### Request Parameters
 
 | Name | Location | Type | Required | Description |
 | :--- | :--- | :--- | :---: | :--- |
-| `provider` | `body` | `string` | **Yes** | Provider ('whisper-local', 'openai', 'vosk', 'google') |
-| `apiKey` | `body` | `string` | No | API key for cloud services |
-| `model` | `body` | `string` | No | Model identifier (e.g. 'whisper-1' or 'base') |
-| `autoTranscribeVoicemail` | `body` | `boolean` | No | Auto-transcribe new voicemails |
-| `defaultLanguage` | `body` | `string` | No | Default speech recognition language |
+| `provider` | `body` | `string` | No | Fixed to `elevenlabs` |
+| `api_key` | `body` | `string` | No | New API key; empty keeps the saved key |
+| `clear_api_key` | `body` | `boolean` | No | Set `true` to clear the saved key |
+| `api_url` | `body` | `string` | No | Provider endpoint; provider defaults are applied when empty |
+| `model_name` | `body` | `string` | No | Fixed to `scribe_v3` |
+| `language` | `body` | `string` | No | `ar`, `en`, or `auto` |
+| `prompt` | `body` | `string` | No | Dialect/context prompt |
+| `transcribe_calls` | `body` | `0\|1` | No | Auto-transcribe completed calls |
+| `transcribe_voicemails` | `body` | `0\|1` | No | Auto-transcribe new voicemails |
+| `min_duration_sec` | `body` | `integer` | No | Ignore shorter recordings |
 
 #### Example Request
 
 ```bash
 curl -X PUT http://localhost:8080/api/config/stt -b cookie.txt \
   -H 'Content-Type: application/json' \
-  -d '{"provider":"openai","apiKey":"sk-...","model":"whisper-1","defaultLanguage":"ar"}'
+  -d '{"provider":"elevenlabs","model_name":"scribe_v3","language":"ar","transcribe_calls":1,"transcribe_voicemails":1}'
 ```
 
 #### Example Response
@@ -7416,7 +7434,16 @@ curl -X PUT http://localhost:8080/api/config/stt -b cookie.txt \
 ```json
 {
   "success": true,
-  "message": "STT configuration updated successfully."
+  "settings": {
+    "enabled": 1,
+    "engine": "cloud_api",
+    "provider": "elevenlabs",
+    "api_url": "https://api.elevenlabs.io/v1/speech-to-text",
+    "model_name": "scribe_v3",
+    "language": "ar",
+    "has_api_key": true
+  },
+  "message": "Speech-to-Text settings updated successfully."
 }
 ```
 
@@ -7425,16 +7452,18 @@ curl -X PUT http://localhost:8080/api/config/stt -b cookie.txt \
 <a id="post-apiconfigstttest-connection"></a>
 ### `POST` /api/config/stt/test-connection
 
-**Description**: Sends a synthetic audio sample to test the active STT provider and validates API authentication and latency.
+**Description**: Sends a synthetic audio sample through the selected cloud provider. If `api_key` is omitted or blank, the saved key is used.
 
 - **Authentication**: Session Cookie (`config` or SuperAdmin)
-- **Headers**: Cookie: connect.sid=<session_cookie>
-- **System Impact**: Sends sample audio probe to configured STT backend.
+- **Headers**: Cookie: connect.sid=<session_cookie>, Content-Type: application/json
+- **System Impact**: Sends a short silent probe to the configured STT backend.
 
 #### Example Request
 
 ```bash
-curl -X POST http://localhost:8080/api/config/stt/test-connection -b cookie.txt
+curl -X POST http://localhost:8080/api/config/stt/test-connection -b cookie.txt \
+  -H 'Content-Type: application/json' \
+  -d '{"provider":"elevenlabs","model_name":"scribe_v3","language":"ar"}'
 ```
 
 #### Example Response
@@ -7442,8 +7471,9 @@ curl -X POST http://localhost:8080/api/config/stt/test-connection -b cookie.txt
 ```json
 {
   "success": true,
-  "latency_ms": 245,
-  "transcription": "Test connection successful."
+  "message": "Cloud API connection verified successfully.",
+  "latencyMs": 245,
+  "sampleResult": "[No speech in health-check audio]"
 }
 ```
 
@@ -9041,11 +9071,11 @@ curl -X GET http://localhost:8080/api/settings/webhook -b cookie.txt
 <a id="post-apisettingswebhook"></a>
 ### `POST` /api/settings/webhook
 
-**Description**: Creates or updates the inbound-call webhook target. When enabled, every call arriving on a GSM dongle (`Dongle/*` channel) triggers one `POST` to the configured URL.
+**Description**: Creates or updates the call webhook target. When enabled, GSM dongle arrivals trigger one `POST`; when `call_events_enabled` is also enabled, inbound SIP/PJSIP trunk lifecycle events (`call_ringing`, `call_answered`, `call_ended`) are delivered to the same URL.
 
 - **Authentication**: Session Cookie (**SuperAdmin only**)
 - **Headers**: Cookie: connect.sid=<session_cookie>, Content-Type: application/json
-- **System Impact**: Upserts `webhook_incoming_call_enabled`, `webhook_incoming_call_url`, `webhook_incoming_call_secret` into `asterisk.dashboard_settings` and refreshes the in-memory cache immediately (no restart required).
+- **System Impact**: Upserts `webhook_incoming_call_enabled`, `webhook_incoming_call_url`, `webhook_incoming_call_secret`, and `webhook_call_events_enabled` into `asterisk.dashboard_settings` and refreshes the in-memory cache immediately (no restart required).
 
 #### Request Parameters
 
@@ -9054,13 +9084,14 @@ curl -X GET http://localhost:8080/api/settings/webhook -b cookie.txt
 | `enabled` | `body` | `boolean` | No | Fire the webhook on incoming calls |
 | `url` | `body` | `string` | No | Absolute `http://` or `https://` endpoint to POST to. Validated on save |
 | `secret` | `body` | `string` | No | Optional HMAC-SHA256 signing key. When set, each request carries an `X-Sokrat-Signature` header |
+| `call_events_enabled` | `body` | `boolean` | No | Send inbound SIP/PJSIP trunk lifecycle events (`call_ringing`, `call_answered`, `call_ended`) to the same URL |
 
 #### Example Request
 
 ```bash
 curl -X POST http://localhost:8080/api/settings/webhook -b cookie.txt \
   -H 'Content-Type: application/json' \
-  -d '{"enabled":true,"url":"https://crm.example.com/api/incoming-call","secret":"s3cr3t"}'
+  -d '{"enabled":true,"call_events_enabled":true,"url":"https://crm.example.com/api/incoming-call","secret":"s3cr3t"}'
 ```
 
 #### Example Response
@@ -9086,6 +9117,25 @@ Sokrat sends this JSON body to your URL. **Respond with any `2xx` status**; the 
   "timestamp": "2026-09-29T10:45:56.931Z"
 }
 ```
+
+When lifecycle events are enabled, inbound SIP/PJSIP trunk calls additionally send:
+
+```json
+{
+  "event": "call_ringing",
+  "source": "sip-trunk",
+  "direction": "inbound",
+  "uniqueid": "1727440000.12",
+  "linkedid": "1727440000.12",
+  "channel": "PJSIP/trunk-00000001",
+  "caller_number": "+201011719380",
+  "called_number": "+201156804841",
+  "extension": null,
+  "timestamp": "2026-09-29T10:45:56.931Z"
+}
+```
+
+`call_answered` adds the same identifiers; `call_ended` adds `duration_seconds` and `cause`. The stream is available for read-only API keys via `GET /api/integrations/v1/events` with `live:read`.
 
 | Field | Type | Description |
 | :--- | :--- | :--- |
@@ -9501,8 +9551,8 @@ curl -X GET http://localhost:8080/api/admin/api-keys -b root-cookie.txt
 | Name | Location | Type | Required | Description |
 | :--- | :--- | :--- | :---: | :--- |
 | `name` | `body` | `string` | **Yes** | Human-readable label or CRM system name |
-| `scopes` | `body` | `string` | No | Comma-separated scopes or `*` for full access (default: `*`) |
-| `allowed_ips` | `body` | `string` | No | Optional IP whitelist (comma-separated, CIDR `10.0.0.0/24`, or wildcard `192.168.1.*`) |
+| `scopes` | `body` | `string` | No | Comma-separated scopes or `*` for full access (default: `*`). Read-only example: `calls:read,recordings:read,extensions:read,stats:read,cdr,cdr-export` |
+| `allowed_ips` | `body` | `string` | No | Optional IP allowlist (comma-separated IPs, CIDR `10.0.0.0/24`, wildcard `192.168.1.*`, or DNS hostnames resolved at request time) |
 | `expires_in_days` | `body` | `integer` | No | Expiration duration in days (`0` = never expires) |
 
 #### Example Request
@@ -9511,9 +9561,9 @@ curl -X GET http://localhost:8080/api/admin/api-keys -b root-cookie.txt
 curl -X POST http://localhost:8080/api/admin/api-keys -b root-cookie.txt \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "HubSpot CRM Webhook",
-    "scopes": "cdr:read,cdr:audio",
-    "allowed_ips": "192.168.1.100",
+    "name": "Smart Vision ERP Integration",
+    "scopes": "calls:read,recordings:read,extensions:read,stats:read,cdr,cdr-export",
+    "allowed_ips": "89.117.53.1,erp.smartvgroup.com",
     "expires_in_days": 90
   }'
 ```

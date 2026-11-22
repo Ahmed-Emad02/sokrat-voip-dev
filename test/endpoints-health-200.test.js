@@ -83,7 +83,6 @@ test('Health Check: All core PBX Configuration REST APIs return HTTP 200', async
             '/api/config/diagram',
             '/api/config/extension-conflicts',
             '/api/config/modem',
-            '/api/config/modem/denoise',
             '/api/config/modem/jitterbuffer',
             '/api/config/modem/reports',
             '/api/config/modem/rtcp',

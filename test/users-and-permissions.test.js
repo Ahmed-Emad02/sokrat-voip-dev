@@ -141,7 +141,7 @@ test('requireAuth correctly gates unauthenticated requests (API 401 vs View 302)
     assert.deepEqual(apiRes._json, { success: false, error: 'Unauthorized. Please log in.' });
 
     // 2. Unauthenticated Integrations request -> 401 JSON
-    const intReq = { session: {}, path: '/integrations/crm', headers: {}, originalUrl: '/integrations/crm' };
+    const intReq = { session: {}, path: '/integrations/clients', headers: {}, originalUrl: '/integrations/clients' };
     const intRes = createMockRes();
     requireAuth(intReq, intRes, () => {});
     assert.equal(intRes.statusCode, 401);
@@ -361,7 +361,7 @@ test('views/sidebar.ejs correctly filters navigation links based on user permiss
     });
     assert.ok(superAdminHtml.includes('/users?lang='), 'Super Admin should see /users link in sidebar');
     assert.ok(superAdminHtml.includes('/config?lang='), 'Super Admin should see /config link in sidebar');
-    assert.ok(superAdminHtml.includes('/integrations/crm'), 'Root Super Admin should see /integrations/crm link');
+    assert.ok(superAdminHtml.includes('/integrations'), 'Root Super Admin should see /integrations link');
     assert.ok(superAdminHtml.includes('/operator?lang='), 'Super Admin should see /operator link');
 
     // Case B: Restricted operator with ONLY 'cdr' and 'voicemails' -> Users, Operator, Config, and CRM must be hidden
@@ -379,7 +379,7 @@ test('views/sidebar.ejs correctly filters navigation links based on user permiss
     assert.equal(restrictedHtml.includes('/users?lang='), false, 'Non-superadmin should NOT see /users link');
     assert.equal(restrictedHtml.includes('/operator?lang='), false, 'User without operator perm should NOT see /operator link');
     assert.equal(restrictedHtml.includes('/gsm-dongles?lang='), false, 'User without gsm-dongles perm should NOT see /gsm-dongles link');
-    assert.equal(restrictedHtml.includes('/integrations/crm'), false, 'Non-root user should NOT see /integrations/crm link');
+    assert.equal(restrictedHtml.includes('/integrations'), false, 'Non-root user should NOT see /integrations link');
 });
 
 test('views/config.ejs correctly gates sub-tab visibility and root-only controls', async () => {

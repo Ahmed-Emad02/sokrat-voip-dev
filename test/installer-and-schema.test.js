@@ -393,6 +393,19 @@ test('chan_dongle patch and bundle skip the CCWA status query and keep CCWA time
     assert.equal(binary.includes(Buffer.from('AT+CCWA=1,2,1')), false, 'bundle binary must not contain the removed CCWA status query');
 });
 
+test('chan_dongle supports a per-device serial baud rate', () => {
+    const rootDir = path.join(__dirname, '..');
+    const patch = fs.readFileSync(path.join(rootDir, 'asterisk', 'chan_dongle.patch'), 'utf8');
+    const conf = fs.readFileSync(path.join(rootDir, 'dongle.conf'), 'utf8');
+    const binary = fs.readFileSync(path.join(rootDir, 'installer-bundle', 'binaries', 'chan_dongle.so'));
+
+    assert.match(patch, /ast_variable_retrieve \(cfg, cat, "baud"\)/, 'patch must parse a per-device baud setting');
+    assert.match(patch, /opentty_baud/, 'patch must open tty ports with the configured baud');
+    assert.match(patch, /case 57600: return B57600;/, 'patch must support 57600 baud');
+    assert.match(conf, /baud is per-device/, 'template must document the per-device baud option');
+    assert.ok(binary.includes(Buffer.from('BaudSetting')), 'bundle binary must expose the configured baud');
+});
+
 test('SMS autodelete is disabled in the template and the driver exposes storage indices', () => {
     const rootDir = path.join(__dirname, '..');
     const conf = fs.readFileSync(path.join(rootDir, 'dongle.conf'), 'utf8');
@@ -434,7 +447,7 @@ test('voice activation and bounded retry are packaged for all install paths', ()
 
     const helper = fs.readFileSync(path.join(rootDir, 'scripts', 'dongle-module.sh'), 'utf8');
     assert.match(helper, /chan_dongle-voice-enable\.patch/, 'shared dongle helper must apply the voice enable patch');
-    assert.match(helper, /745e9dbf5bbcb815c04d5fa11a1e83c5eb110dfeb204534436a2054f6ed019dd/, 'bundle hash must pin the generic voice module');
+    assert.match(helper, /cb93bf719ebed984a20634b09fc857dc73540fe58ddc4c87273d175420ff40b0/, 'bundle hash must pin the generic voice module');
 
     const binary = fs.readFileSync(path.join(rootDir, 'installer-bundle', 'binaries', 'chan_dongle.so'));
     assert.ok(binary.includes(Buffer.from('Enabling voice with AT^CVOICE=0')), 'bundle binary must include generic voice activation');

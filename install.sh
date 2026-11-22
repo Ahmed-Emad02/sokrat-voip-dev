@@ -1992,6 +1992,7 @@ same => n,Goto(s,process)
 exten => s,1,Goto(s,process)
 same => n(process),NoOp(--- Incoming call from Dongle ${DONGLENAME} (EXTEN: ${EXTEN}) ---)
 same => n,Set(DONGLE_TARGET=${DONGLENAME})
+same => n,Set(__SOKRAT_INBOUND_DONGLE=${DONGLENAME})
 same => n,Set(CHANNEL(hangup_handler_push)=cdr-cause-capture,s,1)
 same => n,ExecIf($["${MY_SIM_NUMBER}" = "" | "${MY_SIM_NUMBER}" = "+1234567890"]?Set(MY_SIM_NUMBER=))
 same => n,ExecIf($["${DB(DONGLE_SETTINGS/${DONGLENAME})}" != "1"]?Goto(skip_dynamic))
@@ -2072,8 +2073,6 @@ same => n,Set(U_HANG=${DB(AUDIO_GLOBALS/vad_hangover)})
 same => n,ExecIf($["${U_HANG}" = ""]?Set(U_HANG=250))
 same => n,ExecIf($["${CALLER_VAD}" = "0"]?Set(VAD_OPT=gate=off):Set(VAD_OPT=gate=on,threshold=${U_THRESH},hangover=${U_HANG},mindb=${CALLER_VAD_DB}))
 same => n,ExecIf($["${CALLER_DENOISE}" != "off"]?Set(RNNOISE(${CALLER_DENOISE},${VAD_OPT})=on))
-; Enable adaptive jitter buffer for SIP audio
-same => n,Set(JITTERBUFFER(adaptive)=default)
 same => n,Set(CALLER_AGC=${DB(AMPUSER/${REALCALLERIDNUM}/agc)})
 same => n,ExecIf($["${CALLER_AGC}" = ""]?Set(CALLER_AGC=${DB(AMPUSER/${CALLERID(num)}/agc)}))
 same => n,ExecIf($["${CALLER_AGC}" = ""]?Set(CALLER_AGC=off))
@@ -2082,6 +2081,7 @@ same => n,ExecIf($["${CALLER_AGC}" != "off" & "${CALLER_AGC}" != "0"]?Set(AGC(tx
 same => n,Set(RAW_TARGET=${CUT(OUT_${DIAL_TRUNK},/,2)})
 same => n,Set(DONGLE_TARGET=${DB(DONGLE_DEVICE_MAP/${RAW_TARGET})})
 same => n,ExecIf($["${DONGLE_TARGET}"=""]?Set(DONGLE_TARGET=${RAW_TARGET}))
+same => n,Gosub(sokrat-jb,s,1(${REALCALLERIDNUM},${DONGLE_TARGET}))
 same => n,Set(CHANNEL(hangup_handler_push)=cdr-cause-capture,s,1)
 same => n,MacroExit()
 MACRO
@@ -2137,6 +2137,7 @@ append_context '[macro-dialout-one-predial-hook]' '[macro-dialout-one-predial-ho
 
 [macro-dialout-one-predial-hook]
 exten => s,1,NoOp(--- Dynamic Adaptive Jitter Buffer & RNNoise Filter for Outbound Extension Leg ---)
+same => n,Gosub(sokrat-jb,s,1(${CALLERID(num)},))
 same => n,Set(CALLER_DENOISE=${DB(AMPUSER/${CALLERID(num)}/ai_denoise)})
 same => n,ExecIf($["${CALLER_DENOISE}" = ""]?Set(CALLER_DENOISE=off))
 same => n,Set(CALLER_VAD=${DB(AMPUSER/${CALLERID(num)}/vad_gate)})
@@ -2149,8 +2150,6 @@ same => n,Set(U_HANG=${DB(AUDIO_GLOBALS/vad_hangover)})
 same => n,ExecIf($["${U_HANG}" = ""]?Set(U_HANG=250))
 same => n,ExecIf($["${CALLER_VAD}" = "0"]?Set(VAD_OPT=gate=off):Set(VAD_OPT=gate=on,threshold=${U_THRESH},hangover=${U_HANG},mindb=${CALLER_VAD_DB}))
 same => n,ExecIf($["${CALLER_DENOISE}" != "off"]?Set(RNNOISE(${CALLER_DENOISE},${VAD_OPT})=on))
-; Enable adaptive jitter buffer for SIP audio
-same => n,Set(JITTERBUFFER(adaptive)=default)
 same => n,Set(CALLER_AGC=${DB(AMPUSER/${CALLERID(num)}/agc)})
 same => n,ExecIf($["${CALLER_AGC}" = ""]?Set(CALLER_AGC=off))
 same => n,ExecIf($["${CALLER_AGC}" != "off" & "${CALLER_AGC}" != "0"]?Set(AGC(rx)=${CALLER_AGC}))
@@ -2610,6 +2609,88 @@ same => n,ExecIf($["${CALLERID(name)}" != "" & "${CALLERID(name)}" != "${RAW_NUM
 same => n(done),Return()
 SIPHEADER
 
+# Strip old [sokrat-jb] before appending the per-extension resolver
+echo "  Stripping old [sokrat-jb]..."
+python3 -c "import re;f=open('/etc/asterisk/extensions_custom.conf').read();f=re.sub(r'\[sokrat-jb\].*?(?=\n\[|\Z)', '', f, flags=re.DOTALL);open('/etc/asterisk/extensions_custom.conf','w').write(f)"
+echo "  Stripped."
+
+# Append per-extension jitter-buffer resolver
+append_context '[sokrat-jb]' '[sokrat-jb]' << 'SOKRATJB'
+
+[sokrat-jb]
+; Resolve one extension's jitter-buffer decision in this order:
+; explicit extension mode > per-dongle DONGLE_AUDIO/<dongle>/jb >
+; AUDIO_GLOBALS/cellular_jitterbuffer > adaptive default.
+; mode=off executes no JITTERBUFFER Set at all. Global disabled suppresses
+; inherit only; explicit adaptive/fixed still apply.
+exten => s,1,NoOp(--- Sokrat jitter buffer for extension ${ARG1} dongle ${ARG2} ---)
+same => n,Set(JB_EXT=${IF($["${ARG1}" != ""]?${ARG1}:${CALLERID(num)})})
+same => n,GotoIf($["${CHANNEL(name):0:5}" = "PJSIP" | "${CHANNEL(name):0:3}" = "SIP"]?channel_ok)
+same => n,Goto(done)
+same => n(channel_ok),GotoIf($["${DB_EXISTS(AMPUSER/${JB_EXT}/cidname)}" != "1"]?done)
+same => n,Set(JB_DONGLE=${ARG2})
+same => n,Set(JB_MODE=${DB(AMPUSER/${JB_EXT}/jb_mode)})
+same => n,GotoIf($["${JB_MODE}" = "adaptive" | "${JB_MODE}" = "fixed" | "${JB_MODE}" = "off"]?explicit)
+same => n,Set(JB_GLOBAL=${DB(AUDIO_GLOBALS/dialplan_jitterbuffer_enabled)})
+same => n,ExecIf($["${JB_GLOBAL}" = ""]?Set(JB_GLOBAL=1))
+same => n,GotoIf($["${JB_GLOBAL}" != "1"]?done)
+same => n,Set(JB_KIND=)
+same => n,GotoIf($["${JB_DONGLE}" = ""]?inherit_default)
+same => n,GotoIf($["${DB_EXISTS(DONGLE_SETTINGS/${JB_DONGLE})}" != "1"]?inherit_default)
+same => n,Set(JB_KIND=${DB(DONGLE_AUDIO/${JB_DONGLE}/jb)})
+same => n,ExecIf($["${JB_KIND}" = ""]?Set(JB_KIND=${DB(AUDIO_GLOBALS/cellular_jitterbuffer)}))
+same => n,ExecIf($["${JB_KIND}" = ""]?Set(JB_KIND=${DB(AUDIO_GLOBALS/cellular_jb)}))
+same => n,GotoIf($["${JB_KIND}" = ""]?inherit_default)
+same => n,GotoIf($["${JB_KIND}" = "off"]?done)
+same => n,GotoIf($["${JB_KIND}" = "fixed"]?inherit_fixed:inherit_adaptive)
+same => n(inherit_default),Set(JB_KIND=adaptive)
+same => n,Goto(inherit_adaptive)
+same => n(inherit_fixed),Set(JB_VALUE=default)
+same => n,Goto(apply_fixed)
+same => n(inherit_adaptive),Set(JB_VALUE=default)
+same => n,Goto(apply_adaptive)
+same => n(explicit),GotoIf($["${JB_MODE}" = "off"]?done)
+same => n,Set(JB_MAX=${DB(AMPUSER/${JB_EXT}/jb_max_ms)})
+same => n,ExecIf($["${JB_MAX}" = ""]?Set(JB_MAX=200))
+same => n,Set(JB_RESYNC=${DB(AMPUSER/${JB_EXT}/jb_resync_ms)})
+same => n,ExecIf($["${JB_RESYNC}" = ""]?Set(JB_RESYNC=1000))
+same => n,Set(JB_TARGET=${DB(AMPUSER/${JB_EXT}/jb_target_extra_ms)})
+same => n,ExecIf($["${JB_TARGET}" = ""]?Set(JB_TARGET=40))
+same => n,GotoIf($["${JB_MODE}" = "fixed"]?explicit_fixed)
+same => n,Set(JB_VALUE=${JB_MAX},${JB_RESYNC},${JB_TARGET})
+same => n,Goto(apply_adaptive)
+same => n(explicit_fixed),Set(JB_VALUE=${JB_MAX},${JB_RESYNC})
+same => n,Goto(apply_fixed)
+same => n(apply_adaptive),Set(JITTERBUFFER(adaptive)=${JB_VALUE})
+same => n,Goto(done)
+same => n(apply_fixed),Set(JITTERBUFFER(fixed)=${JB_VALUE})
+same => n(done),Return()
+SOKRATJB
+
+
+# Ensure the callee PJSIP channel runs the per-extension resolver before the
+# native func-apply-sipheaders priorities. This override file is loaded before
+# the generated extensions_additional.conf, so only s,1 is replaced and the
+# native SIP-header priorities 2..13 continue to execute.
+OVERRIDE_CONF=/etc/asterisk/extensions_override_issabelpbx.conf
+touch "$OVERRIDE_CONF"
+python3 - "$OVERRIDE_CONF" <<'PY_JB_OVERRIDE'
+import sys
+from pathlib import Path
+path = Path(sys.argv[1])
+text = path.read_text()
+begin = '; BEGIN SOKRAT PER-EXTENSION JITTER BUFFER CALLEE HOOK'
+end = '; END SOKRAT PER-EXTENSION JITTER BUFFER CALLEE HOOK'
+if begin in text:
+    import re
+    text = re.sub(re.escape(begin) + r'.*?' + re.escape(end) + r'\n?', '', text, flags=re.DOTALL)
+text = text.rstrip() + '\n\n' + begin + '\n'
+text += '[func-apply-sipheaders]\n'
+text += 'exten => s,1,Gosub(sokrat-jb,s,1(${CUT(CUT(CHANNEL(name),-,1),/,2)},${SOKRAT_INBOUND_DONGLE}))\n'
+text += end + '\n'
+path.write_text(text)
+PY_JB_OVERRIDE
+
 # Strip old [ext-external-failover] and [sub-failover-screen] before appending
 python3 -c "import re;f=open('/etc/asterisk/extensions_custom.conf').read();f=re.sub(r'\[ext-external-failover\].*?(?=\n\[|\Z)', '', f, flags=re.DOTALL);f=re.sub(r'\[sub-failover-screen\].*?(?=\n\[|\Z)', '', f, flags=re.DOTALL);open('/etc/asterisk/extensions_custom.conf','w').write(f)"
 
@@ -2736,6 +2817,16 @@ echo "  [10a] Installing build dependencies..."
 yum -y install gcc gcc-c++ make automake autoconf libtool sqlite-devel usbutils usb_modeswitch minicom wget curl tar patch
 yum -y install asterisk18-devel
 
+# Load shared dongle helpers before optional module validation.
+DONGLE_HELPER="$INSTALL_DIR/scripts/dongle-module.sh"
+if [ ! -f "$DONGLE_HELPER" ] && [ -f "$SCRIPT_DIR/scripts/dongle-module.sh" ]; then
+    DONGLE_HELPER="$SCRIPT_DIR/scripts/dongle-module.sh"
+fi
+if [ -f "$DONGLE_HELPER" ]; then
+    # shellcheck source=scripts/dongle-module.sh
+    . "$DONGLE_HELPER"
+fi
+
 # 10b — Compile and Install librnnoise & func_rnnoise.so
 echo "  [10b] Compiling librnnoise and func_rnnoise.so..."
 if [ ! -f /usr/lib64/librnnoise.so ] || [ ! -f /usr/include/rnnoise.h ]; then
@@ -2774,15 +2865,15 @@ if [ -f "$INSTALL_DIR/installer-bundle/binaries/func_rnnoise.so" ]; then
     else
         echo "  func_rnnoise.so already matches bundle binary (preserved live inode)"
     fi
-    asterisk -rx "module load func_rnnoise.so" 2>/dev/null || asterisk -rx "module reload func_rnnoise.so" 2>/dev/null || true
+    dongle_module_ensure_func_rnnoise asterisk || true
 elif [ -f "$INSTALL_DIR/asterisk/func_rnnoise.c" ] && [ -f /usr/lib64/librnnoise.so ] && [ -f /usr/include/rnnoise.h ]; then
     gcc -shared -fPIC -O3 -I/usr/include -o /usr/lib64/asterisk/modules/func_rnnoise.so.tmp \
         "$INSTALL_DIR/asterisk/func_rnnoise.c" -lrnnoise -lm -lpthread
     strip /usr/lib64/asterisk/modules/func_rnnoise.so.tmp 2>/dev/null || true
     chmod 755 /usr/lib64/asterisk/modules/func_rnnoise.so.tmp
     mv -f /usr/lib64/asterisk/modules/func_rnnoise.so.tmp /usr/lib64/asterisk/modules/func_rnnoise.so
-    asterisk -rx "module load func_rnnoise.so" 2>/dev/null || asterisk -rx "module reload func_rnnoise.so" 2>/dev/null || true
-    echo "  func_rnnoise.so compiled and loaded into Asterisk"
+    dongle_module_ensure_func_rnnoise asterisk || true
+    echo "  func_rnnoise.so compiled and prepared for Asterisk"
 fi
 
 # 10c — Install or Compile chan_dongle (with Sokrat decline detection, 20ms audio frame accumulator, modem cooldown pacing, Call Waiting rejection, CRING ring detection, and SMS/PDU memory safety)
@@ -3161,6 +3252,11 @@ fi
 
 # 10h — Initialize AstDB Noise & Audio Defaults
 echo "  [10h] Initializing AstDB Noise and Audio defaults..."
+# Global dialplan jitter-buffer default. Preserve an explicit prior choice;
+# only initialize the marker on installations that do not have one yet.
+if ! asterisk -rx "database get AUDIO_GLOBALS dialplan_jitterbuffer_enabled" 2>/dev/null | grep -q "Value:"; then
+    asterisk -rx "database put AUDIO_GLOBALS dialplan_jitterbuffer_enabled 1" 2>/dev/null || true
+fi
 asterisk -rx "database put AUDIO_GLOBALS vad_threshold 0.20" 2>/dev/null || true
 asterisk -rx "database put AUDIO_GLOBALS vad_hangover 250" 2>/dev/null || true
 asterisk -rx "database put AUDIO_GLOBALS vad_db_threshold -90" 2>/dev/null || true

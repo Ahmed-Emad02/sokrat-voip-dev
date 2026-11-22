@@ -315,6 +315,7 @@
                                 <th class="pb-3 text-start"><%= currentLang === 'ar' ? 'المفتاح' : 'Key Token' %></th>
                                 <th class="pb-3 text-start"><%= currentLang === 'ar' ? 'الصلاحيات' : 'Scopes' %></th>
                                 <th class="pb-3 text-start"><%= currentLang === 'ar' ? 'الآي بي المسموح' : 'Allowed IPs' %></th>
+                                <th class="pb-3 text-start"><%= currentLang === 'ar' ? 'الانتهاء' : 'Expires' %></th>
                                 <th class="pb-3 text-start"><%= currentLang === 'ar' ? 'آخر استخدام' : 'Last Used' %></th>
                                 <th class="pb-3 text-start"><%= currentLang === 'ar' ? 'الحالة' : 'Status' %></th>
                                 <th class="pb-3 text-end"><%= currentLang === 'ar' ? 'إجراءات' : 'Actions' %></th>
@@ -323,7 +324,7 @@
                         <tbody class="divide-y divide-[var(--border-primary)]/40 text-[var(--text-primary)] font-mono">
                             <% if (keys.length === 0) { %>
                                 <tr>
-                                    <td colspan="7" class="py-12 text-center text-[var(--text-muted)] font-mono">
+                                    <td colspan="8" class="py-12 text-center text-[var(--text-muted)] font-mono">
                                         <div class="flex flex-col items-center justify-center gap-2">
                                             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-[var(--text-muted)] opacity-60"><path d="m21 2-2 2m-6 6 7 7-3 3-4-4v-4l-4-4m-2 2L4 12l2-2 3 3 2-2-3-3 2-2 4 4Z"/><circle cx="7.5" cy="7.5" r="2.5"/></svg>
                                             <span><%= currentLang === 'ar' ? 'لا توجد مفاتيح API حتى الآن. انقر على "إنشاء مفتاح جديد" لإنشاء أول مفتاح.' : 'No API keys created yet. Click "Generate New API Key" above to create one.' %></span>
@@ -375,6 +376,13 @@
                                         <% } %>
                                     </td>
                                     <td class="py-3.5 text-[var(--text-muted)] text-[11px]">
+                                        <% if (key.expires_at) { %>
+                                            <div class="<%= new Date(key.expires_at) < new Date() ? 'text-rose-400' : '' %>"><%= moment(key.expires_at).format('YYYY-MM-DD HH:mm') %></div>
+                                        <% } else { %>
+                                            <span>Never</span>
+                                        <% } %>
+                                    </td>
+                                    <td class="py-3.5 text-[var(--text-muted)] text-[11px]">
                                         <% if (key.last_used_at) { %>
                                             <div><%= moment(key.last_used_at).fromNow() %></div>
                                             <% if (key.last_used_ip) { %>
@@ -397,6 +405,15 @@
                                     </td>
                                     <td class="py-3.5 text-end font-mono">
                                         <div class="inline-flex items-center gap-1.5">
+                                            <button type="button"
+                                                    class="btn-edit px-2.5 py-1 text-[11px] bg-sky-950 hover:bg-sky-900 text-sky-300 rounded-lg transition"
+                                                    data-id="<%= key.id %>"
+                                                    data-name="<%= key.name %>"
+                                                    data-scopes="<%= key.scopes || '' %>"
+                                                    data-ips="<%= key.allowed_ips || '' %>"
+                                                    data-expires="<%= key.expires_at ? moment(key.expires_at).format('YYYY-MM-DDTHH:mm') : '' %>">
+                                                <%= currentLang === 'ar' ? 'تعديل' : 'Edit' %>
+                                            </button>
                                             <button type="button" 
                                                     class="btn-toggle-status px-2.5 py-1 text-[11px] rounded-lg transition <%= key.status === 'active' ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300' : 'bg-emerald-950 hover:bg-emerald-900 text-emerald-300' %>" 
                                                     data-id="<%= key.id %>" 
@@ -583,19 +600,62 @@
         </div>
     </div>
 
+    <!-- Edit Key Modal -->
+    <div id="editKeyModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+        <div class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
+            <div class="flex items-center justify-between border-b border-[var(--border-primary)] pb-3">
+                <h3 class="text-sm font-bold text-[var(--text-primary)] uppercase tracking-wider">
+                    <%= currentLang === 'ar' ? 'تعديل مفتاح API' : 'Edit API Key' %>
+                </h3>
+                <button type="button" id="btnCloseEditModal" class="text-zinc-400 hover:text-[var(--text-primary)]">✕</button>
+            </div>
+            <form id="editKeyForm" class="space-y-4">
+                <input type="hidden" id="editKeyId">
+                <div>
+                    <label for="editKeyName" class="block text-xs font-bold text-[var(--text-secondary)] mb-1.5"><%= currentLang === 'ar' ? 'الاسم / الوصف' : 'Name / Label' %></label>
+                    <input type="text" id="editKeyName" required class="w-full px-3 py-2 text-xs bg-black/40 border border-[var(--border-primary)] rounded-lg text-[var(--text-primary)] focus:border-red-500 outline-none">
+                </div>
+                <div>
+                    <label for="editKeyScopes" class="block text-xs font-bold text-[var(--text-secondary)] mb-1.5"><%= currentLang === 'ar' ? 'الصلاحيات' : 'Scopes' %></label>
+                    <input type="text" id="editKeyScopes" required class="w-full px-3 py-2 text-xs font-mono bg-black/40 border border-[var(--border-primary)] rounded-lg text-[var(--text-primary)] focus:border-red-500 outline-none">
+                    <p class="text-[10px] text-[var(--text-muted)] mt-1"><%= currentLang === 'ar' ? 'مفصولة بفواصل. استخدم * لكامل الصلاحيات.' : 'Comma-separated. Use * for full access.' %></p>
+                </div>
+                <div>
+                    <label for="editKeyIps" class="block text-xs font-bold text-[var(--text-secondary)] mb-1.5"><%= currentLang === 'ar' ? 'الآي بي / النطاقات المسموحة' : 'Allowed IPs / Hostnames' %></label>
+                    <input type="text" id="editKeyIps" class="w-full px-3 py-2 text-xs font-mono bg-black/40 border border-[var(--border-primary)] rounded-lg text-[var(--text-primary)] focus:border-red-500 outline-none" placeholder="e.g. 89.117.53.1,erp.smartvgroup.com">
+                </div>
+                <div>
+                    <label for="editKeyExpires" class="block text-xs font-bold text-[var(--text-secondary)] mb-1.5"><%= currentLang === 'ar' ? 'تاريخ الانتهاء (اتركه فارغاً لعدم الانتهاء)' : 'Expiry date (leave blank for never)' %></label>
+                    <input type="datetime-local" id="editKeyExpires" class="w-full px-3 py-2 text-xs bg-black/40 border border-[var(--border-primary)] rounded-lg text-[var(--text-primary)] focus:border-red-500 outline-none">
+                </div>
+                <div class="flex justify-end gap-2 pt-3 border-t border-[var(--border-primary)]">
+                    <button type="button" id="btnCancelEdit" class="px-4 py-2 text-xs font-bold rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200"><%= currentLang === 'ar' ? 'إلغاء' : 'Cancel' %></button>
+                    <button type="submit" id="btnSaveEdit" class="px-5 py-2 text-xs font-bold rounded-lg text-white bg-[var(--accent-color)] hover:bg-[#e0352b]"><%= currentLang === 'ar' ? 'حفظ' : 'Save Changes' %></button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script>
         const createModal = document.getElementById('createModal');
         const revealModal = document.getElementById('revealModal');
+        const editKeyModal = document.getElementById('editKeyModal');
         const newKeyBanner = document.getElementById('newKeyBanner');
         const newKeyValue = document.getElementById('newKeyValue');
 
         // Multi-Select Scopes Configuration
         const SCOPES_CONFIG = [
             { key: '*', label: '<%= currentLang === "ar" ? "* كامل الصلاحيات" : "* Full Access" %>', desc: '<%= currentLang === "ar" ? "وصول شامل وغير مقيد لكافة العمليات" : "Unrestricted full access to all endpoints" %>' },
-            { key: 'cdr:read', label: 'cdr:read', desc: '<%= currentLang === "ar" ? "عرض والبحث بسجل المكالمات" : "Query & search CDR call logs" %>' },
-            { key: 'cdr:audio', label: 'cdr:audio', desc: '<%= currentLang === "ar" ? "بث وتحميل التسجيلات الصوتية" : "Stream & download recordings" %>' },
-            { key: 'calls:read', label: 'calls:read', desc: '<%= currentLang === "ar" ? "بحث مكالمات العميل بالهاتف" : "Search calls by phone number" %>' },
-            { key: 'extensions:read', label: 'extensions:read', desc: '<%= currentLang === "ar" ? "استعلام حالة التحويلات" : "Read extensions and live state" %>' },
+            { key: 'calls:read', label: 'calls:read', desc: '<%= currentLang === "ar" ? "قراءة سجل المكالمات والبحث بالهاتف أو التحويلة" : "Read call records by phone, extension or date" %>' },
+            { key: 'recordings:read', label: 'recordings:read', desc: '<%= currentLang === "ar" ? "بث وتحميل التسجيلات الصوتية" : "Stream & download call recordings" %>' },
+            { key: 'extensions:read', label: 'extensions:read', desc: '<%= currentLang === "ar" ? "قراءة قائمة التحويلات وحالتها" : "Read the extension list and live state" %>' },
+            { key: 'stats:read', label: 'stats:read', desc: '<%= currentLang === "ar" ? "قراءة إحصائيات الموظفين والتقارير" : "Read employee statistics and reports" %>' },
+            { key: 'cdr', label: 'cdr', desc: '<%= currentLang === "ar" ? "قراءة سجل المكالمات والنسخ النصية" : "Read CDR records and call transcripts" %>' },
+            { key: 'cdr-export', label: 'cdr-export', desc: '<%= currentLang === "ar" ? "تصدير سجل المكالمات Excel/CSV" : "Export call history to Excel/CSV" %>' },
+            { key: 'live:read', label: 'live:read', desc: '<%= currentLang === "ar" ? "قراءة أحداث المكالمات الحية" : "Read live call events and embed tickets" %>' },
+            { key: 'softphone:use', label: 'softphone:use', desc: '<%= currentLang === "ar" ? "استخدام الهاتف المدمج للاتصال بالنقر" : "Use the embedded softphone for click-to-call" %>' },
+            { key: 'cdr:read', label: 'cdr:read (legacy)', desc: '<%= currentLang === "ar" ? "اسم قديم يعادل calls:read + cdr" : "Legacy alias for calls:read + cdr" %>' },
+            { key: 'cdr:audio', label: 'cdr:audio (legacy)', desc: '<%= currentLang === "ar" ? "اسم قديم يعادل recordings:read" : "Legacy alias for recordings:read" %>' },
             { key: 'operator', label: 'operator', desc: '<%= currentLang === "ar" ? "لوحة المراقبة وإجراءات التجسس" : "Live switchboard actions" %>' },
             { key: 'dialer', label: 'dialer', desc: '<%= currentLang === "ar" ? "حملات الاتصال الآلي والعملاء" : "Manage outbound campaigns" %>' },
             { key: 'dongles', label: 'dongles', desc: '<%= currentLang === "ar" ? "شرائح GSM ورسائل SMS" : "GSM modems & SMS messaging" %>' },
@@ -812,6 +872,55 @@
                     alert('Error: ' + err.message);
                 }
             });
+        });
+
+        // Edit key metadata and expiry
+        document.getElementById('btnCloseEditModal').addEventListener('click', () => editKeyModal.classList.add('hidden'));
+        document.getElementById('btnCancelEdit').addEventListener('click', () => editKeyModal.classList.add('hidden'));
+
+        document.querySelectorAll('.btn-edit').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.getElementById('editKeyId').value = btn.getAttribute('data-id');
+                document.getElementById('editKeyName').value = btn.getAttribute('data-name') || '';
+                document.getElementById('editKeyScopes').value = btn.getAttribute('data-scopes') || '';
+                document.getElementById('editKeyIps').value = btn.getAttribute('data-ips') || '';
+                document.getElementById('editKeyExpires').value = btn.getAttribute('data-expires') || '';
+                editKeyModal.classList.remove('hidden');
+            });
+        });
+
+        document.getElementById('editKeyForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('editKeyId').value;
+            const btn = document.getElementById('btnSaveEdit');
+            const original = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'Saving...';
+            try {
+                const expiresValue = document.getElementById('editKeyExpires').value;
+                const res = await fetch(`/api/admin/api-keys/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: document.getElementById('editKeyName').value.trim(),
+                        scopes: document.getElementById('editKeyScopes').value.trim(),
+                        allowed_ips: document.getElementById('editKeyIps').value.trim() || null,
+                        expires_at: expiresValue || null
+                    })
+                });
+                const data = await res.json();
+                if (!res.ok || !data.success) {
+                    alert(data.error || 'Failed to update API key');
+                    btn.disabled = false;
+                    btn.textContent = original;
+                    return;
+                }
+                window.location.reload();
+            } catch (err) {
+                alert('Error: ' + err.message);
+                btn.disabled = false;
+                btn.textContent = original;
+            }
         });
 
         // Toggle status (revoke/activate)

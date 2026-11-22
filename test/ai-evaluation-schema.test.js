@@ -70,7 +70,9 @@ test('SIP-hosted AI agent dialplan and APIs are present', () => {
 
 test('STT worker persists diarized segments and processes evaluation jobs', () => {
     assert.match(worker, /transcribeWithCloudAiDetailed/);
-    assert.match(worker, /targetUrl\.searchParams\.set\('diarize', 'true'\)/);
+    assert.match(worker, /formData\.append\('diarize', 'true'\)/);
+    assert.match(worker, /formData\.append\('model_id', 'scribe_v3'\)/);
+    assert.match(worker, /'xi-api-key': apiKey/);
     assert.match(worker, /persistSegments\(pool, 'call'/);
     assert.match(worker, /persistSegments\(pool, 'voicemail'/);
     assert.match(worker, /processEvaluationJob\(pool\)/);

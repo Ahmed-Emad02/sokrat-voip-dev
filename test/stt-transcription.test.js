@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const { execSync } = require('child_process');
 const ejs = require('ejs');
 
@@ -14,6 +15,7 @@ test('scripts/stt-worker.js and scripts/enqueue-stt.js exist and export required
     assert.equal(typeof worker.resolveVoicemailAudioPath, 'function', 'resolveVoicemailAudioPath must be exported');
     assert.equal(typeof worker.prepareAudioForUpload, 'function', 'prepareAudioForUpload must be exported');
     assert.equal(typeof worker.transcribeWithCloudAi, 'function', 'transcribeWithCloudAi must be exported');
+    assert.equal(typeof worker.transcribeWithElevenLabs, 'function', 'transcribeWithElevenLabs must be exported');
     assert.equal(typeof worker.testCloudSttConnection, 'function', 'testCloudSttConnection must be exported');
 
     const enqueue = require('../scripts/enqueue-stt');
@@ -243,4 +245,53 @@ test('transcribeWithCloudAi validates API key presence and rejects empty key', a
     await assert.rejects(async () => {
         await transcribeWithCloudAi('/tmp/dummy.mp3', { apiKey: '' });
     }, /API key is not configured/);
+});
+
+test('ElevenLabs Scribe v3 is the only accepted STT provider and sends the batch contract', async () => {
+    const worker = require('../scripts/stt-worker');
+    const tmp = path.join(os.tmpdir(), `elevenlabs-stt-test-${process.pid}-${Date.now()}.wav`);
+    fs.writeFileSync(tmp, Buffer.from('RIFF0000WAVEfmt '));
+    const originalFetch = global.fetch;
+    let captured = null;
+    global.fetch = async (url, options) => {
+        captured = { url: String(url), options };
+        return {
+            ok: true,
+            json: async () => ({
+                text: 'إزيك يا فندم',
+                language_code: 'ar',
+                audio_duration_secs: 1.2,
+                words: [
+                    { type: 'word', text: 'إزيك', start: 0, end: 0.5, speaker_id: 'speaker_0' },
+                    { type: 'word', text: 'يا', start: 0.5, end: 0.7, speaker_id: 'speaker_0' },
+                    { type: 'word', text: 'فندم', start: 0.7, end: 1.2, speaker_id: 'speaker_0' }
+                ]
+            })
+        };
+    };
+    try {
+        const result = await worker.transcribeWithCloudAiDetailed(tmp, {
+            provider: 'elevenlabs',
+            apiKey: 'test-elevenlabs-key',
+            language: 'ar',
+            prompt: 'Sokrat, باقة'
+        });
+        assert.equal(captured.url, 'https://api.elevenlabs.io/v1/speech-to-text');
+        assert.equal(captured.options.headers['xi-api-key'], 'test-elevenlabs-key');
+        assert.equal(captured.options.body.get('model_id'), 'scribe_v3');
+        assert.equal(captured.options.body.get('language_code'), 'ar');
+        assert.equal(captured.options.body.get('diarize'), 'true');
+        assert.equal(captured.options.body.get('timestamps_granularity'), 'word');
+        assert.equal(result.provider, 'elevenlabs');
+        assert.equal(result.model, 'scribe_v3');
+        assert.match(result.text, /إزيك/);
+    } finally {
+        global.fetch = originalFetch;
+        try { fs.unlinkSync(tmp); } catch (_) {}
+    }
+
+    await assert.rejects(
+        worker.transcribeWithCloudAiDetailed(tmp, { provider: 'deepgram', apiKey: 'test' }),
+        /Only ElevenLabs Scribe v3 is configured/
+    );
 });

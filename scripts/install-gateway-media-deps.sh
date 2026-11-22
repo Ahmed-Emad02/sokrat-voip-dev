@@ -2,7 +2,10 @@
 # Additive packages only; no routes, firewall reset, Asterisk restart or config.
 set -euo pipefail
 if ! command -v openvpn >/dev/null 2>&1 || ! command -v iptables >/dev/null 2>&1 || ! python3 -c 'import cryptography' >/dev/null 2>&1; then
-    if command -v dnf >/dev/null 2>&1; then
+    if [ "${SOKRAT_OFFLINE:-0}" = "1" ]; then
+        echo 'Offline bundle is missing OpenVPN >= 2.4, iptables, or Python cryptography; install them manually before reverse TLS pairing' >&2
+        exit 1
+    elif command -v dnf >/dev/null 2>&1; then
         dnf -y install openvpn iptables python3-cryptography
     elif command -v apt-get >/dev/null 2>&1; then
         DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends openvpn iptables python3-cryptography

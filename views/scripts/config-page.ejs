@@ -1173,7 +1173,7 @@
             scrollTopPillIntoView(tabId, true);
 
             stopRtcpTimer();
-            if (tabId === 'audioprocessing') { loadAudioGlobals(); loadPerDongleAudioProfiles(); loadPerExtensionAudioProfiles(); }
+            if (tabId === 'audioprocessing') { loadAudioGlobals(); loadGlobalDialplanJitterBuffer(); loadPerDongleAudioProfiles(); loadPerExtensionAudioProfiles(); }
             else if (tabId === 'extensions') fetchExtensions();
             else if (tabId === 'callcodes') fetchConfigCallCodes();
             else if (tabId === 'ringgroups') { fetchRingGroups(); ensureAllConfigListsLoaded(); }
@@ -1714,7 +1714,7 @@
                             </td>
                         `;
                         tr.querySelector('[data-action="edit"]').addEventListener('click', () => {
-                            editExtension(ext.extension, ext.name, ext.secret, ext.voicemail, ext.tech, ext.denoise, ext.vad_gate, ext.vad_db, ext.agc, ext.auto_answer, ext.dnd, ext.disable_outbound_ringing_cancel);
+                            editExtension(ext.extension, ext.name, ext.secret, ext.voicemail, ext.tech, ext.denoise, ext.vad_gate, ext.vad_db, ext.agc, ext.jb_mode, ext.jb_max_ms, ext.jb_resync_ms, ext.jb_target_extra_ms, ext.auto_answer, ext.dnd, ext.disable_outbound_ringing_cancel);
                         });
                         tr.querySelector('[data-action="delete"]').addEventListener('click', () => {
                             deleteExtension(ext.extension);
@@ -1909,6 +1909,31 @@
         window.saveBulkExtensions = saveBulkExtensions;
         window.updateBulkExtensionPreview = updateBulkExtensionPreview;
 
+        function updateJitterBufferUi() {
+            const modeEl = document.getElementById('extJbMode');
+            if (!modeEl) return;
+            const mode = modeEl.value;
+            const params = Array.from(document.querySelectorAll('.ext-jb-param'));
+            const targetWrap = document.getElementById('extJbTargetWrap');
+            const effective = document.getElementById('extJbEffective');
+            const showParams = mode === 'adaptive' || mode === 'fixed';
+            params.forEach(el => {
+                const isTarget = el === targetWrap;
+                const visible = showParams && (!isTarget || mode === 'adaptive');
+                el.hidden = !visible;
+                el.style.display = visible ? '' : 'none';
+                const input = el.querySelector('input');
+                if (input) input.disabled = !visible;
+            });
+            if (effective) {
+                if (mode === 'inherit') effective.textContent = isRtl ? 'يرث السياسة العامة/المودم' : 'Inherits global / dongle policy';
+                else if (mode === 'off') effective.textContent = isRtl ? 'معطل بالكامل لهذه التحويلة' : 'Fully disabled for this extension';
+                else if (mode === 'adaptive') effective.textContent = isRtl ? 'قيمة دقيقة: adaptive=الحد الأقصى، إعادة المزامنة، الهدف' : 'Exact: adaptive=max,resync,target';
+                else effective.textContent = isRtl ? 'قيمة دقيقة: fixed=الحد الأقصى، إعادة المزامنة' : 'Exact: fixed=max,resync';
+            }
+        }
+        window.updateJitterBufferUi = updateJitterBufferUi;
+
         async function openExtensionModal() {
             document.getElementById('extModalTitle').textContent = isRtl ? 'إضافة تحويلة جديدة (WebRTC / Generic SIP)' : 'Add Extension (WebRTC / Generic SIP)';
             document.getElementById('extEditMode').value = 'false';
@@ -1932,6 +1957,11 @@
             document.getElementById('extVadDb').dispatchEvent(new Event('change', { bubbles: true }));
             document.getElementById('extAgc').value = 'off';
             document.getElementById('extAgc').dispatchEvent(new Event('change', { bubbles: true }));
+            document.getElementById('extJbMode').value = 'inherit';
+            document.getElementById('extJbMax').value = '200';
+            document.getElementById('extJbResync').value = '1000';
+            document.getElementById('extJbTarget').value = '40';
+            updateJitterBufferUi();
             resetEmployeeProfileFields();
             openModal('extensionModal');
             try {
@@ -1941,7 +1971,7 @@
             }
         }
 
-        async function editExtension(extNum, name, secret, voicemail, tech, denoise, vadGate, vadDb, agc, autoAnswer, dnd, disableCancel) {
+        async function editExtension(extNum, name, secret, voicemail, tech, denoise, vadGate, vadDb, agc, jbMode, jbMax, jbResync, jbTarget, autoAnswer, dnd, disableCancel) {
             document.getElementById('extModalTitle').textContent = (isRtl ? 'تعديل التحويلة ' : 'Edit Extension ') + extNum;
             document.getElementById('extEditMode').value = 'true';
             document.getElementById('extNum').value = extNum;
@@ -1954,6 +1984,11 @@
             document.getElementById('extVadGate').value = (vadGate === '1' || vadGate === 1 || vadGate === true) ? '1' : '0';
             document.getElementById('extVadDb').value = (vadDb && vadDb !== 'undefined') ? String(vadDb).trim() : 'off';
             document.getElementById('extAgc').value = (agc && agc !== 'undefined') ? String(agc).trim() : 'off';
+            document.getElementById('extJbMode').value = ['inherit', 'adaptive', 'fixed', 'off'].includes(jbMode) ? jbMode : 'inherit';
+            document.getElementById('extJbMax').value = Number.isFinite(Number(jbMax)) ? String(Number(jbMax)) : '200';
+            document.getElementById('extJbResync').value = Number.isFinite(Number(jbResync)) ? String(Number(jbResync)) : '1000';
+            document.getElementById('extJbTarget').value = Number.isFinite(Number(jbTarget)) ? String(Number(jbTarget)) : '40';
+            updateJitterBufferUi();
             if (document.getElementById('extAutoAnswer')) document.getElementById('extAutoAnswer').value = ['user_choice', 'force_on', 'force_off'].includes(autoAnswer) ? autoAnswer : 'user_choice';
             if (document.getElementById('extDnd')) document.getElementById('extDnd').value = ['user_choice', 'force_on', 'force_off'].includes(dnd) ? dnd : 'user_choice';
             if (document.getElementById('extCancel')) document.getElementById('extCancel').value = (disableCancel === '1' || disableCancel === 1 || disableCancel === true) ? '1' : '0';
@@ -2044,6 +2079,10 @@
                         vad_gate: vadGate,
                         vad_db: vadDb,
                         agc,
+                        jb_mode: document.getElementById('extJbMode').value,
+                        jb_max_ms: parseInt(document.getElementById('extJbMax').value, 10),
+                        jb_resync_ms: parseInt(document.getElementById('extJbResync').value, 10),
+                        jb_target_extra_ms: parseInt(document.getElementById('extJbTarget').value, 10),
                         auto_answer: autoAnswer,
                         dnd: dnd,
                         disable_outbound_ringing_cancel: parseInt(disableCancel, 10)
@@ -6238,11 +6277,143 @@
             }
         }
 
+        function openCanvasClassicTarget() {
+            const params = new URLSearchParams(window.location.search);
+            const addType = params.get('canvasNew');
+            const editType = params.get('canvasEditType');
+            const editId = params.get('canvasEditId') || '';
+            const editCid = params.get('canvasEditCid') || '';
+            if (!addType && !editType) return;
+
+            const cleanParams = () => {
+                const url = new URL(window.location.href);
+                ['canvasNew', 'canvasEditType', 'canvasEditId', 'canvasEditCid'].forEach(key => url.searchParams.delete(key));
+                window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+            };
+            const addActions = {
+                extension: () => openExtensionModal(),
+                inbound: () => openInboundModal(),
+                outbound: () => openOutboundModal(),
+                trunk: () => openTrunkModal(),
+                ringgroup: () => openRingGroupModal(),
+                queue: () => openQueueModal(),
+                ivr: () => openIvrModal(),
+                timecondition: () => openTimeConditionModal(),
+                timegroup: () => openTimeGroupModal(),
+                announcement: () => openAnnouncementModal(),
+                voicemail: null
+            };
+            let attempts = 0;
+            const openTarget = () => {
+                if (addType) {
+                    const action = addActions[addType];
+                    if (addType === 'voicemail' || typeof action === 'function') {
+                        cleanParams();
+                        if (typeof action === 'function') action();
+                        return true;
+                    }
+                }
+                if (editType === 'extension') {
+                    const ext = (loadedExtensionsList || []).find(item => String(item.extension) === String(editId));
+                    if (ext) {
+                        cleanParams();
+                        editExtension(ext.extension, ext.name, ext.secret, ext.voicemail, ext.tech, ext.denoise, ext.vad_gate, ext.vad_db, ext.agc, ext.jb_mode, ext.jb_max_ms, ext.jb_resync_ms, ext.jb_target_extra_ms, ext.auto_answer, ext.dnd, ext.disable_outbound_ringing_cancel);
+                        return true;
+                    }
+                } else if (editType === 'inbound') {
+                    const route = (loadedInboundRoutesList || []).find(item => String(item.extension || '') === String(editId) && String(item.cidnum || '') === String(editCid));
+                    if (route) {
+                        cleanParams();
+                        editInboundRoute(route.extension, route.cidnum, route.description, route.destination);
+                        return true;
+                    }
+                } else if (editType === 'outbound') {
+                    const route = (loadedOutboundRoutesList || []).find(item => String(item.route_id) === String(editId));
+                    if (route) {
+                        cleanParams();
+                        editOutboundRoute(route.route_id, route.name, route.patterns || [], route.trunks || [], route.outcid || '', route.outcid_mode || '');
+                        return true;
+                    }
+                } else if (editType === 'trunk') {
+                    const trunk = (loadedTrunksList || []).find(item => String(item.trunkid) === String(editId));
+                    if (trunk) {
+                        cleanParams();
+                        editTrunk(trunk);
+                        return true;
+                    }
+                } else if (editType === 'ringgroup') {
+                    const group = (loadedRingGroupsList || []).find(item => String(item.grpnum) === String(editId));
+                    if (group) {
+                        cleanParams();
+                        editRingGroup(group.grpnum);
+                        return true;
+                    }
+                } else if (editType === 'queue') {
+                    const queue = (loadedQueuesList || []).find(item => String(item.extension) === String(editId));
+                    if (queue) {
+                        cleanParams();
+                        editQueue(queue.extension);
+                        return true;
+                    }
+                } else if (editType === 'ivr') {
+                    const ivr = (loadedIvrsList || []).find(item => String(item.id) === String(editId));
+                    if (ivr) {
+                        cleanParams();
+                        openIvrModal(ivr.id);
+                        return true;
+                    }
+                } else if (editType === 'timecondition') {
+                    const condition = (loadedTimeConditionsList || []).find(item => String(item.timeconditions_id) === String(editId));
+                    if (condition) {
+                        cleanParams();
+                        editTimeCondition(condition.timeconditions_id);
+                        return true;
+                    }
+                } else if (editType === 'announcement') {
+                    const announcement = (loadedAnnouncementsList || []).find(item => String(item.announcement_id) === String(editId));
+                    if (announcement) {
+                        cleanParams();
+                        editAnnouncement(announcement.announcement_id);
+                        return true;
+                    }
+                } else if (editType === 'timegroup') {
+                    const group = (loadedTimeGroupsList || []).find(item => String(item.id) === String(editId));
+                    if (group) {
+                        cleanParams();
+                        editTimeGroup(group.id);
+                        return true;
+                    }
+                } else if (editType === 'moh') {
+                    cleanParams();
+                    return true;
+                } else if (editType === 'voicemail') {
+                    cleanParams();
+                    return true;
+                }
+                return false;
+            };
+            const tick = () => {
+                attempts += 1;
+                if (openTarget() || attempts >= 100) {
+                    if (attempts >= 100) {
+                        cleanParams();
+                        if (typeof showToast === 'function') {
+                            showToast(isRtl ? 'تعذر فتح نموذج الإعداد الكلاسيكي.' : 'Could not open the classic editor form.', 'error');
+                        }
+                    }
+                    return;
+                }
+                window.setTimeout(tick, 150);
+            };
+            window.setTimeout(tick, 250);
+        }
+
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', initConfigPage);
         } else {
             initConfigPage();
         }
+        openCanvasClassicTarget();
 
         // --- 7. VOICEMAIL CONFIGURATION ---
 
@@ -10425,6 +10596,109 @@
         }
         window.saveAudioGlobals = saveAudioGlobals;
 
+        const GLOBAL_DIALPLAN_JB_DEFAULTS = Object.freeze({
+            mode: 'adaptive',
+            max_ms: 200,
+            resync_ms: 1000,
+            target_extra_ms: 40,
+            sync_video: false
+        });
+        let globalDialplanJbBound = false;
+
+        function updateGlobalDialplanJitterPreview() {
+            const enabledEl = document.getElementById('globalDialplanJbEnabled');
+            const modeEl = document.getElementById('globalDialplanJbMode');
+            const maxEl = document.getElementById('globalDialplanJbMax');
+            const resyncEl = document.getElementById('globalDialplanJbResync');
+            const targetEl = document.getElementById('globalDialplanJbTarget');
+            const syncEl = document.getElementById('globalDialplanJbSyncVideo');
+            const previewEl = document.getElementById('globalDialplanJbPreview');
+            if (!previewEl) return;
+            const enabled = !enabledEl || enabledEl.checked;
+            const mode = modeEl ? modeEl.value : GLOBAL_DIALPLAN_JB_DEFAULTS.mode;
+            const maxMs = maxEl && maxEl.value !== '' ? maxEl.value : String(GLOBAL_DIALPLAN_JB_DEFAULTS.max_ms);
+            const resync = resyncEl && resyncEl.value !== '' ? resyncEl.value : String(GLOBAL_DIALPLAN_JB_DEFAULTS.resync_ms);
+            const target = targetEl && targetEl.value !== '' ? targetEl.value : String(GLOBAL_DIALPLAN_JB_DEFAULTS.target_extra_ms);
+            const sync = syncEl && syncEl.checked ? 'yes' : 'no';
+            if (!enabled || mode === 'off') {
+                previewEl.textContent = 'JITTERBUFFER disabled for inherited extensions';
+            } else if (mode === 'fixed') {
+                previewEl.textContent = `JITTERBUFFER(fixed)=${maxMs},${resync},,${sync}`;
+            } else {
+                previewEl.textContent = `JITTERBUFFER(adaptive)=${maxMs},${resync},${target},${sync}`;
+            }
+        }
+        window.updateGlobalDialplanJitterPreview = updateGlobalDialplanJitterPreview;
+
+        function bindGlobalDialplanJitterPreview() {
+            if (globalDialplanJbBound) return;
+            globalDialplanJbBound = true;
+            ['globalDialplanJbEnabled', 'globalDialplanJbMode', 'globalDialplanJbMax',
+                'globalDialplanJbResync', 'globalDialplanJbTarget', 'globalDialplanJbSyncVideo']
+                .forEach((id) => {
+                    const el = document.getElementById(id);
+                    if (el) el.addEventListener('input', updateGlobalDialplanJitterPreview);
+                    if (el) el.addEventListener('change', updateGlobalDialplanJitterPreview);
+                });
+        }
+
+        async function loadGlobalDialplanJitterBuffer() {
+            bindGlobalDialplanJitterPreview();
+            try {
+                const res = await fetch('/api/config/modem/jitterbuffer');
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || 'Unable to read jitter-buffer settings');
+                const cfg = data.config || {};
+                const enabledEl = document.getElementById('globalDialplanJbEnabled');
+                const modeEl = document.getElementById('globalDialplanJbMode');
+                const maxEl = document.getElementById('globalDialplanJbMax');
+                const resyncEl = document.getElementById('globalDialplanJbResync');
+                const targetEl = document.getElementById('globalDialplanJbTarget');
+                const syncEl = document.getElementById('globalDialplanJbSyncVideo');
+                if (enabledEl) enabledEl.checked = Boolean(data.enabled);
+                if (modeEl) modeEl.value = ['adaptive', 'fixed', 'off'].includes(cfg.mode) ? cfg.mode : 'adaptive';
+                if (maxEl) maxEl.value = String(cfg.max_ms ?? GLOBAL_DIALPLAN_JB_DEFAULTS.max_ms);
+                if (resyncEl) resyncEl.value = String(cfg.resync_ms ?? GLOBAL_DIALPLAN_JB_DEFAULTS.resync_ms);
+                if (targetEl) targetEl.value = String(cfg.target_extra_ms ?? GLOBAL_DIALPLAN_JB_DEFAULTS.target_extra_ms);
+                if (syncEl) syncEl.checked = Boolean(cfg.sync_video);
+                updateGlobalDialplanJitterPreview();
+            } catch (e) {
+                showToast(e.message || 'Failed to load global dialplan jitter-buffer settings.', 'error');
+            }
+        }
+        window.loadGlobalDialplanJitterBuffer = loadGlobalDialplanJitterBuffer;
+
+        async function saveGlobalDialplanJitterBuffer() {
+            const enabledEl = document.getElementById('globalDialplanJbEnabled');
+            const modeEl = document.getElementById('globalDialplanJbMode');
+            const maxEl = document.getElementById('globalDialplanJbMax');
+            const resyncEl = document.getElementById('globalDialplanJbResync');
+            const targetEl = document.getElementById('globalDialplanJbTarget');
+            const syncEl = document.getElementById('globalDialplanJbSyncVideo');
+            const payload = {
+                enabled: enabledEl ? enabledEl.checked : true,
+                mode: modeEl ? modeEl.value : GLOBAL_DIALPLAN_JB_DEFAULTS.mode,
+                max_ms: Number(maxEl && maxEl.value !== '' ? maxEl.value : GLOBAL_DIALPLAN_JB_DEFAULTS.max_ms),
+                resync_ms: Number(resyncEl && resyncEl.value !== '' ? resyncEl.value : GLOBAL_DIALPLAN_JB_DEFAULTS.resync_ms),
+                target_extra_ms: Number(targetEl && targetEl.value !== '' ? targetEl.value : GLOBAL_DIALPLAN_JB_DEFAULTS.target_extra_ms),
+                sync_video: Boolean(syncEl && syncEl.checked)
+            };
+            try {
+                const res = await fetch('/api/config/modem/jitterbuffer', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || 'Failed to save jitter-buffer settings');
+                updateGlobalDialplanJitterPreview();
+                showToast(data.message || 'Global dialplan jitter-buffer settings applied.', 'success');
+            } catch (e) {
+                showToast(e.message || 'Failed to save global dialplan jitter-buffer settings.', 'error');
+            }
+        }
+        window.saveGlobalDialplanJitterBuffer = saveGlobalDialplanJitterBuffer;
+
         function resetRecordingAudioMix() {
             const agent = document.getElementById('recordingAgentGain');
             const customer = document.getElementById('recordingCustomerGain');
@@ -10545,7 +10819,7 @@
                     renderExtensionsDspTable(cachedDspExtensions);
                 }
             } catch (e) {
-                tbody.innerHTML = `<tr><td colspan="6" class="py-4 text-center text-rose-400 text-xs">Error: ${escapeHtml(e.message)}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="7" class="py-4 text-center text-rose-400 text-xs">Error: ${escapeHtml(e.message)}</td></tr>`;
             }
         }
 
@@ -10565,7 +10839,7 @@
             const tbody = document.getElementById('extensionsDspTableBody');
             if (!tbody) return;
             if (!list || list.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" class="py-4 text-center text-xs text-[var(--text-muted)] italic">No matching extensions found.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" class="py-4 text-center text-xs text-[var(--text-muted)] italic">No matching extensions found.</td></tr>';
                 return;
             }
             tbody.innerHTML = list.map(ext => `
@@ -10608,6 +10882,14 @@
                             <option value="off" ${ext.agc === 'off' ? 'selected' : ''}>Disabled</option>
                         </select>
                     </td>
+                    <td class="py-2.5 px-3">
+                        <select id="ext_jb_mode_${ext.extension}" class="config-input py-1 px-2 text-xs font-semibold" title="Jitter Buffer mode; Inherit uses the global dialplan defaults">
+                            <option value="inherit" ${(!ext.jb_mode || ext.jb_mode === 'inherit') ? 'selected' : ''}>Inherit Global</option>
+                            <option value="adaptive" ${ext.jb_mode === 'adaptive' ? 'selected' : ''}>Adaptive</option>
+                            <option value="fixed" ${ext.jb_mode === 'fixed' ? 'selected' : ''}>Fixed</option>
+                            <option value="off" ${ext.jb_mode === 'off' ? 'selected' : ''}>Off</option>
+                        </select>
+                    </td>
                     <td class="py-2.5 px-3 text-end">
                         <button onclick="saveSingleExtensionDsp('${ext.extension}')" class="config-action-btn config-action-btn--primary py-1 px-2 text-[11px]">
                             <span>Save</span>
@@ -10622,7 +10904,8 @@
                 denoise: document.getElementById(`ext_denoise_${ext}`)?.value,
                 vad_gate: document.getElementById(`ext_gate_${ext}`)?.value,
                 vad_db: document.getElementById(`ext_vdb_${ext}`)?.value,
-                agc: document.getElementById(`ext_agc_${ext}`)?.value
+                agc: document.getElementById(`ext_agc_${ext}`)?.value,
+                jb_mode: document.getElementById(`ext_jb_mode_${ext}`)?.value
             };
             try {
                 const res = await fetch(`/api/config/audio/extensions/${ext}`, {
@@ -12023,17 +12306,23 @@
                     const proxyUrl = `/api/config/ipscan/proxy/${encodeURIComponent(h.ip)}/${encodeURIComponent(webPort)}/`;
 
                     webServerHtml = `
-                        <div class="flex flex-col gap-1 max-w-[260px]">
-                            <button type="button" onclick="openDeviceWebConsole('${h.ip}', ${webPort}, '${escapeHtml(h.httpTitle || h.httpServerName || h.ip)}')" class="inline-flex items-center gap-1.5 font-bold text-xs text-cyan-400 hover:text-cyan-300 transition text-left cursor-pointer truncate group" title="<%= isRtl ? 'فتح في المتصفح المدمج (بروكسي مباشر)' : 'Open in Built-in Browser Console (Direct Proxy)' %>">
-                                <svg class="w-3.5 h-3.5 text-cyan-400 shrink-0 group-hover:scale-110 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
-                                <span class="truncate underline decoration-cyan-500/40 underline-offset-2">${escapeHtml(h.httpTitle || h.httpServerName)}</span>
-                            </button>
-                            <div class="flex items-center gap-2">
-                                ${h.httpServer ? `<span class="text-[10px] font-mono text-[var(--text-muted)] truncate" title="${escapeHtml(h.httpServer)}">${escapeHtml(h.httpServer)}</span>` : ''}
-                                <a href="${proxyUrl}" target="_blank" class="text-[10px] text-cyan-400/80 hover:text-cyan-300 font-mono hover:underline inline-flex items-center gap-0.5" title="<%= isRtl ? 'فتح في نافذة متصفح منفصلة' : 'Open in separate tab' %>">
-                                    <span>[tab ↗]</span>
+                        <div class="flex min-w-0 max-w-[280px] flex-col gap-1.5">
+                            <div class="flex min-w-0 items-center gap-1.5">
+                                <a href="${proxyUrl}" target="_blank" rel="noopener" onclick="if (window.openDeviceWebConsole && openDeviceWebConsole('${h.ip}', ${webPort}, '${escapeHtml(h.httpTitle || h.httpServerName || h.ip)}')) return false; return true;" class="group inline-flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-cyan-500/30 bg-cyan-500/[0.08] px-2.5 py-1.5 text-left transition hover:border-cyan-400/60 hover:bg-cyan-500/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60" title="<%= isRtl ? 'فتح في المتصفح المدمج (بروكسي مباشر)' : 'Open in Built-in Browser Console (Direct Proxy)' %>">
+                                    <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-cyan-400/25 bg-cyan-500/10 text-cyan-300 transition group-hover:bg-cyan-500/20 group-hover:text-cyan-200">
+                                        <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+                                    </span>
+                                    <span class="min-w-0 flex-1">
+                                        <span class="block truncate text-[11px] font-extrabold tracking-tight text-cyan-200 transition group-hover:text-cyan-100">${escapeHtml(h.httpTitle || h.httpServerName)}</span>
+                                        <span class="block truncate font-mono text-[9px] font-medium text-cyan-400/60">${escapeHtml(h.ip)}:${webPort}</span>
+                                    </span>
+                                    <svg class="h-3.5 w-3.5 shrink-0 text-cyan-400/50 transition group-hover:translate-x-0.5 group-hover:text-cyan-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                                </a>
+                                <a href="${proxyUrl}" target="_blank" rel="noopener" class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[var(--border-primary)] bg-[var(--bg-card)] text-[var(--text-muted)] transition hover:border-cyan-500/40 hover:bg-cyan-500/10 hover:text-cyan-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60" title="<%= isRtl ? 'فتح في نافذة متصفح منفصلة' : 'Open in separate tab' %>" aria-label="<%= isRtl ? 'فتح في نافذة متصفح منفصلة' : 'Open in separate tab' %>">
+                                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
                                 </a>
                             </div>
+                            ${h.httpServer ? `<div class="flex min-w-0 items-center gap-1.5 px-1"><span class="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400/80 shadow-[0_0_6px_rgba(52,211,153,.6)]"></span><span class="truncate font-mono text-[9px] text-[var(--text-muted)]" title="${escapeHtml(h.httpServer)}">${escapeHtml(h.httpServer)}</span></div>` : ''}
                         </div>
                     `;
                 }
@@ -12072,10 +12361,10 @@
 
                 const webPort = h.httpPort || (h.ports.find(p => [80, 443, 8080, 8443].includes(p.port))?.port);
                 const webConsoleBtn = webPort ? `
-                    <button type="button" onclick="openDeviceWebConsole('${h.ip}', ${webPort}, '${escapeHtml(h.httpTitle || h.httpServerName || h.ip)}')" class="px-2 py-1 text-[11px] font-bold rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 transition cursor-pointer flex items-center gap-1 shadow-xs" title="<%= isRtl ? 'فتح في المتصفح المدمج عبر البروكسي الداخلي' : 'Open in Built-in Browser Console' %>">
+                    <a href="/api/config/ipscan/proxy/${encodeURIComponent(h.ip)}/${webPort}/" target="_blank" rel="noopener" onclick="if (window.openDeviceWebConsole && openDeviceWebConsole('${h.ip}', ${webPort}, '${escapeHtml(h.httpTitle || h.httpServerName || h.ip)}')) return false; return true;" class="px-2 py-1 text-[11px] font-bold rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 transition cursor-pointer flex items-center gap-1 shadow-xs" title="<%= isRtl ? 'فتح في المتصفح المدمج عبر البروكسي الداخلي' : 'Open in Built-in Browser Console' %>">
                         <svg class="w-3 h-3 text-cyan-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
                         <span><%= isRtl ? 'المتصفح' : 'Console' %></span>
-                    </button>
+                    </a>
                 ` : '';
 
                 html += `
@@ -12145,7 +12434,7 @@
             const newTabBtn = document.getElementById('deviceWebConsoleNewTabBtn');
             const loader = document.getElementById('deviceWebConsoleLoading');
 
-            if (!modal || !iframe) return;
+            if (!modal || !iframe) return false;
 
             const cleanPort = port || 80;
             const proxyUrl = `/api/config/ipscan/proxy/${encodeURIComponent(ip)}/${encodeURIComponent(cleanPort)}/`;
@@ -12158,13 +12447,20 @@
 
             iframe.src = proxyUrl;
             modal.classList.remove('hidden');
+            modal.style.setProperty('display', 'flex', 'important');
+            modal.setAttribute('aria-hidden', 'false');
+            return true;
         }
 
         function closeDeviceWebConsoleModal() {
             const modal = document.getElementById('deviceWebConsoleModal');
             const iframe = document.getElementById('deviceWebConsoleIframe');
             if (iframe) iframe.src = 'about:blank';
-            if (modal) modal.classList.add('hidden');
+            if (modal) {
+                modal.classList.add('hidden');
+                modal.style.setProperty('display', 'none', 'important');
+                modal.setAttribute('aria-hidden', 'true');
+            }
         }
 
         function reloadDeviceWebConsole() {

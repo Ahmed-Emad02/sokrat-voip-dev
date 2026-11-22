@@ -426,17 +426,16 @@ CREATE TABLE IF NOT EXISTS `stt_settings` (
   `id` INT PRIMARY KEY DEFAULT 1,
   `enabled` TINYINT(1) DEFAULT 1,
   `engine` VARCHAR(32) DEFAULT 'cloud_api',
-  `provider` VARCHAR(32) DEFAULT 'munsit',
+  `provider` VARCHAR(32) DEFAULT 'elevenlabs',
   `api_key` TEXT DEFAULT NULL,
-  `api_url` VARCHAR(255) DEFAULT 'https://api.munsit.com/api/v1/audio/transcribe',
-  `model_name` VARCHAR(64) DEFAULT 'munsit',
+  `api_url` VARCHAR(255) DEFAULT 'https://api.elevenlabs.io/v1/speech-to-text',
+  `model_name` VARCHAR(64) DEFAULT 'scribe_v3',
   `language` VARCHAR(10) DEFAULT 'ar',
   `prompt` TEXT DEFAULT NULL,
   `transcribe_calls` TINYINT(1) DEFAULT 0,
   `transcribe_voicemails` TINYINT(1) DEFAULT 0,
   `min_duration_sec` INT DEFAULT 3,
   `max_concurrency` INT DEFAULT 1,
-  `pause_during_calls` TINYINT(1) DEFAULT 1,
   `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

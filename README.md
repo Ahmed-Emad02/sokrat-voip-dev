@@ -97,6 +97,7 @@ curl -fsSL https://raw.githubusercontent.com/Ahmed-Emad02/sokrat-voip-dev/main/u
 | 📢 **Smart Audio Studio** | Built-in sound studio: upload MP3, WAV, OGG, AAC, or FLAC up to 50 MB; auto-converts via static `ffmpeg` to Asterisk-compatible 8000 Hz / 16-bit mono PCM WAV and registers directly in Issabel IVR. |
 | 🤖 **AI Speech-to-Text** | Background transcription daemon transcribing recorded calls and indexing transcripts for instant full-text search across the CDR database. |
 | 🎯 **Outbound Campaign Dialer** | Create progressive/predictive calling campaigns, import contact lists from Excel/CSV, track lead attempts, agent allocations, and export call disposition reports. |
+| 🧭 **Visual PBX Canvas** | Drag-and-drop graph editor for inbound/outbound routes, IVRs, ring groups, queues, announcements, time conditions, time groups, music-on-hold categories, extensions, and trunks. Changes are drafted visually and applied through the existing PBX APIs. |
 | 🌗 **Dark / Light & Arabic RTL** | Full bilingual support with automated RTL layout for Arabic (`Cairo` typography) and dark/light OLED theme switching saved in local storage. |
 
 ---

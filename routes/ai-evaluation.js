@@ -80,7 +80,7 @@ function serialiseProfile(row) {
     };
 }
 
-module.exports = function createAiEvaluationRouter({ pool, encrypt, decrypt, isSuperAdmin, hasRootAccess }) {
+module.exports = function createAiEvaluationRouter({ pool, encrypt, decrypt }) {
     const router = express.Router();
 
     // AI surfaces are root-only. Deliberately do not accept super-admin
@@ -130,7 +130,6 @@ module.exports = function createAiEvaluationRouter({ pool, encrypt, decrypt, isS
     }
 
     async function syncAgentAstdb(agent) {
-        const prefix = `AI_AGENT ${agent.id}`;
         await runAsterisk(`database put AI_AGENT ${agent.id}/sip_endpoint ${agent.sip_endpoint}`);
         await runAsterisk(`database put AI_AGENT ${agent.id}/direction ${agent.direction}`);
         await runAsterisk(`database put AI_AGENT ${agent.id}/active ${agent.active ? '1' : '0'}`);
@@ -204,22 +203,6 @@ module.exports = function createAiEvaluationRouter({ pool, encrypt, decrypt, isS
             await pool.query('UPDATE `asterisk`.`ai_agents` SET active = 0 WHERE id = ?', [id]);
             await runAsterisk(`database deltree AI_AGENT ${id}`);
             res.json({ success: true, message: 'AI agent deactivated.' });
-        } catch (err) {
-            res.status(500).json({ success: false, error: err.message });
-        }
-    });
-
-    router.get('/sessions', gate, async (req, res) => {
-        try {
-            const limit = int(req.query.limit, 100, 1, 500);
-            const [rows] = await pool.query(
-                `SELECT s.*, a.name AS agent_name
-                 FROM \`asteriskcdrdb\`.\`ai_sessions\` s
-                 LEFT JOIN \`asterisk\`.\`ai_agents\` a ON a.id = s.agent_id
-                 ORDER BY s.id DESC LIMIT ?`,
-                [limit]
-            );
-            res.json({ success: true, sessions: rows });
         } catch (err) {
             res.status(500).json({ success: false, error: err.message });
         }
@@ -380,6 +363,105 @@ module.exports = function createAiEvaluationRouter({ pool, encrypt, decrypt, isS
             const id = int(req.params.id, 0, 1, Number.MAX_SAFE_INTEGER);
             await pool.query('UPDATE `asterisk`.`evaluation_profiles` SET active = 0 WHERE id = ?', [id]);
             res.json({ success: true, message: 'Profile deactivated.' });
+        } catch (err) {
+            res.status(500).json({ success: false, error: err.message });
+        }
+    });
+
+    // Unified voice review: recent call transcripts/evaluations and voicemail
+    // transcripts in one payload for the quality workspace.
+    router.get('/review', gate, async (req, res) => {
+        try {
+            const limit = int(req.query.limit, 50, 1, 100);
+            const [callRows] = await pool.query(`
+                SELECT 'call' AS kind, t.id AS transcription_id, t.uniqueid, t.status,
+                       t.transcript, t.duration_sec, t.created_at, t.completed_at,
+                       t.engine, t.model_used, t.error_message,
+                       c.calldate, c.src, c.dst,
+                       e.id AS evaluation_id, e.overall_score, e.pass, e.profile_id,
+                       p.name AS profile_name
+                FROM \`asteriskcdrdb\`.\`cdr_transcriptions\` t
+                LEFT JOIN \`asteriskcdrdb\`.\`cdr\` c ON c.uniqueid = t.uniqueid
+                LEFT JOIN \`asteriskcdrdb\`.\`call_evaluations\` e ON e.id = (
+                    SELECT MAX(e2.id) FROM \`asteriskcdrdb\`.\`call_evaluations\` e2
+                    WHERE e2.target_type = 'call' AND e2.uniqueid = t.uniqueid
+                )
+                LEFT JOIN \`asterisk\`.\`evaluation_profiles\` p ON p.id = e.profile_id
+                ORDER BY t.id DESC LIMIT ?
+            `, [limit]);
+            const [untranscribedRows] = await pool.query(`
+                SELECT 'call' AS kind, NULL AS transcription_id, c.uniqueid, 'none' AS status,
+                       '' AS transcript, MAX(c.duration) AS duration_sec,
+                       NULL AS created_at, NULL AS completed_at, NULL AS engine,
+                       NULL AS model_used, NULL AS error_message,
+                       MAX(c.calldate) AS calldate, MAX(c.src) AS src, MAX(c.dst) AS dst,
+                       NULL AS evaluation_id, NULL AS overall_score, NULL AS pass,
+                       NULL AS profile_id, NULL AS profile_name
+                FROM \`asteriskcdrdb\`.\`cdr\` c
+                LEFT JOIN \`asteriskcdrdb\`.\`cdr_transcriptions\` t ON t.uniqueid = c.uniqueid
+                WHERE c.recordingfile IS NOT NULL AND c.recordingfile <> ''
+                  AND c.calldate >= NOW() - INTERVAL 30 DAY
+                  AND t.id IS NULL
+                GROUP BY c.uniqueid
+                ORDER BY calldate DESC
+                LIMIT ?
+            `, [limit]);
+            const [vmRows] = await pool.query(`
+                SELECT 'voicemail' AS kind, v.id AS transcription_id, v.mailbox, v.msg_file,
+                       v.callerid, v.status, v.transcript, v.created_at, v.completed_at,
+                       v.engine, v.model_used, v.error_message,
+                       e.id AS evaluation_id, e.overall_score, e.pass, e.profile_id,
+                       p.name AS profile_name
+                FROM \`asteriskcdrdb\`.\`voicemail_transcriptions\` v
+                LEFT JOIN \`asteriskcdrdb\`.\`call_evaluations\` e ON e.id = (
+                    SELECT MAX(e2.id) FROM \`asteriskcdrdb\`.\`call_evaluations\` e2
+                    WHERE e2.target_type = 'voicemail'
+                      AND e2.target_id = CONCAT(v.mailbox, '/', v.msg_file)
+                )
+                LEFT JOIN \`asterisk\`.\`evaluation_profiles\` p ON p.id = e.profile_id
+                ORDER BY v.id DESC LIMIT ?
+            `, [limit]);
+            const [evalStats] = await pool.query(`
+                SELECT COUNT(*) AS total,
+                       ROUND(AVG(overall_score), 1) AS avg_score,
+                       ROUND(SUM(pass = 1) / NULLIF(COUNT(*), 0) * 100, 1) AS pass_rate,
+                       SUM(critical_fail = 1) AS critical_fails
+                FROM \`asteriskcdrdb\`.\`call_evaluations\`
+            `);
+            const [vmStats] = await pool.query(`
+                SELECT COUNT(*) AS total,
+                       SUM(status = 'completed') AS completed,
+                       SUM(status IN ('pending', 'processing')) AS queued
+                FROM \`asteriskcdrdb\`.\`voicemail_transcriptions\`
+            `);
+            // A CDR uniqueid can have several rows (channels). Keep one row per
+            // transcription id so the review queue does not show duplicates.
+            const seen = new Set();
+            const items = [...callRows, ...untranscribedRows, ...vmRows]
+                .filter(item => {
+                    const key = item.kind + ':' + (item.transcription_id ?? item.uniqueid);
+                    if (seen.has(key)) return false;
+                    seen.add(key);
+                    return true;
+                })
+                .sort((a, b) => {
+                    const at = new Date(a.calldate || a.completed_at || a.created_at || 0).getTime();
+                    const bt = new Date(b.calldate || b.completed_at || b.created_at || 0).getTime();
+                    return bt - at;
+                });
+            res.json({
+                success: true,
+                items,
+                stats: {
+                    evaluations: Number(evalStats?.[0]?.total || 0),
+                    avg_score: evalStats?.[0]?.avg_score ?? null,
+                    pass_rate: evalStats?.[0]?.pass_rate ?? null,
+                    critical_fails: Number(evalStats?.[0]?.critical_fails || 0),
+                    voicemails: Number(vmStats?.[0]?.total || 0),
+                    voicemails_completed: Number(vmStats?.[0]?.completed || 0),
+                    voicemails_queued: Number(vmStats?.[0]?.queued || 0)
+                }
+            });
         } catch (err) {
             res.status(500).json({ success: false, error: err.message });
         }
@@ -564,31 +646,6 @@ module.exports = function createAiEvaluationRouter({ pool, encrypt, decrypt, isS
                 LIMIT 100`
             );
             res.json({ success: true, profiles, agents });
-        } catch (err) {
-            res.status(500).json({ success: false, error: err.message });
-        }
-    });
-
-    router.get('/transcripts/:uniqueid', gate, async (req, res) => {
-        try {
-            const uniqueid = string(req.params.uniqueid, 64);
-            const [rows] = await pool.query(
-                'SELECT * FROM `asteriskcdrdb`.`cdr_transcriptions` WHERE uniqueid = ? ORDER BY id DESC LIMIT 1',
-                [uniqueid]
-            );
-            const transcript = rows?.[0] || null;
-            if (!transcript) return res.status(404).json({ success: false, error: 'Transcript not found.' });
-            const [segments] = await pool.query(
-                `SELECT seq, speaker, start_ms, end_ms, text, confidence
-                 FROM \`asteriskcdrdb\`.\`transcript_segments\`
-                 WHERE transcription_type = 'call' AND transcription_id = ? ORDER BY seq ASC`,
-                [transcript.id]
-            );
-            const [evaluations] = await pool.query(
-                'SELECT id, profile_id, overall_score, pass, critical_fail, summary, created_at FROM `asteriskcdrdb`.`call_evaluations` WHERE uniqueid = ? ORDER BY id DESC',
-                [uniqueid]
-            );
-            res.json({ success: true, transcript, segments, evaluations });
         } catch (err) {
             res.status(500).json({ success: false, error: err.message });
         }

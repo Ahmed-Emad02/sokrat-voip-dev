@@ -136,7 +136,7 @@ async function scanAndEnqueueUntranscribed() {
                 WHERE c.recordingfile IS NOT NULL
                   AND c.recordingfile != ''
                   AND (c.billsec >= 3 OR c.duration >= 3)
-                  AND c.calldate >= NOW() - INTERVAL 7 DAY
+                  AND c.calldate >= NOW() - INTERVAL 30 DAY
                   AND t.id IS NULL
                 GROUP BY c.uniqueid
                 ORDER BY latest_calldate DESC

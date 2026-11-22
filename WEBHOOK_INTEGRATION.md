@@ -84,6 +84,7 @@ Open the dashboard as a SuperAdmin and go to **Settings → Webhooks**.
 | **Enabled** | Master switch. When off, no webhooks are sent even if a URL is set. |
 | **Webhook URL** | Absolute `http://` or `https://` endpoint. Query strings are preserved. |
 | **Signing Secret** | Optional. Enables the `X-Sokrat-Signature` header. |
+| **SIP/PJSIP call lifecycle events** | Optional. Sends `call_ringing`, `call_answered`, and `call_ended` for inbound SIP/PJSIP trunk calls to the same URL. |
 
 Click **Test Webhook** before enabling. It sends a real request with `event: "test"`
 so you can confirm connectivity, TLS, and signature handling without waiting for a
@@ -600,18 +601,52 @@ curl -X POST http://<sokrat-host>:8080/api/settings/webhook/test -b cookie.txt \
 
 ---
 
+## SIP/PJSIP call lifecycle events
+
+When **SIP/PJSIP call lifecycle events** is enabled in the webhook settings, the
+same signed URL receives three additional events for inbound SIP/PJSIP trunk calls:
+
+```json
+{
+  "event": "call_ringing",
+  "source": "sip-trunk",
+  "direction": "inbound",
+  "uniqueid": "1727440000.12",
+  "linkedid": "1727440000.12",
+  "channel": "PJSIP/trunk-00000001",
+  "caller_number": "+201011719380",
+  "called_number": "+201156804841",
+  "extension": null,
+  "timestamp": "2026-09-29T10:45:56.931Z"
+}
+```
+
+The sequence is `call_ringing` → `call_answered` → `call_ended`. The ended payload
+adds `duration_seconds` and `cause`. Number fields are forwarded verbatim, just
+like the GSM inbound event. There is one lifecycle per uniqueid; transfers and
+bridges do not create duplicate lifecycle events.
+
+For a read-only HTTP stream instead of a webhook, use:
+
+```text
+GET /api/integrations/v1/events
+X-API-Key: <key with live:read>
+```
+
+---
+
 ## Known limitations
 
-- **Inbound GSM calls only.** Calls arriving on SIP trunks, the web softphone, or
-  Issabel's internal extensions do not fire this webhook.
+- **GSM arrival events and SIP/PJSIP trunk lifecycle events only.** The web
+  softphone and internal extension-to-extension calls do not emit this webhook.
 - **No retries.** If your CRM is briefly unavailable, that notification is lost.
   Build a fallback in your CRM — for example, reconcile against Sokrat's call history
   API on a schedule.
 - **Caller ID may be withheld** by the carrier, yielding an empty `caller_number`.
 - **Ring extensions are static routing hints.** IVR/time-condition/queue destinations return `[]`; the actual live ringing set may differ after a transfer or dynamic route.
-- **No hangup or answered events.** This webhook signals arrival only. If you need
-  call outcome (answered, duration, hangup cause), use the CDR/call-history API
-  instead.
+- **GSM arrival events are arrival-only.** The optional SIP/PJSIP lifecycle stream
+  adds answered and ended events, but GSM calls still use the CDR/call-history API
+  for outcome and duration.
 - **One call, one event.** If the same call is transferred or bridged between
   extensions, you still receive a single notification for the original dongle
   arrival.

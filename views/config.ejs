@@ -1062,7 +1062,6 @@ function isTabAllowed(tabName) {
                 <span class="subsidebar-text truncate font-extrabold"><%= isRtl ? 'مخطط الإعدادات' : 'Config Diagram' %></span>
             </button>
             <% } %>
-
             <!-- Minimize / Maximize Config Sub Sidebar Button for Desktop -->
             <button id="toggleConfigSubSidebarBtn" type="button" onclick="toggleConfigSubSidebar()" class="hidden md:flex items-center justify-center w-full py-2 px-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--accent-color)] hover:bg-[var(--bg-hover)] transition-all cursor-pointer" title="<%= isRtl ? 'تصغير القائمة' : 'Collapse Sub Sidebar' %>">
                 <svg id="configSubCollapseIcon" class="w-4 h-4 shrink-0 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
@@ -1436,31 +1435,6 @@ function isTabAllowed(tabName) {
         <!-- TAB 3: SYSTEM RECORDINGS MANAGEMENT -->
         <% if (isTabAllowed('recordings')) { %>
         <div id="section-recordings" class="tab-section hidden space-y-6">
-            <!-- Local STT Engine Info Banner in Recordings -->
-            <div class="config-card p-4 flex flex-col sm:flex-row items-center justify-between gap-4 border border-blue-500/20 bg-blue-500/5 mb-6">
-                <div class="flex items-center gap-3">
-                    <div class="w-9 h-9 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center shrink-0">
-                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0-4a3 3 0 003-3V7a3 3 0 10-6 0v8a3 3 0 003 3z"/></svg>
-                    </div>
-                    <div>
-                        <div class="flex items-center gap-2">
-                            <h3 class="text-xs font-bold text-[var(--text-primary)]"><%= isRtl ? 'محرك التفريغ الصوتي المحلي (Local Whisper STT) مفعّل' : 'Local Whisper STT Engine Active' %></h3>
-                            <span class="px-2 py-0.5 text-[9px] font-mono font-bold rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Offline 100%</span>
-                        </div>
-                        <p class="text-[11px] text-[var(--text-muted)] mt-0.5"><%= isRtl ? 'يتم تفريغ المكالمات والبريد الصوتي محلياً على السنترال بالعامية المصرية وبدون إرسال الصوت للخارج.' : 'Calls and voicemails are transcribed locally on the PBX in Egyptian Arabic without cloud latency.' %></p>
-                    </div>
-                </div>
-                <div class="flex items-center gap-2 shrink-0">
-                    <button type="button" onclick="switchTab('stt')" class="config-action-btn config-action-btn--primary">
-                        <span><%= isRtl ? 'عرض لوحة STT' : 'Open STT Tab' %></span>
-                    </button>
-                    <button type="button" onclick="openSttApiKeyModal()" class="config-action-btn config-action-btn--secondary">
-                        <span><%= isRtl ? 'إعدادات المحرك' : 'Configure Engine' %></span>
-                    </button>
-                </div>
-            </div>
-
-
             <!-- 1. Upload New Recording Card (Full Width) -->
             <div class="config-card p-6">
                 <div class="mb-5 pb-3 border-b border-[var(--border-primary)] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
@@ -1552,9 +1526,7 @@ function isTabAllowed(tabName) {
 
         <!-- 12. SPEECH-TO-TEXT (STT) TAB SECTION -->
         <% if (isTabAllowed('stt')) { %>
-        <!-- 12. SPEECH-TO-TEXT (STT) TAB SECTION -->
         <div id="section-stt" class="tab-section hidden space-y-6">
-            <!-- Local / Cloud Speech-to-Text Transcription Overview Card -->
             <div class="config-card overflow-hidden">
                 <div class="p-5 sm:p-6 border-b border-[var(--border-primary)] flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                     <div class="flex items-start gap-3 min-w-0">
@@ -1566,10 +1538,16 @@ function isTabAllowed(tabName) {
                                 <h2 class="text-lg font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'التفريغ الصوتي بالذكاء الاصطناعي (STT)' : 'Cloud Speech-to-Text (STT)' %></h2>
                                 <span id="sttOverviewStatusBadge" class="px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">Cloud AI</span>
                             </div>
-                            <p class="text-[11px] text-[var(--text-muted)] mt-1"><%= isRtl ? 'تفريغ المكالمات والبريد الصوتي عبر واجهات الذكاء الاصطناعي السحابية (منصت Munsit، Groq، OpenAI، Deepgram).' : 'Call and voicemail transcription via Cloud AI APIs (Munsit, Groq, OpenAI, Deepgram).' %></p>
+                            <p class="text-[11px] text-[var(--text-muted)] mt-1"><%= isRtl ? 'تفريغ المكالمات والبريد الصوتي عبر ElevenLabs Scribe v3 (العربية/العامية المصرية مع تبديل اللغة الإنجليزية).' : 'Call and voicemail transcription via ElevenLabs Scribe v3 (Arabic/Egyptian with English code-switching).' %></p>
                         </div>
                     </div>
                     <div class="flex items-center gap-2 self-start sm:self-auto shrink-0 flex-wrap">
+                        <% if (typeof isRoot !== 'undefined' && isRoot) { %>
+                        <a href="/quality?lang=<%= currentLang %>" class="config-action-btn config-action-btn--secondary no-underline">
+                            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2z"/></svg>
+                            <span><%= isRtl ? 'فتح المراجعة الصوتية' : 'Open Voice Review' %></span>
+                        </a>
+                        <% } %>
                         <button type="button" onclick="scanAndTranscribeQueue()" class="config-action-btn config-action-btn--secondary">
                             <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
                             <span><%= isRtl ? 'فحص السجلات غير المفرغة' : 'Scan & Queue Audio' %></span>
@@ -1603,15 +1581,8 @@ function isTabAllowed(tabName) {
                         </div>
                     </div>
                 </div>
-        <% } %>
-
-        <!-- TAB 4: TRUNKS MANAGEMENT -->
-        <% if (isTabAllowed('trunks')) { %>
-
-
             </div>
 
-            <!-- Architecture & Safe Operation Telemetry Card -->
             <div class="config-card p-5 sm:p-6 space-y-4">
                 <div class="flex items-center justify-between border-b border-[var(--border-primary)] pb-3">
                     <div class="flex items-center gap-2.5">
@@ -1623,24 +1594,23 @@ function isTabAllowed(tabName) {
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
                     <div class="p-3 rounded-xl bg-[var(--bg-card)] border border-[var(--border-primary)]">
                         <span class="text-[10px] text-[var(--text-muted)] font-bold uppercase block mb-1"><%= isRtl ? 'محرك المعالجة' : 'Inference Engine' %></span>
-                        <span class="font-bold font-mono text-[var(--text-primary)]">Munsit / Whisper Cloud API</span>
+                        <span class="font-bold font-mono text-[var(--text-primary)]">ElevenLabs Scribe v3</span>
                     </div>
                     <div class="p-3 rounded-xl bg-[var(--bg-card)] border border-[var(--border-primary)]">
                         <span class="text-[10px] text-[var(--text-muted)] font-bold uppercase block mb-1"><%= isRtl ? 'دعم اللهجة المصرية' : 'Dialect Support' %></span>
-                        <span class="font-bold font-mono text-[var(--text-primary)]">Egyptian Arabic AI</span>
-                    </div>
-                    <div class="p-3 rounded-xl bg-[var(--bg-card)] border border-[var(--border-primary)]">
-                        <span class="text-[10px] text-[var(--text-muted)] font-bold uppercase block mb-1"><%= isRtl ? 'حماية المكالمات النشطة' : 'Live Call Priority' %></span>
-                        <span class="font-bold text-emerald-400"><%= isRtl ? 'إيقاف التفريغ أثناء المكالمات' : 'Auto-Pause during Calls' %></span>
+                        <span class="font-bold font-mono text-[var(--text-primary)]">Arabic + English code-switching</span>
                     </div>
                     <div class="p-3 rounded-xl bg-[var(--bg-card)] border border-[var(--border-primary)]">
                         <span class="text-[10px] text-[var(--text-muted)] font-bold uppercase block mb-1"><%= isRtl ? 'أولوية الطابور' : 'Queue Strategy' %></span>
-                        <span class="font-bold text-blue-400"><%= isRtl ? 'البريد الصوتي أولاً (أقصى 20)' : 'Voicemail First (Max 20)' %></span>
+                        <span class="font-bold text-emerald-400"><%= isRtl ? 'البريد الصوتي أولاً' : 'Voicemail First' %></span>
+                    </div>
+                    <div class="p-3 rounded-xl bg-[var(--bg-card)] border border-[var(--border-primary)]">
+                        <span class="text-[10px] text-[var(--text-muted)] font-bold uppercase block mb-1"><%= isRtl ? 'أولوية المكالمات النشطة' : 'Live Call Priority' %></span>
+                        <span class="font-bold text-blue-400"><%= isRtl ? 'المكالمات النشطة أولاً' : 'Active Calls First' %></span>
                     </div>
                 </div>
             </div>
 
-                        <!-- On-Demand Call & Voicemail Transcription Tool -->
             <div class="config-card p-5 sm:p-6 space-y-4">
                 <div class="flex items-center justify-between border-b border-[var(--border-primary)] pb-3">
                     <div class="flex items-center gap-2.5">
@@ -1649,7 +1619,7 @@ function isTabAllowed(tabName) {
                         </div>
                         <div>
                             <h3 class="text-xs font-extrabold uppercase tracking-wider text-[var(--text-primary)]"><%= isRtl ? 'تفريغ فوري عند الطلب (On-Demand Transcription)' : 'On-Demand Instant Transcription' %></h3>
-                            <p class="text-[11px] text-[var(--text-muted)] mt-0.5"><%= isRtl ? 'قم بإدخال معرّف المكالمة (Call Unique ID) لتفريغها فورياً عند الحاجة دون استهلاك تلقائي للرصيد.' : 'Transcribe any specific call immediately on-demand by Unique ID without auto-consuming credits.' %></p>
+                            <p class="text-[11px] text-[var(--text-muted)] mt-0.5"><%= isRtl ? 'قم بإدخال معرّف المكالمة (Call Unique ID) لتفريغها فوراً عند الحاجة دون استهلاك تلقائي للرصيد.' : 'Transcribe any specific call immediately on-demand by Unique ID without auto-consuming credits.' %></p>
                         </div>
                     </div>
                 </div>
@@ -1662,7 +1632,6 @@ function isTabAllowed(tabName) {
                 </div>
             </div>
 
-            <!-- Recent Transcriptions Table Card -->
             <div class="config-card overflow-hidden">
                 <div class="p-5 sm:p-6 border-b border-[var(--border-primary)] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
@@ -1670,7 +1639,7 @@ function isTabAllowed(tabName) {
                             <h3 class="text-sm font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'أحدث التسجيلات المفرغة' : 'Recent Transcriptions' %></h3>
                             <span id="sttRecentCountBadge" class="px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">Live Queue</span>
                         </div>
-                        <p class="text-[11px] text-[var(--text-muted)] mt-1"><%= isRtl ? 'عرض أحدث المكالمات المفرغة محلياً بنموذج Whisper بالعامية المصرية.' : 'Live list of calls and audio transcribed locally on the PBX in Egyptian Arabic.' %></p>
+                        <p class="text-[11px] text-[var(--text-muted)] mt-1"><%= isRtl ? 'أحدث المكالمات المفرغة سحابياً. تظهر نصوص البريد الصوتي في صفحة المراجعة الصوتية.' : 'Recent calls transcribed by the cloud provider. Voicemail transcripts appear in Voice Review.' %></p>
                     </div>
                     <div class="flex items-center gap-2">
                         <input type="text" id="sttTranscriptSearchInput" name="sttTranscriptSearchInput" oninput="filterRecentTranscripts()" placeholder="<%= isRtl ? 'بحث في النص...' : 'Search transcripts...' %>" class="config-input text-xs py-1.5 px-3 w-48 font-normal" aria-label="Search transcripts">
@@ -1688,7 +1657,7 @@ function isTabAllowed(tabName) {
                                 <th class="py-3 px-4 w-32"><%= isRtl ? 'المتصل -> المستقبل' : 'Src -> Dst' %></th>
                                 <th class="py-3 px-4 w-24 text-center"><%= isRtl ? 'المدة' : 'Duration' %></th>
                                 <th class="py-3 px-4 w-28 text-center"><%= isRtl ? 'حالة التفريغ' : 'Status' %></th>
-                                <th class="py-3 px-4"><%= isRtl ? 'نص المكالمة (المفرغ محلياً)' : 'Local Transcript' %></th>
+                                <th class="py-3 px-4"><%= isRtl ? 'نص المكالمة' : 'Transcript' %></th>
                             </tr>
                         </thead>
                         <tbody id="sttRecentTableBody" class="divide-y divide-[var(--border-primary)] text-xs font-medium text-[var(--text-primary)]">
@@ -1697,9 +1666,11 @@ function isTabAllowed(tabName) {
                     </table>
                 </div>
             </div>
-
         </div>
+        <% } %>
 
+        <!-- TAB 4: TRUNKS MANAGEMENT -->
+        <% if (isTabAllowed('trunks')) { %>
         <div id="section-trunks" class="tab-section hidden">
             <div class="config-card p-6">
                 <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
@@ -2459,22 +2430,6 @@ function isTabAllowed(tabName) {
                     </div>
                 </div>
             </div>
-            <!-- STT Link in Modem Tab -->
-            <div class="p-4 rounded-xl border border-blue-500/20 bg-blue-500/5 flex flex-col sm:flex-row items-center justify-between gap-3 mb-6">
-                <div class="flex items-center gap-3">
-                    <div class="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center shrink-0">
-                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0-4a3 3 0 003-3V7a3 3 0 10-6 0v8a3 3 0 003 3z"/></svg>
-                    </div>
-                    <div>
-                        <h4 class="text-xs font-bold text-[var(--text-primary)]"><%= isRtl ? 'محرك التفريغ الصوتي المحلي (Local Whisper STT)' : 'Local Whisper Speech-to-Text' %></h4>
-                        <p class="text-[11px] text-[var(--text-muted)]"><%= isRtl ? 'تم نقل لوحة التفريغ الصوتي الشاملة إلى تبويب مخصص ومباشر في الشريط الجانبي والعلوي.' : 'The comprehensive STT control dashboard is available directly in the dedicated STT tab.' %></p>
-                    </div>
-                </div>
-                <button type="button" onclick="switchTab('stt')" class="config-action-btn config-action-btn--primary shrink-0">
-                    <span><%= isRtl ? 'فتح تبويب STT' : 'Open STT Tab' %></span>
-                </button>
-            </div>
-
             <!-- RTCP Real-Time Audio Diagnostics Panel -->
             <div class="config-card overflow-hidden">
                 <div class="p-5 sm:p-6 border-b border-[var(--border-primary)]">
@@ -2595,6 +2550,66 @@ function isTabAllowed(tabName) {
                         <h4 class="text-xs font-bold text-white mb-0.5"><%= isRtl ? 'مخزن تقليل الارتعاش (Jitter)' : 'Adaptive Jitter Buffer' %></h4>
                         <p class="text-[10px] text-[var(--text-muted)]"><%= isRtl ? 'إعادة ترتيب الحزم الصوتية لضمان سلاسة المكالمة دون تقطيع.' : 'Prevents packet jitter and micro-burst packet loss.' %></p>
                     </div>
+                </div>
+            </div>
+
+            <!-- Global Dialplan Jitter Buffer Defaults -->
+            <div class="config-card">
+                <div class="p-4 sm:p-5 border-b border-[var(--border-primary)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center font-bold text-xs">JB</div>
+                        <div>
+                            <h3 class="text-sm font-bold text-white"><%= isRtl ? 'الإعدادات الافتراضية لمخزن ارتعاش الحزم في خطة الاتصال (JITTERBUFFER)' : 'Global Dialplan Jitter Buffer Defaults (JITTERBUFFER)' %></h3>
+                            <p class="text-[10px] text-[var(--text-muted)]"><%= isRtl ? 'تنطبق على التحويلات التي تختار "وراثة". وضع/قيم التحويلة الصريحة تبقى لها الأولوية. لا يؤثر على قناة المودم.' : 'Applies when an extension inherits the global policy. Explicit per-extension values still win. Does not change the dongle channel.' %></p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button type="button" onclick="loadGlobalDialplanJitterBuffer()" class="config-action-btn config-action-btn--neutral text-xs">
+                            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                            <span><%= isRtl ? 'تحديث' : 'Refresh' %></span>
+                        </button>
+                        <button type="button" onclick="saveGlobalDialplanJitterBuffer()" class="config-action-btn config-action-btn--primary text-xs">
+                            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                            <span><%= isRtl ? 'تطبيق وإعادة تحميل' : 'Apply & Reload' %></span>
+                        </button>
+                    </div>
+                </div>
+                <div class="p-5 space-y-4 text-xs">
+                    <label class="flex items-center gap-2 text-[11px] font-bold text-[var(--text-primary)] cursor-pointer">
+                        <input id="globalDialplanJbEnabled" type="checkbox" class="w-4 h-4 accent-emerald-500" checked>
+                        <span><%= isRtl ? 'تفعيل سياسة الوراثة العامة' : 'Enable global inherit policy' %></span>
+                    </label>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div>
+                            <label for="globalDialplanJbMode" class="text-[11px] font-bold text-[var(--text-secondary)] uppercase block mb-1.5 tracking-wider"><%= isRtl ? 'الوضع' : 'Mode' %></label>
+                            <select id="globalDialplanJbMode" class="config-input w-full text-xs font-semibold">
+                                <option value="adaptive"><%= isRtl ? 'Adaptive (متكيف)' : 'Adaptive' %></option>
+                                <option value="fixed"><%= isRtl ? 'Fixed (ثابت)' : 'Fixed' %></option>
+                                <option value="off"><%= isRtl ? 'Off (تعطيل الوراثة)' : 'Off (disable inherit)' %></option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="globalDialplanJbMax" class="text-[11px] font-bold text-[var(--text-secondary)] uppercase block mb-1.5 tracking-wider"><%= isRtl ? 'الحد الأقصى (ms)' : 'Max size (ms)' %></label>
+                            <input id="globalDialplanJbMax" type="number" min="20" max="1000" step="10" value="200" class="config-input w-full font-mono text-xs">
+                        </div>
+                        <div>
+                            <label for="globalDialplanJbResync" class="text-[11px] font-bold text-[var(--text-secondary)] uppercase block mb-1.5 tracking-wider"><%= isRtl ? 'عتبة إعادة المزامنة (ms)' : 'Resync threshold (ms)' %></label>
+                            <input id="globalDialplanJbResync" type="number" min="100" max="5000" step="50" value="1000" class="config-input w-full font-mono text-xs">
+                        </div>
+                        <div>
+                            <label for="globalDialplanJbTarget" class="text-[11px] font-bold text-[var(--text-secondary)] uppercase block mb-1.5 tracking-wider"><%= isRtl ? 'الهدف الإضافي (ms)' : 'Target extra (ms)' %></label>
+                            <input id="globalDialplanJbTarget" type="number" min="0" max="200" step="10" value="40" class="config-input w-full font-mono text-xs">
+                        </div>
+                    </div>
+                    <label class="flex items-center gap-2 text-[11px] font-bold text-[var(--text-primary)] cursor-pointer">
+                        <input id="globalDialplanJbSyncVideo" type="checkbox" class="w-4 h-4 accent-blue-500">
+                        <span><%= isRtl ? 'مزامنة الفيديو (sync_video)' : 'Sync video (sync_video)' %></span>
+                    </label>
+                    <div class="rounded-xl border border-[var(--border-primary)] bg-[var(--bg-main)]/40 p-3">
+                        <div class="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] mb-1.5"><%= isRtl ? 'السطر الفعلي (عند الوراثة)' : 'Effective inherit value' %></div>
+                        <code id="globalDialplanJbPreview" class="block break-all text-[11px] font-mono text-amber-300">JITTERBUFFER(adaptive)=200,1000,40,no</code>
+                    </div>
+                    <p class="text-[10px] text-[var(--text-muted)]"><%= isRtl ? 'التحويلات التي تختار Adaptive/Fixed/Off صراحة تتجاوز هذه القيم. الحفظ يعيد تحميل خطة الاتصال.' : 'Extensions explicitly set to Adaptive/Fixed/Off override these values. Saving reloads the dialplan.' %></p>
                 </div>
             </div>
 
@@ -2793,11 +2808,12 @@ function isTabAllowed(tabName) {
                                 <th class="pb-2.5 px-3"><%= isRtl ? 'بوابة VAD' : 'VAD Gate' %></th>
                                 <th class="pb-2.5 px-3"><%= isRtl ? 'كتم الديسيبل' : 'dBFS Cutoff' %></th>
                                 <th class="pb-2.5 px-3"><%= isRtl ? 'التحكم بالكسب (AGC)' : 'AGC Gain' %></th>
+                                <th class="pb-2.5 px-3"><%= isRtl ? 'مخزن الارتعاش' : 'Jitter Buffer' %></th>
                                 <th class="pb-2.5 px-3 text-end"><%= isRtl ? 'إجراءات' : 'Action' %></th>
                             </tr>
                         </thead>
                         <tbody id="extensionsDspTableBody">
-                            <tr><td colspan="6" class="py-4 text-center text-xs text-[var(--text-muted)] italic"><%= isRtl ? 'جاري تحميل التحويلات...' : 'Loading extensions...' %></td></tr>
+                            <tr><td colspan="7" class="py-4 text-center text-xs text-[var(--text-muted)] italic"><%= isRtl ? 'جاري تحميل التحويلات...' : 'Loading extensions...' %></td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -3375,6 +3391,36 @@ function isTabAllowed(tabName) {
                                         <option value="12000"><%= isRtl ? 'مفعل (12000 - أقصى تضخيم)' : 'Enabled (12000 - Boosted)' %></option>
                                         <option value="off" selected><%= isRtl ? 'معطل (Disabled / Off)' : 'Disabled (Off)' %></option>
                                     </select>
+                                </div>
+                                <div class="sm:col-span-2 rounded-lg border border-cyan-500/20 bg-[var(--bg-primary)]/40 p-3">
+                                    <div class="flex items-center justify-between gap-2 mb-2">
+                                        <span class="text-[11px] font-extrabold uppercase tracking-wider text-cyan-300"><%= isRtl ? 'مخزن تقليل الارتعاش (Jitter Buffer)' : 'Jitter Buffer (Per Extension)' %></span>
+                                        <span id="extJbEffective" class="text-[10px] text-[var(--text-muted)]"></span>
+                                    </div>
+                                    <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                                        <div>
+                                            <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="extJbMode"><%= isRtl ? 'الوضع' : 'Mode' %></label>
+                                            <select id="extJbMode" class="config-input w-full text-xs font-semibold h-[38px]" onchange="updateJitterBufferUi()">
+                                                <option value="inherit" selected><%= isRtl ? 'وراثة السياسة العامة (Inherit)' : 'Inherit (global policy)' %></option>
+                                                <option value="adaptive"><%= isRtl ? 'تكيفي (Adaptive)' : 'Adaptive' %></option>
+                                                <option value="fixed"><%= isRtl ? 'ثابت (Fixed)' : 'Fixed' %></option>
+                                                <option value="off"><%= isRtl ? 'معطل لهذه التحويلة (Off)' : 'Off (this extension)' %></option>
+                                            </select>
+                                        </div>
+                                        <div class="ext-jb-param">
+                                            <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="extJbMax"><%= isRtl ? 'الحجم الأقصى (ms)' : 'Max size (ms)' %></label>
+                                            <input type="number" id="extJbMax" min="20" max="1000" step="1" value="200" class="config-input w-full text-xs font-mono h-[38px]">
+                                        </div>
+                                        <div class="ext-jb-param">
+                                            <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="extJbResync"><%= isRtl ? 'إعادة المزامنة (ms)' : 'Resync (ms)' %></label>
+                                            <input type="number" id="extJbResync" min="100" max="5000" step="1" value="1000" class="config-input w-full text-xs font-mono h-[38px]">
+                                        </div>
+                                        <div class="ext-jb-param" id="extJbTargetWrap">
+                                            <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="extJbTarget"><%= isRtl ? 'الهدف الإضافي (ms)' : 'Target extra (ms)' %></label>
+                                            <input type="number" id="extJbTarget" min="0" max="200" step="1" value="40" class="config-input w-full text-xs font-mono h-[38px]">
+                                        </div>
+                                    </div>
+                                    <p id="extJbHelp" class="text-[10px] text-[var(--text-muted)] mt-2 leading-relaxed"><%= isRtl ? 'الوراثة تستخدم السياسة العامة للمقسم وتجاوز المودم. إيقاف يزيل المخزن لهذه التحويلة فقط. زيادة الحجم الأقصى/الهدف تقلل التقطيع مقابل زمن تأخير أعلى. لا يُطبق على قناة المودم.' : 'Inherit follows the global policy and per-dongle override. Off removes the buffer for this extension only. Larger max/target trades latency for fewer chops. The setting is applied to this extension\'s own PJSIP leg, never the dongle channel.' %></p>
                                 </div>
                             </div>
                         </div>

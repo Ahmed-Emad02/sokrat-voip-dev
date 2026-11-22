@@ -1,8 +1,9 @@
 <%
 const words = {
     en: {
-        title: 'Call Quality', subtitle: 'AI Evaluation',
-        overview: 'Overview', evaluations: 'Evaluations', profiles: 'Profiles', agents: 'AI Agents', settings: 'AI Provider',
+        title: 'Call Quality', subtitle: 'Voice Review',
+        overview: 'Overview', evaluations: 'Evaluations', profiles: 'Profiles', agents: 'AI Agents', settings: 'AI Providers',
+        review: 'Voice Review', voiceQueue: 'Voice queue', all: 'All', type: 'Type', party: 'Party', when: 'When', quality: 'Quality', close: 'Close', calls: 'Calls', voicemails: 'Voicemails',
         newAgent: 'New AI Agent', editAgent: 'Edit AI Agent', sipEndpoint: 'SIP endpoint (PJSIP/name)', voice: 'Voice', transferTarget: 'Transfer target', fallbackTarget: 'Fallback target', maxConcurrency: 'Max concurrency', recordingDisclosure: 'Recording/AI disclosure', personaPrompt: 'Persona / system prompt', saveAgent: 'Save AI Agent', noAgents: 'No AI agents configured.',
         totalEvaluations: 'Evaluations', avgScore: 'Average Score', passRate: 'Pass Rate', criticalFails: 'Critical Fails',
         recentEvaluations: 'Recent Evaluations', noEvaluations: 'No evaluations yet. Run one from a completed transcript.',
@@ -15,15 +16,20 @@ const words = {
         instructions: 'Evaluator instructions', rubric: 'Rubric JSON', thresholds: 'Pass score', active: 'Active',
         saveProfile: 'Save Profile', cancel: 'Cancel', runEvaluation: 'Run Evaluation', uniqueid: 'Call uniqueid',
         selectProfile: 'Select profile', run: 'Run', noProfiles: 'No evaluation profiles configured.',
-        provider: 'Provider', apiUrl: 'API URL', model: 'Model', apiKey: 'API key (leave blank to keep existing)',
+        evaluationModel: 'Evaluation model', targetType: 'Transcript type', provider: 'Provider', apiUrl: 'API URL', model: 'Model', apiKey: 'API key (leave blank to keep existing)',
         temperature: 'Temperature', maxTokens: 'Max tokens', budget: 'Monthly budget (USD)', enabled: 'Enabled',
         requireEvidence: 'Require evidence quotes', saveSettings: 'Save Provider Settings', testConnection: 'Test Connection',
         hasKey: 'API key configured', noKey: 'No API key configured', status: 'Status', actions: 'Actions',
-        edit: 'Edit', deactivate: 'Deactivate', refresh: 'Refresh', loading: 'Loading...'
+        edit: 'Edit', deactivate: 'Deactivate', refresh: 'Refresh', loading: 'Loading...',
+        sttProvider: 'Speech-to-text provider', sttSettings: 'ElevenLabs Scribe v3', sttHint: 'Locked to ElevenLabs Scribe v3. Add the API key here; the saved key is never sent back to this page.',
+        configureStt: 'Configure STT', keySaved: 'API key saved', keyMissing: 'No API key', saveStt: 'Save STT Provider', testStt: 'Test STT', scanStt: 'Scan & queue audio', sttSaved: 'Speech-to-text provider saved.',
+        searchTranscripts: 'Search transcripts...', items: 'items', manual: 'Manual', automatic: 'Automatic', transcriptionMode: 'Call transcription', transcribe: 'Transcribe', retry: 'Retry', transcribing: 'Transcribing...', notTranscribed: 'Not transcribed', noReview: 'No transcripts yet. Completed calls and voicemails will appear here.', noTranscript: 'Transcript is not ready yet.', openScorecard: 'Open scorecard', evaluateThis: 'Evaluate this transcript', evaluationQueued: 'Evaluation queued.', sttConfigTitle: 'STT engine', selectItem: 'Select a transcript to inspect it.',
+        callTranscript: 'Call transcript', voicemailTranscript: 'Voicemail transcript', from: 'From', to: 'To', mailbox: 'Mailbox', file: 'File', duration: 'Duration', queued: 'Queued', processing: 'Processing', completed: 'Completed', failed: 'Failed', disabled: 'Disabled', pending: 'Pending', reviewed: 'Reviewed', notReviewed: 'Not reviewed', autoCalls: 'Auto-transcribe calls', autoVoicemails: 'Auto-transcribe voicemails', minSeconds: 'Minimum seconds', dialectPrompt: 'Dialect prompt', engineState: 'Engine state', configureProvider: 'Configure provider', providerHint: 'Provider, model, and endpoint are fixed to ElevenLabs Scribe v3. Only the API key and transcription toggles are editable.'
     },
     ar: {
-        title: 'جودة المكالمات', subtitle: 'تقييم بالذكاء الاصطناعي',
-        overview: 'نظرة عامة', evaluations: 'التقييمات', profiles: 'قوالب التقييم', agents: 'وكلاء الذكاء الاصطناعي', settings: 'مزود الذكاء الاصطناعي',
+        title: 'جودة المكالمات', subtitle: 'مراجعة صوتية',
+        overview: 'نظرة عامة', evaluations: 'التقييمات', profiles: 'قوالب التقييم', agents: 'وكلاء الذكاء الاصطناعي', settings: 'مزودات الذكاء الاصطناعي',
+        review: 'مراجعة صوتية', voiceQueue: 'طابور المراجعة', all: 'الكل', type: 'النوع', party: 'الطرف', when: 'الوقت', quality: 'الجودة', close: 'إغلاق', calls: 'المكالمات', voicemails: 'البريد الصوتي',
         newAgent: 'وكيل جديد', editAgent: 'تعديل الوكيل', sipEndpoint: 'نقطة SIP (PJSIP/name)', voice: 'الصوت', transferTarget: 'هدف التحويل', fallbackTarget: 'هدف الاحتياط', maxConcurrency: 'أقصى تزامن', recordingDisclosure: 'إفصاح التسجيل/الذكاء الاصطناعي', personaPrompt: 'شخصية الوكيل / التعليمات', saveAgent: 'حفظ الوكيل', noAgents: 'لا يوجد وكلاء ذكاء اصطناعي.',
         totalEvaluations: 'التقييمات', avgScore: 'متوسط الدرجة', passRate: 'نسبة النجاح', criticalFails: 'إخفاقات حرجة',
         recentEvaluations: 'أحدث التقييمات', noEvaluations: 'لا توجد تقييمات بعد. شغّل تقييماً من نص مكالمة مكتمل.',
@@ -36,11 +42,15 @@ const words = {
         instructions: 'تعليمات التقييم', rubric: 'معايير التقييم JSON', thresholds: 'درجة النجاح', active: 'مفعل',
         saveProfile: 'حفظ القالب', cancel: 'إلغاء', runEvaluation: 'تشغيل تقييم', uniqueid: 'معرف المكالمة',
         selectProfile: 'اختر القالب', run: 'تشغيل', noProfiles: 'لا توجد قوالب تقييم.',
-        provider: 'المزود', apiUrl: 'عنوان API', model: 'النموذج', apiKey: 'مفتاح API (اتركه فارغاً للإبقاء على الحالي)',
+        evaluationModel: 'نموذج التقييم', targetType: 'نوع النص', provider: 'المزود', apiUrl: 'عنوان API', model: 'النموذج', apiKey: 'مفتاح API (اتركه فارغاً للإبقاء على الحالي)',
         temperature: 'درجة الحرارة', maxTokens: 'أقصى عدد Tokens', budget: 'الميزانية الشهرية (دولار)', enabled: 'مفعل',
         requireEvidence: 'اشتراط أدلة نصية', saveSettings: 'حفظ إعدادات المزود', testConnection: 'اختبار الاتصال',
         hasKey: 'مفتاح API مهيأ', noKey: 'لا يوجد مفتاح API', status: 'الحالة', actions: 'إجراءات',
-        edit: 'تعديل', deactivate: 'تعطيل', refresh: 'تحديث', loading: 'جارٍ التحميل...'
+        edit: 'تعديل', deactivate: 'تعطيل', refresh: 'تحديث', loading: 'جارٍ التحميل...',
+        sttProvider: 'مزود تحويل الصوت إلى نص', sttSettings: 'ElevenLabs Scribe v3', sttHint: 'المحرك مثبت على ElevenLabs Scribe v3. أضف مفتاح API هنا؛ لا يُعاد إرسال المفتاح المحفوظ إلى هذه الصفحة.',
+        configureStt: 'إعداد STT', keySaved: 'مفتاح API محفوظ', keyMissing: 'لا يوجد مفتاح', saveStt: 'حفظ مزود STT', testStt: 'اختبار STT', scanStt: 'فحص وإضافة الصوت', sttSaved: 'تم حفظ مزود تحويل الصوت.',
+        searchTranscripts: 'بحث في النصوص...', items: 'عنصر', manual: 'يدوي', automatic: 'تلقائي', transcriptionMode: 'تفريغ المكالمات', transcribe: 'تفريغ', retry: 'إعادة المحاولة', transcribing: 'جارٍ التفريغ...', notTranscribed: 'غير مفرغ', noReview: 'لا توجد نصوص بعد. ستظهر المكالمات والبريد الصوتي المكتمل هنا.', noTranscript: 'النص غير جاهز بعد.', openScorecard: 'فتح بطاقة التقييم', evaluateThis: 'تقييم هذا النص', evaluationQueued: 'تم إضافة التقييم للطابور.', sttConfigTitle: 'محرك STT', selectItem: 'اختر نصاً لعرضه.',
+        callTranscript: 'نص المكالمة', voicemailTranscript: 'نص البريد الصوتي', from: 'من', to: 'إلى', mailbox: 'صندوق البريد', file: 'الملف', duration: 'المدة', queued: 'في الطابور', processing: 'جارٍ المعالجة', completed: 'مكتمل', failed: 'فشل', disabled: 'معطل', pending: 'معلق', reviewed: 'تمت المراجعة', notReviewed: 'لم تتم المراجعة', autoCalls: 'تفريغ المكالمات تلقائياً', autoVoicemails: 'تفريغ البريد الصوتي تلقائياً', minSeconds: 'الحد الأدنى بالثواني', dialectPrompt: 'موجه اللهجة', engineState: 'حالة المحرك', configureProvider: 'إعداد المزود', providerHint: 'المزود والنموذج والرابط مثبتة على ElevenLabs Scribe v3. يمكن تعديل مفتاح API وإعدادات التفريغ فقط.'
     }
 };
 const t = words[isRtl ? 'ar' : 'en'];
@@ -74,12 +84,24 @@ const t = words[isRtl ? 'ar' : 'en'];
             --text-muted: #71717a; --accent-color: #b91c1c; --accent-hover: #991b1b;
         }
         body { font-family: 'JetBrains Mono', 'Cairo', monospace; background: var(--bg-primary); color: var(--text-primary); }
+        /* The shared sidebar injects a hover "shutter" pseudo-element into every
+           button. These controls use their own flat/solid styling. */
+        .q-table-row::before, .q-player-btn::before, .q-player-mute::before,
+        .q-filter button::before, .q-mode button::before, .q-mini-btn::before, .q-tab::before, .q-btn::before, .q-provider::before {
+            content: none !important;
+            display: none !important;
+        }
+        .q-table-row { border-radius: 0 !important; }
+        #qtab-review h2, #qtab-profiles h2, #qtab-agents h2, #qtab-settings h2 { font-size: .9rem !important; }
+        #reviewDrawerTitle { font-size: 1rem !important; }
+        .q-modal h3 { font-size: .95rem !important; }
         .panel { background: var(--bg-secondary); border: 1px solid var(--border-primary); }
-        .q-tab { padding: .55rem .9rem; border-radius: .65rem; font-size: .75rem; font-weight: 800; color: var(--text-secondary); border: 1px solid transparent; cursor: pointer; }
+        .q-tab { padding: .55rem .9rem; border-radius: .65rem; font-size: .75rem; font-weight: 800; color: var(--text-secondary); border: 1px solid transparent; cursor: pointer; background: transparent; }
         .q-tab.active { background: var(--accent-color); color: #fff; border-color: var(--accent-color); }
         .q-input { width: 100%; background: var(--bg-primary); border: 1px solid var(--border-primary); color: var(--text-primary); border-radius: .55rem; padding: .5rem .65rem; font-size: .75rem; }
         .q-btn { padding: .5rem .85rem; border-radius: .55rem; font-size: .72rem; font-weight: 800; cursor: pointer; border: 1px solid var(--border-primary); color: var(--text-primary); background: var(--bg-hover); }
         .q-btn-primary { background: var(--accent-color); border-color: var(--accent-color); color: #fff; }
+        .q-btn:disabled { opacity: .45; cursor: not-allowed; }
         .q-btn-danger { background: #7f1d1d; border-color: #991b1b; color: #fff; }
         .q-table th { text-align: start; padding: .6rem .5rem; color: var(--text-muted); font-size: .65rem; text-transform: uppercase; letter-spacing: .04em; }
         .q-table td { padding: .65rem .5rem; border-top: 1px solid var(--border-primary); font-size: .75rem; vertical-align: top; }
@@ -88,89 +110,283 @@ const t = words[isRtl ? 'ar' : 'en'];
         .q-badge-pass { background: rgba(16,185,129,.12); color: #34d399; border: 1px solid rgba(16,185,129,.3); }
         .q-badge-fail { background: rgba(239,68,68,.12); color: #f87171; border: 1px solid rgba(239,68,68,.3); }
         .q-badge { padding: .2rem .45rem; border-radius: .35rem; font-size: .62rem; font-weight: 900; }
+        .q-commandbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; padding: .85rem 1rem; border: 1px solid var(--border-primary); border-radius: .9rem; background: var(--bg-secondary); margin-bottom: .85rem; }
+        .q-metrics { display: flex; align-items: stretch; gap: 1.4rem; flex-wrap: wrap; }
+        .q-metric { min-width: 5.2rem; }
+        .q-metric-label { font-size: .56rem; color: var(--text-muted); font-weight: 800; text-transform: uppercase; letter-spacing: .05em; }
+        .q-metric-value { font-size: 1.15rem; font-weight: 900; margin-top: .15rem; line-height: 1; }
+        .q-engine { display: flex; align-items: center; gap: .55rem; min-width: 0; flex-wrap: wrap; padding-inline-start: 1rem; border-inline-start: 1px solid var(--border-primary); }
+        .q-engine strong { white-space: nowrap; }
+        .q-engine .q-btn { white-space: nowrap; }
+        .q-review-shell { border: 1px solid var(--border-primary); border-radius: 1rem; background: var(--bg-secondary); overflow: hidden; }
+        .q-review-toolbar { display: flex; align-items: center; justify-content: space-between; gap: .8rem; flex-wrap: wrap; padding: .8rem 1rem; border-bottom: 1px solid var(--border-primary); }
+        .q-filter { display: inline-flex; border: 1px solid var(--border-primary); border-radius: .55rem; overflow: hidden; }
+        .q-filter button { border: 0; background: transparent; color: var(--text-secondary); font-size: .65rem; font-weight: 800; padding: .38rem .65rem; cursor: pointer; }
+        .q-filter button[aria-pressed="true"] { background: var(--accent-color); color: #fff; }
+        .q-search { width: 16rem; min-width: 13rem; flex: 1 1 16rem; max-width: 22rem; }
+        .q-mode { display: inline-flex; border: 1px solid var(--border-primary); border-radius: .55rem; overflow: hidden; }
+        .q-mode button { border: 0; background: transparent; color: var(--text-secondary); font-size: .62rem; font-weight: 800; padding: .35rem .55rem; cursor: pointer; white-space: nowrap; }
+        .q-mode button[aria-pressed="true"] { background: rgba(229,62,62,.12); color: var(--accent-hover); box-shadow: inset 0 -2px 0 var(--accent-color); }
+        .q-mini-btn { border: 1px solid var(--accent-color); background: rgba(229,62,62,.12); color: var(--accent-hover); border-radius: .35rem; padding: .18rem .4rem; font-size: .58rem; font-weight: 900; cursor: pointer; white-space: nowrap; }
+        .q-mini-btn:hover { background: var(--accent-color); color: #fff; }
+        .q-row-progress { grid-column: 1 / -1; display: block; height: 2px; background: var(--border-primary); border-radius: 999px; overflow: hidden; margin-top: .25rem; }
+        .q-row-progress i { display: block; width: 38%; height: 100%; background: var(--accent-color); border-radius: inherit; animation: q-progress 1.1s ease-in-out infinite; }
+        @keyframes q-progress { 0% { transform: translateX(-110%); } 100% { transform: translateX(300%); } }
+        .q-row-busy .q-preview { color: var(--text-muted); font-style: italic; }
+        .q-table-head, .q-table-row { display: grid; grid-template-columns: 3.6rem minmax(10rem, 1fr) 9.5rem 7.2rem minmax(9rem, 1.25fr); gap: .65rem; align-items: center; }
+        .q-table-head { padding: .55rem 1rem; border-bottom: 1px solid var(--border-primary); background: var(--bg-primary); color: var(--text-muted); font-size: .56rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; position: sticky; top: 0; z-index: 2; }
+        .q-table-body { max-height: calc(100vh - 19rem); overflow: auto; }
+        .q-table-row { width: 100%; padding: .62rem 1rem; border: 0; border-top: 1px solid var(--border-primary); background: var(--bg-secondary); color: var(--text-primary); text-align: start; cursor: pointer; }
+        .q-table-row:first-child { border-top: 0; }
+        .q-table-row:hover { background: var(--bg-hover); }
+        .q-table-row[aria-current="true"] { background: rgba(229,62,62,.08); box-shadow: inset 3px 0 0 var(--accent-color); }
+        html[dir="rtl"] .q-table-row[aria-current="true"] { box-shadow: inset -3px 0 0 var(--accent-color); }
+        .q-type-badge { display: inline-block; font-size: .52rem; font-weight: 900; color: var(--text-muted); border: 1px solid var(--border-primary); border-radius: .28rem; padding: .18rem .3rem; }
+        .q-party-title { display: block; font-size: .73rem; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .q-party-meta { display: block; font-size: .58rem; color: var(--text-muted); margin-top: .13rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .q-when { font-size: .62rem; color: var(--text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+        .q-quality { display: flex; align-items: center; gap: .3rem; flex-wrap: wrap; }
+        .q-score { font-size: .78rem; font-weight: 900; font-variant-numeric: tabular-nums; }
+        .q-preview { font-size: .64rem; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .q-empty { padding: 2.5rem 1rem; text-align: center; font-size: .7rem; color: var(--text-muted); }
+        body.q-drawer-open { overflow: hidden; }
+        .q-drawer-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.58); opacity: 0; pointer-events: none; transition: opacity .18s ease; z-index: 90; }
+        .q-drawer-backdrop.open { opacity: 1; pointer-events: auto; }
+        .q-drawer { position: fixed; inset-block: 0; inset-inline-end: 0; width: min(34rem, 100vw); background: var(--bg-secondary); border-inline-start: 1px solid var(--border-primary); box-shadow: -20px 0 50px rgba(0,0,0,.25); transform: translateX(100%); transition: transform .2s ease; z-index: 95; display: flex; flex-direction: column; }
+        html[dir="rtl"] .q-drawer { transform: translateX(-100%); box-shadow: 20px 0 50px rgba(0,0,0,.25); }
+        .q-drawer.open { transform: translateX(0); }
+        .q-drawer-head { display: flex; align-items: flex-start; justify-content: space-between; gap: .8rem; padding: 1rem; border-bottom: 1px solid var(--border-primary); flex: 0 0 auto; }
+        .q-drawer-body { padding: 1rem; overflow: auto; flex: 1 1 auto; }
+        .q-inspector-title { font-size: 1rem; font-weight: 900; }
+        .q-kicker { font-size: .58rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: .06em; font-weight: 800; }
+        .q-transcript { max-height: 18rem; overflow: auto; white-space: pre-wrap; line-height: 1.65; }
+        .q-player { display: flex; align-items: center; gap: .65rem; margin-top: .9rem; padding: .55rem .65rem; border: 1px solid var(--border-primary); border-radius: .75rem; background: var(--bg-primary); }
+        .q-player-btn { width: 2.25rem; height: 2.25rem; flex: 0 0 auto; display: grid; place-items: center; border: 0; border-radius: 999px; background: var(--accent-color); color: #fff; cursor: pointer; }
+        .q-player-btn:hover { background: var(--accent-hover); }
+        .q-player-btn svg { width: .95rem; height: .95rem; }
+        .q-player-core { flex: 1 1 auto; min-width: 0; }
+        .q-player-track { height: 1.1rem; display: flex; align-items: center; cursor: pointer; }
+        .q-player-rail { width: 100%; height: 4px; border-radius: 999px; background: var(--border-primary); transition: height .15s ease; }
+        .q-player-track:hover .q-player-rail { height: 5px; }
+        .q-player-fill { width: 0; height: 100%; position: relative; background: linear-gradient(90deg, var(--accent-color), var(--accent-hover)); }
+        .q-player-fill::after { content: ""; position: absolute; top: 50%; inset-inline-end: -3px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent-hover); transform: translateY(-50%); }
+        .q-player-times { display: flex; justify-content: space-between; margin-top: .1rem; color: var(--text-muted); font-size: .55rem; font-variant-numeric: tabular-nums; }
+        .q-player-mute { flex: 0 0 auto; border: 0; background: transparent; color: var(--text-muted); cursor: pointer; padding: .25rem; }
+        .q-player-mute:hover { color: var(--text-primary); }
+        .q-player-mute svg { width: .95rem; height: .95rem; }
+        .q-player.q-player-error .q-player-fill { background: var(--text-muted); }
+        .q-player.q-player-error .q-player-times { color: #f87171; }
+        .q-player audio { display: none; }
+        .q-player:focus-within { border-color: var(--accent-color); }
+        .q-player-btn:focus-visible, .q-player-mute:focus-visible, .q-player-track:focus-visible { outline: 2px solid var(--accent-hover); outline-offset: 2px; }
+        .q-provider-fixed { display: flex; align-items: center; gap: .7rem; border: 1px solid var(--border-primary); border-radius: .7rem; padding: .65rem .75rem; background: var(--bg-primary); }
+        .q-provider-mark { width: 2rem; height: 2rem; display: grid; place-items: center; border-radius: .5rem; background: rgba(229,62,62,.12); color: var(--accent-hover); font-size: .6rem; font-weight: 900; flex: 0 0 auto; }
+        .q-provider-fixed strong { display: block; font-size: .72rem; }
+        .q-provider-fixed span:not(.q-badge) { display: block; font-size: .58rem; color: var(--text-muted); }
+        .q-provider-fixed .q-badge { margin-inline-start: auto; flex: 0 0 auto; }
+        .q-provider-rail { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border: 1px solid var(--border-primary); border-radius: .7rem; overflow: hidden; }
+        .q-provider { border: 0; border-inline-end: 1px solid var(--border-primary); border-bottom: 2px solid transparent; background: transparent; color: var(--text-secondary); padding: .55rem .45rem; text-align: start; cursor: pointer; }
+        .q-provider:last-child { border-inline-end: 0; }
+        .q-provider strong { display: block; font-size: .67rem; color: var(--text-primary); }
+        .q-provider span { display: block; font-size: .55rem; margin-top: .15rem; color: var(--text-muted); }
+        .q-provider[aria-checked="true"] { background: var(--bg-hover); border-bottom-color: var(--accent-color); }
+        .q-provider:focus-visible, .q-table-row:focus-visible, .q-tab:focus-visible, .q-btn:focus-visible, .q-input:focus-visible { outline: 2px solid var(--accent-hover); outline-offset: 2px; }
+        .q-settings-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
+        .q-status-line { font-size: .65rem; color: var(--text-muted); min-height: 1.1rem; }
+        .q-status-ok { color: #34d399; }
+        .q-status-warn { color: #fbbf24; }
+        .q-status-bad { color: #f87171; }
         body.light-theme .q-input { background: #fff; color: #18181b; }
+        body.light-theme .q-table-row[aria-current="true"] { background: rgba(185,28,28,.07); }
+        @media (max-width: 1180px) {
+            .q-table-head, .q-table-row { grid-template-columns: 3.4rem minmax(10rem, 1fr) 8.8rem 6.4rem; }
+            .q-col-preview { display: none; }
+        }
+        @media (max-width: 1024px) {
+            .q-settings-grid { grid-template-columns: 1fr; }
+            .q-table-head, .q-table-row { grid-template-columns: 3.4rem minmax(9rem, 1fr) 7rem; }
+            .q-col-when { display: none; }
+        }
+        @media (max-width: 640px) {
+            .q-commandbar { padding: .8rem; }
+            .q-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; width: 100%; }
+            .q-engine { width: 100%; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; padding-inline-start: 0; padding-top: .7rem; border-inline-start: 0; border-top: 1px solid var(--border-primary); }
+            .q-engine .q-btn { grid-column: 1 / -1; justify-self: start; }
+            .q-review-toolbar { align-items: stretch; }
+            .q-review-toolbar > div:last-child { width: 100%; }
+            .q-filter { width: 100%; }
+            .q-filter button { flex: 1; }
+            .q-search { width: 100%; min-width: 0; max-width: none; flex: 1 1 100%; }
+            .q-table-head { display: none; }
+            .q-table-body { max-height: none; }
+            .q-table-row { grid-template-columns: 3.2rem minmax(0, 1fr) 4.8rem; padding: .7rem .75rem; }
+            .q-drawer { width: 100vw; }
+            .q-provider-rail { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .q-provider { border-bottom: 1px solid var(--border-primary); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .q-table-row, .q-provider, .q-btn, .q-tab, .q-drawer, .q-drawer-backdrop { transition: none; }
+            .q-row-progress i { animation: none !important; width: 100%; opacity: .55; }
+        }
     </style>
 </head>
 <body class="flex flex-col md:flex-row min-h-screen m-0 p-0">
     <%- include('sidebar') %>
-    <div class="flex-1 p-5 md:p-8 min-h-screen">
-        <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-5">
+    <main class="flex-1 p-5 md:p-8 min-h-screen min-w-0">
+        <header class="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-5">
             <div>
                 <h1 class="text-2xl md:text-3xl font-extrabold"><%= t.title %> <span style="color:var(--accent-color)"><%= t.subtitle %></span></h1>
-                <p class="text-xs mt-1" style="color:var(--text-muted)"><%= isRtl ? 'تقييم المكالمات بالذكاء الاصطناعي وفق سياق ومعايير وتعليمات قابلة للتخصيص.' : 'AI call evaluation with configurable context, rubric, and instructions.' %></p>
             </div>
             <div class="flex gap-2 flex-wrap">
                 <button class="q-btn" onclick="loadAll()"><%= t.refresh %></button>
                 <button class="q-btn q-btn-primary" onclick="openRunModal()"><%= t.runEvaluation %></button>
             </div>
+        </header>
+
+        <div class="flex gap-2 flex-wrap mb-5" role="tablist" aria-label="Quality workspace">
+            <button class="q-tab active" role="tab" aria-selected="true" data-qtab="review" onclick="switchQTab('review')"><%= t.review %></button>
+            <button class="q-tab" role="tab" aria-selected="false" data-qtab="profiles" onclick="switchQTab('profiles')"><%= t.profiles %></button>
+            <button class="q-tab" role="tab" aria-selected="false" data-qtab="agents" onclick="switchQTab('agents')"><%= t.agents %></button>
+            <button class="q-tab" role="tab" aria-selected="false" data-qtab="settings" onclick="switchQTab('settings')"><%= t.settings %></button>
         </div>
 
-        <div class="flex gap-2 flex-wrap mb-5">
-            <button class="q-tab active" data-qtab="overview" onclick="switchQTab('overview')"><%= t.overview %></button>
-            <button class="q-tab" data-qtab="evaluations" onclick="switchQTab('evaluations')"><%= t.evaluations %></button>
-            <button class="q-tab" data-qtab="profiles" onclick="switchQTab('profiles')"><%= t.profiles %></button>
-            <button class="q-tab" data-qtab="agents" onclick="switchQTab('agents')"><%= t.agents %></button>
-            <button class="q-tab" data-qtab="settings" onclick="switchQTab('settings')"><%= t.settings %></button>
-        </div>
-
-        <div id="qtab-overview" class="qtab-panel">
-            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-                <div class="panel rounded-xl p-4"><div class="text-[10px] uppercase font-bold" style="color:var(--text-muted)"><%= t.totalEvaluations %></div><div id="statTotal" class="text-2xl font-black mt-1">0</div></div>
-                <div class="panel rounded-xl p-4"><div class="text-[10px] uppercase font-bold" style="color:var(--text-muted)"><%= t.avgScore %></div><div id="statAvg" class="text-2xl font-black mt-1">--</div></div>
-                <div class="panel rounded-xl p-4"><div class="text-[10px] uppercase font-bold" style="color:var(--text-muted)"><%= t.passRate %></div><div id="statPass" class="text-2xl font-black mt-1">--</div></div>
-                <div class="panel rounded-xl p-4"><div class="text-[10px] uppercase font-bold" style="color:var(--text-muted)"><%= t.criticalFails %></div><div id="statCritical" class="text-2xl font-black mt-1">0</div></div>
+        <section id="qtab-review" class="qtab-panel" role="tabpanel">
+            <div class="q-commandbar">
+                <div class="q-metrics">
+                    <div class="q-metric"><div class="q-metric-label"><%= t.totalEvaluations %></div><div id="statEvaluations" class="q-metric-value">0</div></div>
+                    <div class="q-metric"><div class="q-metric-label"><%= t.avgScore %></div><div id="statAvg" class="q-metric-value">--</div></div>
+                    <div class="q-metric"><div class="q-metric-label"><%= t.passRate %></div><div id="statPass" class="q-metric-value">--</div></div>
+                    <div class="q-metric"><div class="q-metric-label"><%= t.voicemails %></div><div id="statVoicemails" class="q-metric-value">0</div></div>
+                </div>
+                <div class="q-engine">
+                    <span class="q-kicker"><%= t.sttConfigTitle %></span>
+                    <strong id="reviewSttProvider" class="text-xs font-mono truncate">ElevenLabs / scribe_v3</strong>
+                    <span id="reviewSttStatus" class="q-badge q-badge-fail">--</span>
+                    <button class="q-btn" onclick="openSttSettings()"><%= t.configureStt %></button>
+                </div>
             </div>
-            <div class="panel rounded-xl p-4">
-                <div class="flex items-center justify-between mb-3"><h2 class="text-sm font-extrabold"><%= t.recentEvaluations %></h2><span id="evalCount" class="text-[10px]" style="color:var(--text-muted)"></span></div>
-                <div class="overflow-auto"><table class="w-full q-table"><thead><tr><th><%= t.date %></th><th><%= t.profile %></th><th><%= t.agent %></th><th><%= t.score %></th><th><%= t.result %></th><th></th></tr></thead><tbody id="recentEvalBody"></tbody></table></div>
-            </div>
-        </div>
 
-        <div id="qtab-evaluations" class="qtab-panel hidden">
-            <div class="panel rounded-xl p-4">
-                <div class="overflow-auto"><table class="w-full q-table"><thead><tr><th><%= t.date %></th><th><%= t.profile %></th><th><%= t.call %></th><th><%= t.agent %></th><th><%= t.score %></th><th><%= t.result %></th><th></th></tr></thead><tbody id="evalBody"></tbody></table></div>
+            <div class="q-review-shell">
+                <div class="q-review-toolbar">
+                    <div class="flex items-center gap-2 min-w-0">
+                        <h2 class="text-sm font-extrabold"><%= t.voiceQueue %></h2>
+                        <span id="reviewCount" class="q-kicker">0</span>
+                    </div>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <div class="q-mode" role="group" aria-label="<%= t.transcriptionMode %>">
+                            <button type="button" data-transcription-mode="manual" aria-pressed="true" onclick="setTranscriptionMode('manual')"><%= t.manual %></button>
+                            <button type="button" data-transcription-mode="automatic" aria-pressed="false" onclick="setTranscriptionMode('automatic')"><%= t.automatic %></button>
+                        </div>
+                        <div class="q-filter" role="group" aria-label="Filter transcripts">
+                            <button type="button" data-review-filter="all" aria-pressed="true" onclick="setReviewFilter('all')"><%= t.all %></button>
+                            <button type="button" data-review-filter="call" aria-pressed="false" onclick="setReviewFilter('call')"><%= t.calls %></button>
+                            <button type="button" data-review-filter="voicemail" aria-pressed="false" onclick="setReviewFilter('voicemail')"><%= t.voicemails %></button>
+                        </div>
+                        <input id="reviewSearch" class="q-input q-search" type="search" placeholder="<%= t.searchTranscripts %>" aria-label="<%= t.searchTranscripts %>" oninput="onReviewSearch()">
+                    </div>
+                </div>
+                <div class="q-table-head" aria-hidden="true">
+                    <span><%= t.type %></span>
+                    <span><%= t.party %></span>
+                    <span><%= t.when %></span>
+                    <span><%= t.quality %></span>
+                    <span><%= t.transcript %></span>
+                </div>
+                <div id="reviewList" class="q-table-body" aria-live="polite"></div>
             </div>
-        </div>
+        </section>
 
-        <div id="qtab-profiles" class="qtab-panel hidden">
+        <div id="reviewBackdrop" class="q-drawer-backdrop" onclick="closeReviewDrawer()"></div>
+        <aside id="reviewDrawer" class="q-drawer" role="dialog" aria-modal="true" aria-labelledby="reviewDrawerTitle" aria-hidden="true">
+            <div class="q-drawer-head">
+                <div class="min-w-0">
+                    <div class="q-kicker">Voice Review</div>
+                    <h2 id="reviewDrawerTitle" class="q-inspector-title truncate"></h2>
+                </div>
+                <button class="q-btn" onclick="closeReviewDrawer()"><%= t.close %></button>
+            </div>
+            <div id="reviewInspector" class="q-drawer-body" aria-live="polite"></div>
+        </aside>
+
+        <section id="qtab-profiles" class="qtab-panel hidden" role="tabpanel">
             <div class="flex justify-between items-center mb-3">
                 <h2 class="text-sm font-extrabold"><%= t.profiles %></h2>
                 <button class="q-btn q-btn-primary" onclick="openProfileModal()">+ <%= t.newProfile %></button>
             </div>
             <div class="panel rounded-xl p-4 overflow-auto"><table class="w-full q-table"><thead><tr><th><%= t.name %></th><th><%= t.scope %></th><th><%= t.direction %></th><th><%= t.language %></th><th><%= t.sampling %></th><th><%= t.active %></th><th></th></tr></thead><tbody id="profileBody"></tbody></table></div>
-        </div>
+        </section>
 
-        <div id="qtab-agents" class="qtab-panel hidden">
+        <section id="qtab-agents" class="qtab-panel hidden" role="tabpanel">
             <div class="flex justify-between items-center mb-3">
                 <h2 class="text-sm font-extrabold"><%= t.agents %></h2>
                 <button class="q-btn q-btn-primary" onclick="openAgentModal()">+ <%= t.newAgent %></button>
             </div>
             <div class="panel rounded-xl p-4 overflow-auto"><table class="w-full q-table"><thead><tr><th><%= t.name %></th><th><%= t.sipEndpoint %></th><th><%= t.direction %></th><th><%= t.language %></th><th><%= t.maxConcurrency %></th><th><%= t.active %></th><th></th></tr></thead><tbody id="agentBody"></tbody></table></div>
-        </div>
+        </section>
 
-        <div id="qtab-settings" class="qtab-panel hidden">
-            <div class="panel rounded-xl p-5 max-w-3xl">
-                <div class="flex items-center gap-2 mb-4"><h2 class="text-sm font-extrabold"><%= t.settings %></h2><span id="keyBadge" class="q-badge q-badge-fail">--</span></div>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <label class="text-[10px] font-bold"><%= t.provider %><select id="setProvider" class="q-input mt-1"><option value="openai">OpenAI</option><option value="anthropic">Anthropic</option><option value="gemini">Gemini</option><option value="groq">Groq</option><option value="openrouter">OpenRouter</option><option value="custom">Custom (OpenAI-compatible)</option></select></label>
-                    <label class="text-[10px] font-bold"><%= t.model %><input id="setModel" class="q-input mt-1" placeholder="gpt-4o-mini"></label>
-                    <label class="text-[10px] font-bold md:col-span-2"><%= t.apiUrl %><input id="setApiUrl" class="q-input mt-1" placeholder="https://api.openai.com/v1"></label>
-                    <label class="text-[10px] font-bold md:col-span-2"><%= t.apiKey %><input id="setApiKey" type="password" class="q-input mt-1" autocomplete="new-password"></label>
-                    <label class="text-[10px] font-bold"><%= t.temperature %><input id="setTemp" type="number" step="0.1" min="0" max="2" class="q-input mt-1"></label>
-                    <label class="text-[10px] font-bold"><%= t.maxTokens %><input id="setMaxTokens" type="number" min="256" class="q-input mt-1"></label>
-                    <label class="text-[10px] font-bold"><%= t.budget %><input id="setBudget" type="number" step="1" min="0" class="q-input mt-1"></label>
-                    <label class="flex items-center gap-2 text-[10px] font-bold mt-5"><input id="setEnabled" type="checkbox" class="w-4 h-4"><%= t.enabled %></label>
-                    <label class="flex items-center gap-2 text-[10px] font-bold mt-5"><input id="setEvidence" type="checkbox" class="w-4 h-4"><%= t.requireEvidence %></label>
+        <section id="qtab-settings" class="qtab-panel hidden" role="tabpanel">
+            <div class="q-settings-grid">
+                <div class="panel rounded-xl p-5">
+                    <div class="flex items-center gap-2 mb-4"><h2 class="text-sm font-extrabold"><%= t.evaluationModel %></h2><span id="keyBadge" class="q-badge q-badge-fail">--</span></div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <label class="text-[10px] font-bold"><%= t.provider %><select id="setProvider" class="q-input mt-1"><option value="openai">OpenAI</option><option value="anthropic">Anthropic</option><option value="gemini">Gemini</option><option value="groq">Groq</option><option value="openrouter">OpenRouter</option><option value="custom">Custom (OpenAI-compatible)</option></select></label>
+                        <label class="text-[10px] font-bold"><%= t.model %><input id="setModel" class="q-input mt-1" placeholder="gpt-4o-mini"></label>
+                        <label class="text-[10px] font-bold md:col-span-2"><%= t.apiUrl %><input id="setApiUrl" class="q-input mt-1" placeholder="https://api.openai.com/v1"></label>
+                        <label class="text-[10px] font-bold md:col-span-2"><%= t.apiKey %><input id="setApiKey" type="password" class="q-input mt-1" autocomplete="new-password"></label>
+                        <label class="text-[10px] font-bold"><%= t.temperature %><input id="setTemp" type="number" step="0.1" min="0" max="2" class="q-input mt-1"></label>
+                        <label class="text-[10px] font-bold"><%= t.maxTokens %><input id="setMaxTokens" type="number" min="256" class="q-input mt-1"></label>
+                        <label class="text-[10px] font-bold"><%= t.budget %><input id="setBudget" type="number" step="1" min="0" class="q-input mt-1"></label>
+                        <label class="flex items-center gap-2 text-[10px] font-bold mt-5"><input id="setEnabled" type="checkbox" class="w-4 h-4"><%= t.enabled %></label>
+                        <label class="flex items-center gap-2 text-[10px] font-bold mt-5"><input id="setEvidence" type="checkbox" class="w-4 h-4"><%= t.requireEvidence %></label>
+                    </div>
+                    <div class="flex gap-2 mt-4"><button class="q-btn q-btn-primary" onclick="saveSettings()"><%= t.saveSettings %></button><button class="q-btn" onclick="testSettings()"><%= t.testConnection %></button><span id="settingsMsg" class="q-status-line self-center"></span></div>
                 </div>
-                <div class="flex gap-2 mt-4"><button class="q-btn q-btn-primary" onclick="saveSettings()"><%= t.saveSettings %></button><button class="q-btn" onclick="testSettings()"><%= t.testConnection %></button><span id="settingsMsg" class="text-xs self-center" style="color:var(--text-muted)"></span></div>
+
+                <div id="sttProviderCard" class="panel rounded-xl p-5">
+                    <div class="flex items-center justify-between gap-3 mb-1">
+                        <h2 class="text-sm font-extrabold"><%= t.sttSettings %></h2>
+                        <span id="qpSttKeyBadge" class="q-badge q-badge-fail">--</span>
+                    </div>
+                    <p class="text-[10px] leading-relaxed mb-4" style="color:var(--text-muted)"><%= t.sttHint %></p>
+                    <div class="q-provider-fixed">
+                        <div class="q-provider-mark">EL</div>
+                        <div class="min-w-0">
+                            <strong>ElevenLabs Scribe v3</strong>
+                            <span>Batch transcription · Arabic + English code-switching</span>
+                        </div>
+                        <span class="q-badge q-badge-pass">Only provider</span>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
+                        <label class="text-[10px] font-bold"><%= t.model %><input id="qpSttModel" class="q-input mt-1 font-mono" value="scribe_v3" readonly></label>
+                        <label class="text-[10px] font-bold"><%= t.language %><select id="qpSttLanguage" class="q-input mt-1"><option value="ar">Arabic / Egyptian</option></select></label>
+                        <label class="text-[10px] font-bold md:col-span-2"><%= t.apiUrl %><input id="qpSttApiUrl" class="q-input mt-1 font-mono" value="https://api.elevenlabs.io/v1/speech-to-text" readonly></label>
+                        <label class="text-[10px] font-bold md:col-span-2"><%= t.apiKey %><input id="qpSttApiKey" type="password" class="q-input mt-1 font-mono" autocomplete="new-password" placeholder="Leave blank to keep the saved key"></label>
+                        <label class="text-[10px] font-bold md:col-span-2">Keyterms (comma-separated, optional)<textarea id="qpSttPrompt" rows="2" class="q-input mt-1" placeholder="Sokrat, باقة, رقم الحساب"></textarea></label>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
+                        <label class="flex items-center gap-2 text-[10px] font-bold"><input id="qpSttCalls" type="checkbox" class="w-4 h-4"><%= t.autoCalls %></label>
+                        <label class="flex items-center gap-2 text-[10px] font-bold"><input id="qpSttVoicemails" type="checkbox" class="w-4 h-4"><%= t.autoVoicemails %></label>
+                        <label class="flex items-center gap-2 text-[10px] font-bold"><%= t.minSeconds %><input id="qpSttMinDuration" type="number" min="1" max="120" class="q-input" style="max-width:5rem"></label>
+                    </div>
+                    <div class="flex items-center gap-2 mt-3">
+                        <label class="flex items-center gap-2 text-[10px] font-bold"><input id="qpSttEnabled" type="checkbox" class="w-4 h-4" onchange="updateSttStrip()"><%= t.enabled %></label>
+                        <span class="q-status-line" id="qpSttMsg"></span>
+                    </div>
+                    <div class="flex flex-wrap gap-2 mt-4">
+                        <button class="q-btn q-btn-primary" onclick="qpSaveSttSettings()"><%= t.saveStt %></button>
+                        <button class="q-btn" onclick="qpTestSttConnection()"><%= t.testStt %></button>
+                        <button class="q-btn" onclick="qpScanQueue()"><%= t.scanStt %></button>
+                    </div>
+                    <p class="text-[10px] mt-3" style="color:var(--text-muted)"><%= t.providerHint %></p>
+                </div>
             </div>
-        </div>
+        </section>
 
         <div id="detailPanel" class="panel rounded-xl p-5 mt-5 hidden">
             <div class="flex items-center justify-between mb-3"><h2 class="text-sm font-extrabold"><%= t.detail %></h2><button class="q-btn" onclick="document.getElementById('detailPanel').classList.add('hidden')"><%= t.cancel %></button></div>
             <div id="detailContent"></div>
         </div>
-    </div>
+    </main>
 
     <div id="agentModal" class="q-modal">
         <div class="panel rounded-xl p-5 w-full max-w-2xl max-h-[90vh] overflow-auto">
@@ -189,7 +405,7 @@ const t = words[isRtl ? 'ar' : 'en'];
                 <label class="flex items-center gap-2 text-[10px] font-bold mt-5"><input id="aDisclosure" type="checkbox" class="w-4 h-4" checked><%= t.recordingDisclosure %></label>
             </div>
             <label class="block text-[10px] font-bold mt-3"><%= t.personaPrompt %><textarea id="aPrompt" rows="5" class="q-input mt-1"></textarea></label>
-            <div class="flex gap-2 mt-4"><button class="q-btn q-btn-primary" onclick="saveAgent()"><%= t.saveAgent %></button><button class="q-btn" onclick="closeModal('agentModal')"><%= t.cancel %></button><span id="agentMsg" class="text-xs self-center" style="color:var(--text-muted)"></span></div>
+            <div class="flex gap-2 mt-4"><button class="q-btn q-btn-primary" onclick="saveAgent()"><%= t.saveAgent %></button><button class="q-btn" onclick="closeModal('agentModal')"><%= t.cancel %></button><span id="agentMsg" class="q-status-line self-center"></span></div>
         </div>
     </div>
 
@@ -210,16 +426,23 @@ const t = words[isRtl ? 'ar' : 'en'];
             <label class="block text-[10px] font-bold mt-3"><%= t.context %><textarea id="pContext" rows="4" class="q-input mt-1"></textarea></label>
             <label class="block text-[10px] font-bold mt-3"><%= t.instructions %><textarea id="pInstructions" rows="4" class="q-input mt-1"></textarea></label>
             <label class="block text-[10px] font-bold mt-3"><%= t.rubric %><textarea id="pRubric" rows="12" class="q-input mt-1 font-mono"></textarea></label>
-            <div class="flex gap-2 mt-4"><button class="q-btn q-btn-primary" onclick="saveProfile()"><%= t.saveProfile %></button><button class="q-btn" onclick="closeModal('profileModal')"><%= t.cancel %></button><span id="profileMsg" class="text-xs self-center" style="color:var(--text-muted)"></span></div>
+            <div class="flex gap-2 mt-4"><button class="q-btn q-btn-primary" onclick="saveProfile()"><%= t.saveProfile %></button><button class="q-btn" onclick="closeModal('profileModal')"><%= t.cancel %></button><span id="profileMsg" class="q-status-line self-center"></span></div>
         </div>
     </div>
 
     <div id="runModal" class="q-modal">
         <div class="panel rounded-xl p-5 w-full max-w-lg">
             <div class="flex justify-between items-center mb-3"><h3 class="text-sm font-extrabold"><%= t.runEvaluation %></h3><button class="q-btn" onclick="closeModal('runModal')"><%= t.cancel %></button></div>
-            <label class="block text-[10px] font-bold"><%= t.uniqueid %><input id="runUniqueid" class="q-input mt-1" placeholder="1793..."></label>
+            <label class="block text-[10px] font-bold"><%= t.targetType %><select id="runTargetType" class="q-input mt-1" onchange="toggleRunTargetFields()"><option value="call"><%= t.calls %></option><option value="voicemail"><%= t.voicemails %></option></select></label>
+            <div id="runCallFields" class="mt-3">
+                <label class="block text-[10px] font-bold"><%= t.uniqueid %><input id="runUniqueid" class="q-input mt-1" placeholder="1793..."></label>
+            </div>
+            <div id="runVmFields" class="mt-3 hidden grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <label class="block text-[10px] font-bold"><%= t.mailbox %><input id="runMailbox" class="q-input mt-1" placeholder="101"></label>
+                <label class="block text-[10px] font-bold"><%= t.file %><input id="runMsgFile" class="q-input mt-1" placeholder="msg0000.wav"></label>
+            </div>
             <label class="block text-[10px] font-bold mt-3"><%= t.selectProfile %><select id="runProfile" class="q-input mt-1"></select></label>
-            <div class="flex gap-2 mt-4"><button class="q-btn q-btn-primary" onclick="runEvaluation()"><%= t.run %></button><span id="runMsg" class="text-xs self-center" style="color:var(--text-muted)"></span></div>
+            <div class="flex gap-2 mt-4"><button class="q-btn q-btn-primary" onclick="runEvaluation()"><%= t.run %></button><span id="runMsg" class="q-status-line self-center"></span></div>
         </div>
     </div>
 
@@ -227,10 +450,33 @@ const t = words[isRtl ? 'ar' : 'en'];
         const I18N = <%- JSON.stringify(t) %>;
         let profiles = [];
         let agents = [];
-        let evaluations = [];
+        let reviewItems = [];
+        let reviewFilter = 'all';
+        let selectedReviewKey = null;
+        let sttProviderValue = 'elevenlabs';
+        let qpSttHasSavedKey = false;
+        let transcriptionMode = 'manual';
+        let selectedReviewUniqueid = null;
+        const transcribingUniqueids = new Set();
+        let transcriptionPollTimer = null;
+
+        const STT_DEFAULTS = {
+            elevenlabs: { model: 'scribe_v3', url: 'https://api.elevenlabs.io/v1/speech-to-text', label: 'ElevenLabs' }
+        };
 
         async function api(path, options = {}) {
             const res = await fetch('/api/ai' + path, {
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+                ...options
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+            return data;
+        }
+
+        async function jsonFetch(url, options = {}) {
+            const res = await fetch(url, {
                 credentials: 'same-origin',
                 headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
                 ...options
@@ -245,23 +491,38 @@ const t = words[isRtl ? 'ar' : 'en'];
                 .replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
         }
         function fmtDate(value) { return value ? new Date(value).toLocaleString() : ''; }
+        function syncCustomSelect(el) { if (el && typeof el._customSync === 'function') el._customSync(); }
         function switchQTab(name) {
             document.querySelectorAll('.qtab-panel').forEach(el => el.classList.add('hidden'));
             document.getElementById('qtab-' + name).classList.remove('hidden');
-            document.querySelectorAll('[data-qtab]').forEach(el => el.classList.toggle('active', el.dataset.qtab === name));
+            document.querySelectorAll('[data-qtab]').forEach(el => {
+                const active = el.dataset.qtab === name;
+                el.classList.toggle('active', active);
+                el.setAttribute('aria-selected', active ? 'true' : 'false');
+            });
         }
         function openModal(id) { document.getElementById(id).classList.add('open'); }
         function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+        function openSttSettings() {
+            switchQTab('settings');
+            const card = document.getElementById('sttProviderCard');
+            if (card) {
+                const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+                card.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' });
+            }
+        }
 
         async function loadAll() {
-            await Promise.all([loadSettings(), loadProfiles(), loadAgents(), loadEvaluations(), loadScorecards()]);
+            await Promise.all([loadSettings(), loadProfiles(), loadAgents(), loadReview(), qpLoadSttSettings()]);
         }
 
         async function loadSettings() {
             try {
                 const data = await api('/settings');
                 const s = data.settings || {};
-                document.getElementById('setProvider').value = s.provider || 'openai';
+                const providerEl = document.getElementById('setProvider');
+                providerEl.value = s.provider || 'openai';
+                syncCustomSelect(providerEl);
                 document.getElementById('setModel').value = s.model || '';
                 document.getElementById('setApiUrl').value = s.api_url || '';
                 document.getElementById('setTemp').value = s.temperature ?? 0;
@@ -308,6 +569,343 @@ const t = words[isRtl ? 'ar' : 'en'];
             } catch (err) { msg.textContent = err.message; }
         }
 
+        async function loadReview() {
+            try {
+                const data = await api('/review?limit=75');
+                reviewItems = data.items || [];
+                const s = data.stats || {};
+                document.getElementById('statEvaluations').textContent = Number(s.evaluations || 0);
+                document.getElementById('statAvg').textContent = s.avg_score == null ? '--' : s.avg_score;
+                document.getElementById('statPass').textContent = s.pass_rate == null ? '--' : s.pass_rate + '%';
+                document.getElementById('statVoicemails').textContent = Number(s.voicemails_completed || s.voicemails || 0);
+                for (const uid of [...transcribingUniqueids]) {
+                    const item = reviewItems.find(entry => entry.uniqueid === uid);
+                    if (item && (item.status === 'completed' || item.status === 'failed')) transcribingUniqueids.delete(uid);
+                }
+                renderReviewList();
+                syncTranscriptionPolling();
+                if (selectedReviewKey) {
+                    let selected = reviewItems.find(item => itemKey(item) === selectedReviewKey);
+                    if (!selected && selectedReviewUniqueid) selected = reviewItems.find(item => item.uniqueid === selectedReviewUniqueid);
+                    if (selected) {
+                        selectedReviewKey = itemKey(selected);
+                        renderInspector(selected);
+                    } else {
+                        closeReviewDrawer();
+                    }
+                }
+            } catch (err) {
+                document.getElementById('reviewList').innerHTML = '<div class="q-empty" style="color:#f87171">' + esc(err.message) + '</div>';
+            }
+        }
+
+        function itemKey(item) {
+            return item.kind + ':' + (item.transcription_id != null ? item.transcription_id : (item.uniqueid || (item.mailbox + '/' + item.msg_file)));
+        }
+        function itemDate(item) {
+            return item.calldate || item.completed_at || item.created_at || '';
+        }
+        function itemTitle(item) {
+            if (item.kind === 'voicemail') return item.callerid ? (item.callerid + ' → ' + (item.mailbox || '')) : (I18N.voicemailTranscript + ' · ' + (item.mailbox || ''));
+            return (item.src || '?') + ' → ' + (item.dst || '?');
+        }
+        function statusClass(status) {
+            if (status === 'completed') return 'q-badge-pass';
+            if (status === 'failed') return 'q-badge-fail';
+            return 'q-badge';
+        }
+        function statusLabel(status) {
+            if (status === 'none') return I18N.notTranscribed;
+            return I18N[status] || status || I18N.pending;
+        }
+        function setReviewFilter(filter) {
+            reviewFilter = filter;
+            document.querySelectorAll('[data-review-filter]').forEach(btn => btn.setAttribute('aria-pressed', btn.dataset.reviewFilter === filter ? 'true' : 'false'));
+            renderReviewList();
+            ensureReviewSelection();
+        }
+        function ensureReviewSelection() {
+            const list = filteredReviewItems();
+            if (!selectedReviewKey) return;
+            if (!list.some(item => itemKey(item) === selectedReviewKey)) closeReviewDrawer();
+        }
+        function onReviewSearch() {
+            renderReviewList();
+            ensureReviewSelection();
+        }
+        function filteredReviewItems() {
+            const q = String(document.getElementById('reviewSearch')?.value || '').toLowerCase().trim();
+            return reviewItems.filter(item => {
+                if (reviewFilter !== 'all' && item.kind !== reviewFilter) return false;
+                if (!q) return true;
+                return [item.transcript, item.src, item.dst, item.mailbox, item.msg_file, item.callerid, item.profile_name]
+                    .some(value => String(value || '').toLowerCase().includes(q));
+            });
+        }
+        function renderReviewList() {
+            const list = filteredReviewItems();
+            const target = document.getElementById('reviewList');
+            document.getElementById('reviewCount').textContent = (list.length === reviewItems.length ? list.length : list.length + ' / ' + reviewItems.length) + ' ' + I18N.items;
+            if (!list.length) {
+                target.innerHTML = '<div class="q-empty">' + esc(I18N.noReview) + '</div>';
+                return;
+            }
+            target.innerHTML = list.map(item => {
+                const key = itemKey(item);
+                const score = item.overall_score == null ? '—' : Number(item.overall_score).toFixed(0);
+                const passClass = item.pass === 1 ? 'q-badge-pass' : item.pass === 0 ? 'q-badge-fail' : 'q-badge';
+                const busy = item.status === 'pending' || item.status === 'processing' || transcribingUniqueids.has(item.uniqueid);
+                const quality = item.overall_score == null
+                    ? `<span class="q-badge ${statusClass(item.status)}">${esc(statusLabel(item.status))}</span>`
+                    : `<span class="q-score">${score}</span><span class="q-badge ${passClass}">${item.pass ? I18N.pass : I18N.fail}</span>`;
+                const manualButton = transcriptionMode === 'manual' && item.kind === 'call' && item.uniqueid && !busy && item.status !== 'completed'
+                    ? `<button type="button" class="q-mini-btn" data-transcribe="${esc(item.uniqueid)}" title="${item.status === 'failed' ? I18N.retry : I18N.transcribe}">${item.status === 'failed' ? I18N.retry : I18N.transcribe}</button>`
+                    : '';
+                const preview = busy ? I18N.transcribing : (item.transcript ? String(item.transcript).replace(/\s+/g, ' ').slice(0, 220) : '—');
+                const partyMeta = item.kind === 'call'
+                    ? `${item.duration_sec == null ? '-' : item.duration_sec + 's'}${item.profile_name ? ' · ' + item.profile_name : ''}`
+                    : `${I18N.mailbox} ${item.mailbox || '-'} · ${item.msg_file || ''}`;
+                return `
+                    <div class="q-table-row ${busy ? 'q-row-busy' : ''}" role="button" tabindex="0" data-review-key="${esc(key)}" aria-current="${key === selectedReviewKey ? 'true' : 'false'}">
+                        <span class="q-col-type"><span class="q-type-badge">${item.kind === 'voicemail' ? 'VM' : 'CALL'}</span></span>
+                        <span class="q-col-party min-w-0"><span class="q-party-title">${esc(itemTitle(item))}</span><span class="q-party-meta">${esc(partyMeta)}</span></span>
+                        <span class="q-col-when q-when">${esc(fmtDate(itemDate(item)))}</span>
+                        <span class="q-col-quality q-quality">${quality}${manualButton}</span>
+                        <span class="q-col-preview q-preview" dir="auto">${esc(preview)}</span>
+                        ${busy ? '<span class="q-row-progress" aria-label="Transcribing"><i></i></span>' : ''}
+                    </div>`;
+            }).join('');
+        }
+        function selectReviewItem(key) {
+            const item = reviewItems.find(entry => itemKey(entry) === key);
+            if (!item) return;
+            selectedReviewKey = key;
+            selectedReviewUniqueid = item.uniqueid || null;
+            renderReviewList();
+            renderInspector(item);
+            openReviewDrawer();
+        }
+        function openReviewDrawer() {
+            document.getElementById('reviewBackdrop').classList.add('open');
+            const drawer = document.getElementById('reviewDrawer');
+            drawer.classList.add('open');
+            drawer.setAttribute('aria-hidden', 'false');
+            document.body.classList.add('q-drawer-open');
+        }
+        function closeReviewDrawer() {
+            selectedReviewKey = null;
+            selectedReviewUniqueid = null;
+            document.getElementById('reviewBackdrop').classList.remove('open');
+            const drawer = document.getElementById('reviewDrawer');
+            drawer.classList.remove('open');
+            drawer.setAttribute('aria-hidden', 'true');
+            document.body.classList.remove('q-drawer-open');
+            document.getElementById('reviewDrawerTitle').textContent = '';
+            document.getElementById('reviewInspector').innerHTML = '';
+            renderReviewList();
+        }
+        function updateTranscriptionModeButtons() {
+            document.querySelectorAll('[data-transcription-mode]').forEach(btn => {
+                btn.setAttribute('aria-pressed', btn.dataset.transcriptionMode === transcriptionMode ? 'true' : 'false');
+            });
+        }
+        async function setTranscriptionMode(mode) {
+            if (mode !== 'manual' && mode !== 'automatic') return;
+            if (mode === 'automatic' && !qpSttHasSavedKey) {
+                alert('Add the ElevenLabs API key before enabling automatic transcription.');
+                openSttSettings();
+                return;
+            }
+            if (mode === transcriptionMode) return;
+            const previous = transcriptionMode;
+            transcriptionMode = mode;
+            const autoCalls = document.getElementById('qpSttCalls');
+            if (autoCalls) autoCalls.checked = mode === 'automatic';
+            updateTranscriptionModeButtons();
+            renderReviewList();
+            try {
+                await jsonFetch('/api/config/stt/transcription-mode', {
+                    method: 'POST',
+                    body: JSON.stringify({ mode })
+                });
+                if (mode === 'automatic') setTimeout(loadReview, 1200);
+            } catch (err) {
+                transcriptionMode = previous;
+                updateTranscriptionModeButtons();
+                renderReviewList();
+                alert(err.message);
+            }
+        }
+        async function requestCallTranscription(uniqueid) {
+            if (!uniqueid || transcribingUniqueids.has(uniqueid)) return;
+            if (!qpSttHasSavedKey) {
+                alert('Add the ElevenLabs API key before transcribing calls.');
+                openSttSettings();
+                return;
+            }
+            transcribingUniqueids.add(uniqueid);
+            renderReviewList();
+            try {
+                await jsonFetch('/api/transcripts/call/' + encodeURIComponent(uniqueid) + '/transcribe', {
+                    method: 'POST',
+                    body: JSON.stringify({ language: 'ar' })
+                });
+                await loadReview();
+                syncTranscriptionPolling();
+            } catch (err) {
+                transcribingUniqueids.delete(uniqueid);
+                renderReviewList();
+                alert(err.message);
+            }
+        }
+        function syncTranscriptionPolling() {
+            const active = transcribingUniqueids.size > 0 || reviewItems.some(item => item.status === 'pending' || item.status === 'processing');
+            if (active && !transcriptionPollTimer) {
+                transcriptionPollTimer = setInterval(async () => {
+                    await loadReview();
+                    const stillActive = transcribingUniqueids.size > 0 || reviewItems.some(item => item.status === 'pending' || item.status === 'processing');
+                    if (!stillActive) {
+                        clearInterval(transcriptionPollTimer);
+                        transcriptionPollTimer = null;
+                    }
+                }, 3000);
+            } else if (!active && transcriptionPollTimer) {
+                clearInterval(transcriptionPollTimer);
+                transcriptionPollTimer = null;
+            }
+        }
+        function audioUrl(item) {
+            if (item.kind === 'call' && item.uniqueid) return '/api/cdr/audio/' + encodeURIComponent(item.uniqueid);
+            if (item.kind === 'voicemail' && item.mailbox && item.msg_file) {
+                return '/vm-audio/' + encodeURIComponent(item.mailbox) + '/' + encodeURIComponent(item.msg_file);
+            }
+            return '';
+        }
+        function fmtAudioTime(value) {
+            if (!Number.isFinite(value) || value < 0) return '0:00';
+            const total = Math.floor(value);
+            return Math.floor(total / 60) + ':' + String(total % 60).padStart(2, '0');
+        }
+        function mediaPlayerMarkup(src) {
+            return `
+                <div class="q-player" data-audio-src="${esc(src)}">
+                    <button type="button" class="q-player-btn" data-audio-toggle aria-label="Play">
+                        <svg data-audio-play-icon fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                        <svg data-audio-pause-icon class="hidden" fill="currentColor" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
+                    </button>
+                    <div class="q-player-core">
+                        <div class="q-player-track" data-audio-seek role="slider" tabindex="0" aria-label="Seek" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0">
+                            <div class="q-player-rail"><div class="q-player-fill" data-audio-fill></div></div>
+                        </div>
+                        <div class="q-player-times"><span data-audio-current>0:00</span><span data-audio-duration>--:--</span></div>
+                    </div>
+                    <button type="button" class="q-player-mute" data-audio-mute aria-label="Mute">
+                        <svg data-audio-volume-icon fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5L6 9H3v6h3l5 4V5zM15.5 8.5a5 5 0 010 7M18.5 5.5a9 9 0 010 13"/></svg>
+                        <svg data-audio-muted-icon class="hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5L6 9H3v6h3l5 4V5zM17 9l4 6M21 9l-4 6"/></svg>
+                    </button>
+                    <audio preload="metadata" src="${esc(src)}"></audio>
+                </div>`;
+        }
+        function initMediaPlayers(root) {
+            root.querySelectorAll('.q-player').forEach(player => {
+                if (player.dataset.ready === '1') return;
+                player.dataset.ready = '1';
+                const audio = player.querySelector('audio');
+                const toggle = player.querySelector('[data-audio-toggle]');
+                const seek = player.querySelector('[data-audio-seek]');
+                const fill = player.querySelector('[data-audio-fill]');
+                const current = player.querySelector('[data-audio-current]');
+                const duration = player.querySelector('[data-audio-duration]');
+                const mute = player.querySelector('[data-audio-mute]');
+                const playIcon = player.querySelector('[data-audio-play-icon]');
+                const pauseIcon = player.querySelector('[data-audio-pause-icon]');
+                const volumeIcon = player.querySelector('[data-audio-volume-icon]');
+                const mutedIcon = player.querySelector('[data-audio-muted-icon]');
+                const setPlaying = playing => {
+                    playIcon.classList.toggle('hidden', playing);
+                    pauseIcon.classList.toggle('hidden', !playing);
+                    toggle.setAttribute('aria-label', playing ? 'Pause' : 'Play');
+                };
+                const update = () => {
+                    const dur = Number.isFinite(audio.duration) ? audio.duration : 0;
+                    const pct = dur ? Math.min(100, Math.max(0, audio.currentTime / dur * 100)) : 0;
+                    fill.style.width = pct + '%';
+                    current.textContent = fmtAudioTime(audio.currentTime);
+                    duration.textContent = dur ? fmtAudioTime(dur) : '--:--';
+                    seek.setAttribute('aria-valuemax', String(Math.round(dur)));
+                    seek.setAttribute('aria-valuenow', String(Math.round(audio.currentTime)));
+                    setPlaying(!audio.paused);
+                };
+                toggle.addEventListener('click', () => {
+                    if (audio.paused) audio.play().catch(() => {});
+                    else audio.pause();
+                });
+                audio.addEventListener('play', update);
+                audio.addEventListener('pause', update);
+                audio.addEventListener('ended', update);
+                audio.addEventListener('timeupdate', update);
+                audio.addEventListener('loadedmetadata', update);
+                audio.addEventListener('error', () => {
+                    player.classList.add('q-player-error');
+                    duration.textContent = 'unavailable';
+                });
+                seek.addEventListener('click', event => {
+                    if (!Number.isFinite(audio.duration) || !audio.duration) return;
+                    const rect = seek.getBoundingClientRect();
+                    let ratio = (event.clientX - rect.left) / rect.width;
+                    if (document.documentElement.dir === 'rtl') ratio = 1 - ratio;
+                    audio.currentTime = Math.max(0, Math.min(audio.duration, ratio * audio.duration));
+                    update();
+                });
+                seek.addEventListener('keydown', event => {
+                    if (!Number.isFinite(audio.duration) || !audio.duration) return;
+                    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+                        event.preventDefault();
+                        const delta = event.key === 'ArrowRight' ? 5 : -5;
+                        audio.currentTime = Math.max(0, Math.min(audio.duration, audio.currentTime + delta));
+                        update();
+                    }
+                });
+                mute.addEventListener('click', () => {
+                    audio.muted = !audio.muted;
+                    volumeIcon.classList.toggle('hidden', audio.muted);
+                    mutedIcon.classList.toggle('hidden', !audio.muted);
+                    mute.setAttribute('aria-label', audio.muted ? 'Unmute' : 'Mute');
+                });
+                update();
+            });
+        }
+        function renderInspector(item) {
+            const target = document.getElementById('reviewInspector');
+            if (!item) { target.innerHTML = ''; return; }
+            document.getElementById('reviewDrawerTitle').textContent = itemTitle(item);
+            const audio = audioUrl(item);
+            const status = `<span class="q-badge ${statusClass(item.status)}">${esc(statusLabel(item.status))}</span>`;
+            const evalBlock = item.evaluation_id ? `
+                <div class="panel rounded-lg p-3 mt-3">
+                    <div class="flex items-center justify-between gap-2">
+                        <div><div class="q-kicker">${esc(I18N.reviewed)}</div><div class="text-lg font-black">${item.overall_score ?? '--'} <span class="q-badge ${item.pass ? 'q-badge-pass' : 'q-badge-fail'}">${item.pass ? I18N.pass : I18N.fail}</span></div></div>
+                        <button class="q-btn" onclick="openEvaluation(${Number(item.evaluation_id)})">${I18N.openScorecard}</button>
+                    </div>
+                    <div class="text-[11px] mt-1" style="color:var(--text-muted)">${esc(item.profile_name || '')}</div>
+                </div>` : '';
+            const meta = item.kind === 'call'
+                ? `<div class="grid grid-cols-2 gap-2 text-[11px] mt-2"><div><span class="q-kicker">${I18N.from}</span><br>${esc(item.src || '-')}</div><div><span class="q-kicker">${I18N.to}</span><br>${esc(item.dst || '-')}</div><div><span class="q-kicker">${I18N.duration}</span><br>${esc(item.duration_sec == null ? '-' : item.duration_sec + 's')}</div><div><span class="q-kicker">${I18N.call}</span><br><span class="font-mono">${esc(item.uniqueid || '')}</span></div></div>`
+                : `<div class="grid grid-cols-2 gap-2 text-[11px] mt-2"><div><span class="q-kicker">${I18N.mailbox}</span><br>${esc(item.mailbox || '-')}</div><div><span class="q-kicker">${I18N.from}</span><br>${esc(item.callerid || '-')}</div><div><span class="q-kicker">${I18N.file}</span><br><span class="font-mono">${esc(item.msg_file || '')}</span></div><div><span class="q-kicker">${I18N.provider}</span><br>${esc(item.engine || '-')} / ${esc(item.model_used || '-')}</div></div>`;
+            target.innerHTML = `
+                <div class="flex items-center justify-between gap-2">
+                    <div class="q-kicker">${item.kind === 'voicemail' ? I18N.voicemailTranscript : I18N.callTranscript}</div>
+                    ${status}
+                </div>
+                ${meta}
+                ${audio ? mediaPlayerMarkup(audio) : ''}
+                ${evalBlock}
+                <div class="q-kicker mt-4 mb-1">${I18N.transcript}</div>
+                <div class="panel rounded-lg p-3 q-transcript text-xs" dir="auto">${esc(item.transcript || I18N.noTranscript)}</div>
+                ${item.error_message ? `<div class="text-[10px] mt-2" style="color:#f87171">${esc(item.error_message)}</div>` : ''}
+            `;
+            initMediaPlayers(target);
+        }
         async function loadAgents() {
             try {
                 const data = await api('/agents');
@@ -391,6 +989,7 @@ const t = words[isRtl ? 'ar' : 'en'];
                     </tr>`).join('') : `<tr><td colspan="7" class="text-center py-6" style="color:var(--text-muted)">${I18N.noProfiles}</td></tr>`;
                 const select = document.getElementById('runProfile');
                 select.innerHTML = profiles.filter(p => p.active).map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+                if (selectedReviewKey) renderInspector(reviewItems.find(item => itemKey(item) === selectedReviewKey));
             } catch (err) { console.error(err); }
         }
 
@@ -452,42 +1051,8 @@ const t = words[isRtl ? 'ar' : 'en'];
             try { await api('/profiles/' + id, { method: 'DELETE' }); await loadProfiles(); } catch (err) { alert(err.message); }
         }
 
-        async function loadEvaluations() {
-            try {
-                const data = await api('/evaluations?limit=100');
-                evaluations = data.evaluations || [];
-                const recent = evaluations.slice(0, 10);
-                const renderRows = rows => rows.length ? rows.map(e => `
-                    <tr>
-                        <td>${fmtDate(e.created_at)}</td>
-                        <td>${esc(e.profile_name || e.profile_id)}</td>
-                        <td>${esc(e.src || '')} → ${esc(e.dst || '')}<div class="text-[10px]" style="color:var(--text-muted)">${esc(e.uniqueid || '')}</div></td>
-                        <td>${e.overall_score ?? '--'}</td>
-                        <td>${e.pass ? '<span class="q-badge q-badge-pass">' + I18N.pass + '</span>' : '<span class="q-badge q-badge-fail">' + I18N.fail + '</span>'}</td>
-                        <td class="text-end"><button class="q-btn" onclick="openEvaluation(${e.id})">${I18N.detail}</button></td>
-                    </tr>`).join('') : `<tr><td colspan="6" class="text-center py-6" style="color:var(--text-muted)">${I18N.noEvaluations}</td></tr>`;
-                document.getElementById('recentEvalBody').innerHTML = renderRows(recent);
-                document.getElementById('evalBody').innerHTML = renderRows(evaluations);
-                document.getElementById('evalCount').textContent = evaluations.length + ' total';
-            } catch (err) { console.error(err); }
-        }
-
-        async function loadScorecards() {
-            try {
-                const data = await api('/scorecards');
-                const list = data.profiles || [];
-                const total = list.reduce((a, b) => a + Number(b.evaluations || 0), 0);
-                const weighted = list.reduce((a, b) => a + Number(b.avg_score || 0) * Number(b.evaluations || 0), 0);
-                const fails = list.reduce((a, b) => a + Number(b.critical_fails || 0), 0);
-                const passes = list.reduce((a, b) => a + (Number(b.pass_rate || 0) / 100) * Number(b.evaluations || 0), 0);
-                document.getElementById('statTotal').textContent = total;
-                document.getElementById('statAvg').textContent = total ? (weighted / total).toFixed(1) : '--';
-                document.getElementById('statPass').textContent = total ? Math.round(passes / total * 100) + '%' : '--';
-                document.getElementById('statCritical').textContent = fails;
-            } catch (err) { console.error(err); }
-        }
-
         async function openEvaluation(id) {
+            if (document.getElementById('reviewDrawer').classList.contains('open')) closeReviewDrawer();
             const panel = document.getElementById('detailPanel');
             const content = document.getElementById('detailContent');
             panel.classList.remove('hidden');
@@ -497,7 +1062,14 @@ const t = words[isRtl ? 'ar' : 'en'];
                 const e = data.evaluation || {};
                 const scores = data.scores || [];
                 const segments = data.segments || [];
-                const audio = e.uniqueid ? `<audio controls preload="none" class="w-full mt-2" src="/api/cdr/audio/${encodeURIComponent(e.uniqueid)}"></audio>` : '';
+                let audioSrc = '';
+                if (e.target_type === 'voicemail' && e.target_id) {
+                    const parts = String(e.target_id).split('/');
+                    if (parts.length > 1) audioSrc = '/vm-audio/' + encodeURIComponent(parts[0]) + '/' + encodeURIComponent(parts.slice(1).join('/'));
+                } else if (e.uniqueid) {
+                    audioSrc = '/api/cdr/audio/' + encodeURIComponent(e.uniqueid);
+                }
+                const audio = audioSrc ? mediaPlayerMarkup(audioSrc) : '';
                 content.innerHTML = `
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
                         <div>
@@ -521,6 +1093,7 @@ const t = words[isRtl ? 'ar' : 'en'];
                     <h4 class="text-xs font-extrabold mt-4">${I18N.transcript}</h4>
                     <div class="panel rounded-lg p-3 mt-1 max-h-72 overflow-auto text-xs space-y-1">${segments.length ? segments.map(s => `<div><span class="font-bold">${esc(s.speaker)}</span> <span style="color:var(--text-muted)">${s.start_ms != null ? (s.start_ms / 1000).toFixed(1) + 's' : ''}</span> ${esc(s.text)}</div>`).join('') : esc(data.transcript?.transcript || '')}</div>
                 `;
+                initMediaPlayers(content);
             } catch (err) { content.innerHTML = `<div class="text-xs" style="color:#f87171">${esc(err.message)}</div>`; }
         }
 
@@ -532,22 +1105,183 @@ const t = words[isRtl ? 'ar' : 'en'];
             } catch (err) { alert(err.message); }
         }
 
+        function toggleRunTargetFields() {
+            const voicemail = document.getElementById('runTargetType').value === 'voicemail';
+            document.getElementById('runCallFields').classList.toggle('hidden', voicemail);
+            document.getElementById('runVmFields').classList.toggle('hidden', !voicemail);
+            syncCustomSelect(document.getElementById('runTargetType'));
+        }
+
         function openRunModal() {
             if (!profiles.length) { alert(I18N.noProfiles); return; }
+            document.getElementById('runTargetType').value = 'call';
+            toggleRunTargetFields();
             openModal('runModal');
         }
 
         async function runEvaluation() {
             const msg = document.getElementById('runMsg');
+            const targetType = document.getElementById('runTargetType').value;
+            const profileId = Number(document.getElementById('runProfile').value);
+            const payload = targetType === 'voicemail'
+                ? { target_type: 'voicemail', mailbox: document.getElementById('runMailbox').value.trim(), msg_file: document.getElementById('runMsgFile').value.trim(), profile_id: profileId }
+                : { uniqueid: document.getElementById('runUniqueid').value.trim(), profile_id: profileId };
             msg.textContent = '...';
             try {
-                const data = await api('/evaluations/run', { method: 'POST', body: JSON.stringify({ uniqueid: document.getElementById('runUniqueid').value.trim(), profile_id: Number(document.getElementById('runProfile').value) }) });
+                const data = await api('/evaluations/run', { method: 'POST', body: JSON.stringify(payload) });
                 msg.textContent = data.job ? ('Queued #' + data.job.id) : I18N.saved;
-                setTimeout(loadAll, 1500);
+                setTimeout(loadReview, 1500);
             } catch (err) { msg.textContent = err.message; }
         }
 
-        document.addEventListener('keydown', e => { if (e.key === 'Escape') document.querySelectorAll('.q-modal.open').forEach(el => el.classList.remove('open')); });
+        function selectSttProvider(provider, applyDefaults = true) {
+            sttProviderValue = 'elevenlabs';
+            const def = STT_DEFAULTS.elevenlabs;
+            if (applyDefaults) {
+                const model = document.getElementById('qpSttModel');
+                const url = document.getElementById('qpSttApiUrl');
+                if (model) model.value = def.model;
+                if (url) url.value = def.url;
+            }
+            updateSttStrip();
+        }
+
+        function updateSttStrip() {
+            const def = STT_DEFAULTS.elevenlabs;
+            const provider = document.getElementById('reviewSttProvider');
+            if (provider) provider.textContent = def.label + ' / ' + (document.getElementById('qpSttModel')?.value || def.model);
+            const badge = document.getElementById('reviewSttStatus');
+            if (!badge) return;
+            if (!document.getElementById('qpSttEnabled')?.checked) {
+                badge.textContent = I18N.disabled;
+                badge.className = 'q-badge q-badge-fail';
+            } else if (!qpSttHasSavedKey) {
+                badge.textContent = I18N.keyMissing;
+                badge.className = 'q-badge q-badge-fail';
+            } else {
+                badge.textContent = I18N.keySaved;
+                badge.className = 'q-badge q-badge-pass';
+            }
+        }
+
+        async function qpLoadSttSettings() {
+            try {
+                const data = await jsonFetch('/api/config/stt');
+                const s = data.settings || {};
+                qpSttHasSavedKey = Number(s.has_api_key) === 1;
+                const loadedProvider = 'elevenlabs';
+                selectSttProvider(loadedProvider, false);
+                document.getElementById('qpSttModel').value = 'scribe_v3';
+                document.getElementById('qpSttApiUrl').value = 'https://api.elevenlabs.io/v1/speech-to-text';
+                const sttLanguageEl = document.getElementById('qpSttLanguage');
+                sttLanguageEl.value = s.language || 'ar';
+                syncCustomSelect(sttLanguageEl);
+                document.getElementById('qpSttPrompt').value = s.prompt || '';
+                document.getElementById('qpSttCalls').checked = Boolean(Number(s.transcribe_calls));
+                transcriptionMode = Number(s.transcribe_calls) ? 'automatic' : 'manual';
+                updateTranscriptionModeButtons();
+                if (reviewItems.length) renderReviewList();
+                document.getElementById('qpSttVoicemails').checked = Boolean(Number(s.transcribe_voicemails));
+                document.getElementById('qpSttMinDuration').value = Number(s.min_duration_sec || 3);
+                document.getElementById('qpSttEnabled').checked = Boolean(Number(s.enabled));
+                document.getElementById('qpSttApiKey').value = '';
+                const badge = document.getElementById('qpSttKeyBadge');
+                badge.textContent = qpSttHasSavedKey ? I18N.keySaved : I18N.keyMissing;
+                badge.className = 'q-badge ' + (qpSttHasSavedKey ? 'q-badge-pass' : 'q-badge-fail');
+                updateSttStrip();
+            } catch (err) {
+                document.getElementById('qpSttMsg').textContent = err.message;
+            }
+        }
+
+        async function qpSaveSttSettings() {
+            const msg = document.getElementById('qpSttMsg');
+            msg.textContent = '...';
+            try {
+                await jsonFetch('/api/config/stt', {
+                    method: 'PUT',
+                    body: JSON.stringify({
+                        enabled: document.getElementById('qpSttEnabled').checked,
+                        provider: 'elevenlabs',
+                        api_key: document.getElementById('qpSttApiKey').value,
+                        api_url: document.getElementById('qpSttApiUrl').value,
+                        model_name: document.getElementById('qpSttModel').value,
+                        language: document.getElementById('qpSttLanguage').value,
+                        prompt: document.getElementById('qpSttPrompt').value,
+                        transcribe_calls: document.getElementById('qpSttCalls').checked ? 1 : 0,
+                        transcribe_voicemails: document.getElementById('qpSttVoicemails').checked ? 1 : 0,
+                        min_duration_sec: Number(document.getElementById('qpSttMinDuration').value || 3)
+                    })
+                });
+                msg.textContent = I18N.sttSaved;
+                msg.className = 'q-status-line q-status-ok';
+                await qpLoadSttSettings();
+            } catch (err) {
+                msg.textContent = err.message;
+                msg.className = 'q-status-line q-status-bad';
+            }
+        }
+
+        async function qpTestSttConnection() {
+            const msg = document.getElementById('qpSttMsg');
+            msg.textContent = '...';
+            try {
+                const data = await jsonFetch('/api/config/stt/test-connection', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        provider: 'elevenlabs',
+                        api_key: document.getElementById('qpSttApiKey').value,
+                        api_url: document.getElementById('qpSttApiUrl').value,
+                        model_name: document.getElementById('qpSttModel').value,
+                        language: document.getElementById('qpSttLanguage').value,
+                        prompt: document.getElementById('qpSttPrompt').value
+                    })
+                });
+                msg.textContent = data.success ? ('OK ' + data.latencyMs + 'ms') : (data.error || 'Failed');
+                msg.className = 'q-status-line ' + (data.success ? 'q-status-ok' : 'q-status-bad');
+            } catch (err) {
+                msg.textContent = err.message;
+                msg.className = 'q-status-line q-status-bad';
+            }
+        }
+
+        async function qpScanQueue() {
+            const msg = document.getElementById('qpSttMsg');
+            msg.textContent = '...';
+            try {
+                await jsonFetch('/api/transcripts/scan', { method: 'POST', body: '{}' });
+                msg.textContent = I18N.evaluationQueued;
+                msg.className = 'q-status-line q-status-ok';
+            } catch (err) {
+                msg.textContent = err.message;
+                msg.className = 'q-status-line q-status-bad';
+            }
+        }
+
+        document.getElementById('reviewList').addEventListener('click', event => {
+            const transcribe = event.target.closest('[data-transcribe]');
+            if (transcribe) {
+                event.stopPropagation();
+                requestCallTranscription(transcribe.dataset.transcribe);
+                return;
+            }
+            const row = event.target.closest('[data-review-key]');
+            if (row) selectReviewItem(row.dataset.reviewKey);
+        });
+        document.getElementById('reviewList').addEventListener('keydown', event => {
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            if (event.target.closest('[data-transcribe]')) return;
+            const row = event.target.closest('[data-review-key]');
+            if (!row) return;
+            event.preventDefault();
+            selectReviewItem(row.dataset.reviewKey);
+        });
+        document.addEventListener('keydown', e => {
+            if (e.key !== 'Escape') return;
+            document.querySelectorAll('.q-modal.open').forEach(el => el.classList.remove('open'));
+            if (document.getElementById('reviewDrawer').classList.contains('open')) closeReviewDrawer();
+        });
+        updateTranscriptionModeButtons();
         loadAll();
     </script>
 </body>
