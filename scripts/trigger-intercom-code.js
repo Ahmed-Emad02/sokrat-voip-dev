@@ -68,7 +68,7 @@ async function main() {
 
         // 4. Originate calls for each target extension
         for (const targetExt of targetsToCall) {
-            const targetChan = `Local/${targetExt}@from-intercom-autoanswer`;
+            const targetChan = `Local/${targetExt}@from-intercom-autoanswer/n`;
             const cmd = `${ASTERISK_BIN} -rx "channel originate ${targetChan} extension ${roomId}@from-intercom-conf"`;
             exec(cmd, (err) => {
                 if (err) console.error(`Failed to originate intercom call to ${targetExt}:`, err.message);
