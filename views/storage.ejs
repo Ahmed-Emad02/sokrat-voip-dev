@@ -70,6 +70,7 @@ const words = {
         chartNetChannels: "Network Traffic (KB/s) & Active Calls",
         hardwareSpecs: "Host & Hardware Specifications",
         quickActions: "Quick Maintenance Actions",
+        systemHealthy: "System Healthy",
         flushCachesDesc: "Frees cached pagecache and dentries from RAM",
         reloadAsteriskDesc: "Re-reads dialplan and chan_dongle configs without dropping calls",
         reclaimingMemory: "Flushing RAM caches...",
@@ -145,6 +146,7 @@ const words = {
         ttysLabel: "منافذ TTY التسلسلية:",
         powerLabel: "تخصيص الطاقة:",
         quickActions: "إجراءات الصيانة السريعة",
+        systemHealthy: "النظام بحالة ممتازة",
         flushCachesDesc: "تحرير الذاكرة المؤقتة (Pagecache) من ذاكرة RAM بأمان",
         reloadAsteriskDesc: "إعادة قراءة خطط الاتصال وشرائح GSM دون قطع المكالمات",
         reclaimingMemory: "جاري تفريغ الذاكرة المؤقتة...",
@@ -327,6 +329,10 @@ const isRtl = currentLang === 'ar';
             <div>
                 <div class="flex items-center gap-3">
                     <h2 class="text-3xl font-extrabold text-white tracking-tight"><%= t.title %> <span class="text-[var(--accent-color)]"><%= t.subtitle %></span></h2>
+                    <span id="system-health-pill" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <span id="system-health-text"><%= t.systemHealthy %></span>
+                    </span>
                 </div>
             </div>
             
