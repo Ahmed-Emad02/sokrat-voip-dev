@@ -22236,6 +22236,42 @@ app.post('/api/config/modem/gain', async (req, res) => {
     }
 });
 
+// POST /api/config/modem/autoconfig/rollback - Restore the original pre-autoconfig dongle.conf (ROOT USER ONLY)
+app.post('/api/config/modem/autoconfig/rollback', requireAuth, async (req, res) => {
+    try {
+        if (!hasRootAccess(req)) {
+            return res.status(403).json({ success: false, error: 'Access denied. Only the root superuser can roll back dongle autoconfiguration.' });
+        }
+        const script = process.env.SOKRAT_DONGLE_AUTOCONFIG
+            || path.join(__dirname, 'scripts', 'dongle-autoconfig.py');
+        if (!fs.existsSync(script)) {
+            return res.status(500).json({ success: false, error: `Dongle autoconfig tool not found at ${script}` });
+        }
+        let stdout;
+        try {
+            stdout = await execFileAsync('/usr/bin/python3', [script, 'rollback', '--yes', '--json'], { timeout: 60000 });
+        } catch (err) {
+            const detail = String((err && (err.stderr || err.stdout || err.message)) || 'rollback failed').trim();
+            return res.status(409).json({ success: false, error: detail });
+        }
+        let payload = {};
+        try {
+            payload = JSON.parse(String(stdout || '').trim() || '{}');
+        } catch (_) {
+            payload = { raw: String(stdout || '').trim() };
+        }
+        res.json({
+            success: true,
+            ...payload,
+            message: payload.backup
+                ? `Restored ${payload.backup}; automatic dongle reconciliation is disabled.`
+                : 'Dongle autoconfiguration rolled back; automatic reconciliation is disabled.'
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // POST /api/config/modem/reset - Reset all dongle gains to 0 in dongle.conf
 app.post('/api/config/modem/reset', async (req, res) => {
     try {

@@ -227,14 +227,32 @@ if ! command -v git &>/dev/null; then
     dnf install -y git 2>/dev/null || yum install -y git
 fi
 
-echo "--> Cloning Sokrat VOIP repository..."
-if [ -d "$INSTALL_DIR/.git" ]; then
+echo "--> Preparing Sokrat VOIP repository..."
+VALID_CLONE=0
+if [ -d "$INSTALL_DIR/.git" ] \
+   && git -C "$INSTALL_DIR" rev-parse --git-dir >/dev/null 2>&1 \
+   && git -C "$INSTALL_DIR" rev-parse --verify HEAD >/dev/null 2>&1 \
+   && git -C "$INSTALL_DIR" cat-file -e "HEAD:installer-bundle/install-sokrat.sh" >/dev/null 2>&1; then
+    VALID_CLONE=1
+fi
+
+if [ "$VALID_CLONE" = "1" ]; then
     echo "  Updating existing clone in $INSTALL_DIR..."
-    git -C "$INSTALL_DIR" fetch --depth 1 origin "$REPO_BRANCH" 2>/dev/null || true
-    git -C "$INSTALL_DIR" checkout "$REPO_BRANCH" 2>/dev/null || true
+    git -C "$INSTALL_DIR" fetch origin "+refs/heads/$REPO_BRANCH:refs/remotes/origin/$REPO_BRANCH" || exit 1
+    git -C "$INSTALL_DIR" checkout -B "$REPO_BRANCH" "origin/$REPO_BRANCH" || exit 1
 else
+    if [ -e "$INSTALL_DIR" ]; then
+        FAILED_DIR="${INSTALL_DIR}.failed-$(date +%Y%m%dT%H%M%SZ)"
+        echo "  Moving incomplete checkout to $FAILED_DIR"
+        mv "$INSTALL_DIR" "$FAILED_DIR" || exit 1
+    fi
     mkdir -p "$(dirname "$INSTALL_DIR")"
-    git clone --branch "$REPO_BRANCH" "$REPO_URL" "$INSTALL_DIR"
+    git clone --branch "$REPO_BRANCH" "$REPO_URL" "$INSTALL_DIR" || exit 1
+fi
+
+if [ ! -f "$INSTALL_DIR/installer-bundle/install-sokrat.sh" ]; then
+    echo "ERROR: checkout is missing $INSTALL_DIR/installer-bundle/install-sokrat.sh" >&2
+    exit 1
 fi
 
 # ──────────────────────────────────────────────────────────────────────────────

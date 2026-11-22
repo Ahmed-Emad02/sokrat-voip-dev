@@ -2011,6 +2011,24 @@ if command -v httpd >/dev/null 2>&1; then
     httpd -t >/dev/null 2>&1 && systemctl reload httpd 2>/dev/null || true
 fi
 
+# Refresh dongle autoconfiguration units and keep the timer only when a slot map exists.
+if [ -f "$INSTALL_DIR/scripts/dongle-autoconfig.py" ]; then
+    install -d -m 0755 /etc/sokrat /var/lib/sokrat/dongle-autoconfig/backups
+    chmod 0755 "$INSTALL_DIR/scripts/dongle-autoconfig.py" 2>/dev/null || true
+    find "$INSTALL_DIR/scripts/dongle_autoconfig" -maxdepth 1 -name '*.py' -exec chmod 0755 {} + 2>/dev/null || true
+    if [ -f "$INSTALL_DIR/scripts/systemd/sokrat-dongle-autoconfig.service" ] && \
+       [ -f "$INSTALL_DIR/scripts/systemd/sokrat-dongle-autoconfig.timer" ]; then
+        install -m 0644 "$INSTALL_DIR/scripts/systemd/sokrat-dongle-autoconfig.service" /etc/systemd/system/sokrat-dongle-autoconfig.service
+        install -m 0644 "$INSTALL_DIR/scripts/systemd/sokrat-dongle-autoconfig.timer" /etc/systemd/system/sokrat-dongle-autoconfig.timer
+        systemctl daemon-reload
+        if [ -f /etc/sokrat/dongle-slots.json ]; then
+            systemctl enable --now sokrat-dongle-autoconfig.timer 2>/dev/null || true
+        else
+            echo "  dongle autoconfig units refreshed; slot map absent, timer not enabled"
+        fi
+    fi
+fi
+
 systemctl restart sokrat-voip.service 2>/dev/null || true
 systemctl restart sokrat-watchdog.service 2>/dev/null || true
 systemctl restart sokrat-stt.service 2>/dev/null || true

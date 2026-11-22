@@ -2822,6 +2822,9 @@ DONGLE_HELPER="$INSTALL_DIR/scripts/dongle-module.sh"
 if [ ! -f "$DONGLE_HELPER" ] && [ -f "$SCRIPT_DIR/scripts/dongle-module.sh" ]; then
     DONGLE_HELPER="$SCRIPT_DIR/scripts/dongle-module.sh"
 fi
+if [ ! -f "$DONGLE_HELPER" ] && [ -f "$SCRIPT_DIR/../scripts/dongle-module.sh" ]; then
+    DONGLE_HELPER="$SCRIPT_DIR/../scripts/dongle-module.sh"
+fi
 if [ -f "$DONGLE_HELPER" ]; then
     # shellcheck source=scripts/dongle-module.sh
     . "$DONGLE_HELPER"
@@ -2971,6 +2974,23 @@ echo "  99-huawei-dongle.rules installed"
 cp "$INSTALL_DIR/rules/99-dongle-auto-restart.rules" /etc/udev/rules.d/99-dongle-auto-restart.rules
 chmod 644 /etc/udev/rules.d/99-dongle-auto-restart.rules
 echo "  99-dongle-auto-restart.rules installed"
+
+# Sokrat dongle autoconfiguration (port-based slots, idle-gated apply, rollback).
+if [ -f "$INSTALL_DIR/scripts/dongle-autoconfig.py" ]; then
+    install -d -m 0755 /etc/sokrat /var/lib/sokrat/dongle-autoconfig/backups
+    chmod 0755 "$INSTALL_DIR/scripts/dongle-autoconfig.py" 2>/dev/null || true
+    find "$INSTALL_DIR/scripts/dongle_autoconfig" -maxdepth 1 -name '*.py' -exec chmod 0755 {} + 2>/dev/null || true
+    install -m 0644 "$INSTALL_DIR/scripts/systemd/sokrat-dongle-autoconfig.service" /etc/systemd/system/sokrat-dongle-autoconfig.service
+    install -m 0644 "$INSTALL_DIR/scripts/systemd/sokrat-dongle-autoconfig.timer" /etc/systemd/system/sokrat-dongle-autoconfig.timer
+    install -m 0644 "$INSTALL_DIR/config/dongle-slots.example.json" /etc/sokrat/dongle-slots.example.json 2>/dev/null || true
+    systemctl daemon-reload
+    if [ -f /etc/sokrat/dongle-slots.json ]; then
+        systemctl enable --now sokrat-dongle-autoconfig.timer 2>/dev/null || true
+        echo "  dongle autoconfig timer enabled"
+    else
+        echo "  dongle autoconfig installed; create /etc/sokrat/dongle-slots.json via: python3 $INSTALL_DIR/scripts/dongle-autoconfig.py bootstrap --write"
+    fi
+fi
 # Disable USB autosuspend in GRUB kernel command line
 if [ -f /etc/default/grub ]; then
     if ! grep -q 'usbcore.autosuspend=-1' /etc/default/grub; then

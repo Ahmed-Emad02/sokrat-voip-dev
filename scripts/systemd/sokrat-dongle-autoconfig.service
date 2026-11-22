@@ -1,0 +1,14 @@
+[Unit]
+Description=Sokrat dongle slot reconciliation and health recovery
+After=network.target asterisk.service
+Wants=asterisk.service
+ConditionPathExists=/etc/sokrat/dongle-slots.json
+
+[Service]
+Type=oneshot
+User=root
+Environment=PYTHONUNBUFFERED=1
+Nice=10
+ExecStart=/usr/bin/python3 /opt/sokrat-voip/scripts/dongle-autoconfig.py reconcile --yes --auto --json
+TimeoutStartSec=180
+SuccessExitStatus=0 75
