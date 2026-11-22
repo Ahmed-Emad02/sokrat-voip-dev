@@ -11279,7 +11279,7 @@ app.post('/api/intercom/call', requireAuth, async (req, res) => {
         const roomId = '88' + String(Date.now()).slice(-6);
 
         // Originate Host Caller to join conference room
-        const hostChan = `Local/${caller}@from-intercom-autoanswer`;
+        const hostChan = `Local/${caller}@from-intercom-autoanswer/n`;
         if (amiClient) {
             amiClient.write(`Action: Originate\r\nChannel: ${hostChan}\r\nContext: from-intercom-conf\r\nExten: ${roomId}\r\nPriority: 1\r\nVariable: INTERCOM_CALLER=${caller}\r\nCallerID: "Intercom Host" <${caller}>\r\nAsync: true\r\n\r\n`);
         } else {
@@ -11289,7 +11289,7 @@ app.post('/api/intercom/call', requireAuth, async (req, res) => {
         // Originate each target extension to join conference room
         const originatedList = [];
         for (const targetExt of validTargets) {
-            const targetChan = `Local/${targetExt}@from-intercom-autoanswer`;
+            const targetChan = `Local/${targetExt}@from-intercom-autoanswer/n`;
             if (amiClient) {
                 amiClient.write(`Action: Originate\r\nChannel: ${targetChan}\r\nContext: from-intercom-conf\r\nExten: ${roomId}\r\nPriority: 1\r\nVariable: INTERCOM_CALLER=${caller}\r\nCallerID: "Intercom ${caller}" <${caller}>\r\nAsync: true\r\n\r\n`);
             } else {
