@@ -2340,21 +2340,17 @@ function isTabAllowed(tabName) {
                     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div>
                             <span class="text-xs font-bold text-[var(--text-primary)] block"><%= isRtl ? 'إدارة فتحات المودم' : 'Dongle Slot Management' %></span>
-                            <span class="text-[10px] text-[var(--text-muted)]"><%= isRtl ? 'إضافة أو إزالة تعريفات الأجهزة وإعادة ضبط مستويات الكسب.' : 'Add or remove device definitions, or reset all gain values.' %></span>
+                            <span class="text-[10px] text-[var(--text-muted)]"><%= isRtl ? 'إدارة الفتحات الفارغة غير المخصصة فقط، دون تعيين مودم أو إعادة تحميل أو إعادة ضبط.' : 'Manage empty, unassigned slots only, without modem assignment, reloads or resets.' %></span>
                         </div>
                         <div class="flex flex-wrap items-center gap-2">
-                            <% if ((typeof isRoot !== 'undefined' && isRoot) || (typeof currentUser !== 'undefined' && currentUser === 'root')) { %>
+                            <% if (typeof currentUser !== 'undefined' && currentUser === 'root') { %>
                                 <button type="button" onclick="openAddDongleSlotModal()" class="config-action-btn config-action-btn--positive">
                                     <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
-                                    <span><%= isRtl ? 'إضافة فتحة' : 'Add Slot' %></span>
+                                    <span><%= isRtl ? 'إضافة فتحة فارغة' : 'Add empty slot' %></span>
                                 </button>
                                 <button type="button" onclick="openRemoveDongleSlotModal()" class="config-action-btn config-action-btn--danger">
                                     <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M20 12H4" /></svg>
                                     <span><%= isRtl ? 'إزالة فتحة' : 'Remove Slot' %></span>
-                                </button>
-                                <button type="button" onclick="rollbackDongleAutoconfig()" class="config-action-btn config-action-btn--danger" title="<%= isRtl ? 'استعادة النسخة الأصلية قبل الإعداد التلقائي وتعطيل الإعداد التلقائي' : 'Restore the original pre-autoconfig dongle.conf backup and disable automatic reconciliation' %>">
-                                    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 10h10a5 5 0 015 5v2m0 0l-3-3m3 3l3-3M3 10V6m0 4l3-3m-3 3l-3-3" /></svg>
-                                    <span><%= isRtl ? 'التراجع عن الإعداد التلقائي' : 'Rollback Autoconfig' %></span>
                                 </button>
                             <% } %>
                             <button type="button" onclick="resetAllDongleGains()" class="config-action-btn config-action-btn--danger">
@@ -5451,55 +5447,32 @@ function isTabAllowed(tabName) {
     </div>
     </div>
 
+    <% if (typeof currentUser !== 'undefined' && currentUser === 'root') { %>
     <!-- MODAL: ADD DONGLE SLOT (ROOT USER ONLY) -->
-    <div id="addDongleSlotModal" class="fixed inset-0 bg-black/75 backdrop-blur-md z-[99999] flex items-center justify-center hidden p-4 sm:p-6">
+    <div id="addDongleSlotModal" data-current-user="<%= currentUser %>" class="fixed inset-0 bg-black/75 backdrop-blur-md z-[99999] flex items-center justify-center hidden p-4 sm:p-6">
         <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] max-w-md w-full flex flex-col text-[var(--text-primary)] overflow-hidden">
             <div class="flex items-center justify-between px-6 py-4 border-b border-[var(--border-primary)] bg-[var(--bg-primary)]/40 shrink-0">
-                <h3 class="text-base font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'إضافة شريحة/مودم جديد لـ Asterisk' : 'Add Dongle Slot(s) to Asterisk' %></h3>
+                <h3 class="text-base font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'إضافة فتحة فارغة' : 'Add Empty Slot' %></h3>
                 <button type="button" onclick="closeModal('addDongleSlotModal')" class="w-8 h-8 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[var(--text-muted)] hover:text-[var(--text-primary)] flex items-center justify-center cursor-pointer">✕</button>
             </div>
             <form onsubmit="saveNewDongleSlot(event)" class="p-6 space-y-4">
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="newSlotCount"><%= isRtl ? 'عدد الشرائح (Quantity) *' : 'Quantity to Add *' %></label>
-                        <input type="number" id="newSlotCount" value="1" min="1" max="32" oninput="updateDongleSlotPreview()" class="config-input w-full font-mono text-xs font-bold text-emerald-400">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="newSlotPrefix"><%= isRtl ? 'سابقة الاسم (Prefix)' : 'Name Prefix' %></label>
-                        <input type="text" id="newSlotPrefix" value="dongle" oninput="updateDongleSlotPreview()" class="config-input w-full font-mono text-xs">
-                    </div>
-                </div>
                 <div>
-                    <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="newSlotName"><%= isRtl ? 'اسم الفتحة الأولى (Custom Name if Qty=1)' : 'Custom Slot Name (Single Slot)' %></label>
-                    <input type="text" id="newSlotName" placeholder="e.g. dongle1" oninput="updateDongleSlotPreview()" class="config-input w-full font-mono text-xs">
+                    <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="newSlotCount"><%= isRtl ? 'عدد الفتحات الفارغة *' : 'Empty Slots to Add *' %></label>
+                    <input type="number" id="newSlotCount" value="1" min="1" max="32" step="1" required oninput="updateDongleSlotPreview()" class="config-input w-full font-mono text-xs font-bold text-emerald-400">
                 </div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="newSlotAudio"><%= isRtl ? 'منفذ الصوت الأولي' : 'Base Audio TTY Port' %></label>
-                        <input type="text" id="newSlotAudio" placeholder="/dev/ttyUSB1" class="config-input w-full font-mono text-xs">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="newSlotData"><%= isRtl ? 'منفذ البيانات الأولي' : 'Base Data TTY Port' %></label>
-                        <input type="text" id="newSlotData" placeholder="/dev/ttyUSB2" class="config-input w-full font-mono text-xs">
-                    </div>
-                </div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="newSlotRxGain">Rx Gain (dB)</label>
-                        <input type="number" id="newSlotRxGain" value="3" min="-10" max="10" class="config-input w-full font-mono text-xs">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="newSlotTxGain">Tx Gain (dB)</label>
-                        <input type="number" id="newSlotTxGain" value="3" min="-10" max="10" class="config-input w-full font-mono text-xs">
-                    </div>
+                <div class="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/25 text-[11px] leading-relaxed text-[var(--text-primary)]">
+                    <%= isRtl
+                        ? 'تُنشأ فتحات فارغة غير مخصصة فقط بأسماء يحددها الخادم. لن يتم تعيين أي مودم أو فحص الأجهزة أو إعادة تحميل الخدمات أو إعادة ضبطها.'
+                        : 'Creates only empty, unassigned slots with server-allocated names. No modem assignment, hardware probing, service reloads or resets.' %>
                 </div>
                 <div class="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs font-mono text-emerald-400">
-                    <span class="block text-[10px] text-[var(--text-muted)] uppercase mb-0.5"><%= isRtl ? 'معاينة الفتحات المضافة' : 'Preview Slots To Create' %>:</span>
-                    <span id="newSlotPreviewText" class="font-bold">dongle0</span>
+                    <span class="block text-[10px] text-[var(--text-muted)] uppercase mb-0.5"><%= isRtl ? 'تخصيص أسماء الفتحات' : 'Slot Name Allocation' %>:</span>
+                    <span id="newSlotPreviewText" class="font-bold"></span>
                 </div>
+                <p id="newSlotResultText" role="status" class="text-xs break-words text-[var(--text-secondary)]"></p>
                 <div class="flex justify-end gap-3 pt-4 border-t border-[var(--border-primary)]">
                     <button type="button" onclick="closeModal('addDongleSlotModal')" class="config-btn-secondary px-4 py-2 text-xs"><%= isRtl ? 'إلغاء' : 'Cancel' %></button>
-                    <button type="submit" class="config-btn-primary px-5 py-2 text-xs font-bold"><%= isRtl ? 'إضافة الشرائح' : 'Add Slot(s)' %></button>
+                    <button type="submit" id="createDongleSlotsButton" class="config-btn-primary px-5 py-2 text-xs font-bold"><%= isRtl ? 'إنشاء فتحة فارغة' : 'Create empty slot(s)' %></button>
                 </div>
             </form>
         </div>
@@ -5509,30 +5482,28 @@ function isTabAllowed(tabName) {
     <div id="removeDongleSlotModal" class="fixed inset-0 bg-black/75 backdrop-blur-md z-[99999] flex items-center justify-center hidden p-4 sm:p-6">
         <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] max-w-md w-full flex flex-col text-[var(--text-primary)] overflow-hidden">
             <div class="flex items-center justify-between px-6 py-4 border-b border-[var(--border-primary)] bg-[var(--bg-primary)]/40 shrink-0">
-                <h3 class="text-base font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'حذف شرائح/مودم من Asterisk' : 'Remove Dongle Slot(s) from Asterisk' %></h3>
+                <h3 class="text-base font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'إزالة فتحات فارغة غير مخصصة' : 'Remove Empty, Unassigned Slots' %></h3>
                 <button type="button" onclick="closeModal('removeDongleSlotModal')" class="w-8 h-8 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[var(--text-muted)] hover:text-[var(--text-primary)] flex items-center justify-center cursor-pointer">✕</button>
             </div>
             <form onsubmit="executeRemoveDongleSlot(event)" class="p-6 space-y-4">
                 <div>
-                    <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="removeSlotCount"><%= isRtl ? 'عدد الشرائح المراد حذفها (من الأخيرة)' : 'Quantity of Slots to Remove (From Last)' %></label>
-                    <input type="number" id="removeSlotCount" value="1" min="1" max="32" class="config-input w-full font-mono text-xs text-red-400 font-bold mb-2">
-                </div>
-                <div>
-                    <span class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'أو اختر فتحات محددة لحذفها' : 'Or Select Specific Dongle Slots to Remove' %></span>
+                    <span class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'اختر الفتحات الفارغة لإزالتها؛ الفتحات المخصصة غير متاحة' : 'Select empty slots to remove; assigned slots are disabled' %></span>
                     <div id="removeSlotChecklist" class="space-y-1.5 max-h-40 overflow-y-auto p-2.5 bg-[var(--bg-card)] rounded-lg border border-[var(--border-primary)] font-mono text-xs custom-scrollbar">
                         <!-- Populated dynamically -->
                     </div>
                 </div>
                 <p class="text-xs text-amber-400 font-semibold leading-relaxed">
-                    <%= isRtl ? 'ملاحظة: سيتم حذف الفتحات المحددة من dongle.conf وتنظيف مطابقات AstDB وتحديث Asterisk.' : 'Notice: This will remove the selected dongle sections from dongle.conf and reload Asterisk.' %>
+                    <%= isRtl ? 'تُزال فقط الفتحات الفارغة غير المخصصة التي تختارها بالاسم. لن يتم تعيين أي مودم أو إعادة تحميل الخدمات أو إعادة ضبطها.' : 'Only the empty, unassigned slots you select by name will be removed. No modem assignment, service reloads or resets.' %>
                 </p>
+                <p id="removeSlotResultText" role="status" class="text-xs break-words text-[var(--text-secondary)]"></p>
                 <div class="flex justify-end gap-3 pt-4 border-t border-[var(--border-primary)]">
                     <button type="button" onclick="closeModal('removeDongleSlotModal')" class="config-btn-secondary px-4 py-2 text-xs"><%= isRtl ? 'إلغاء' : 'Cancel' %></button>
-                    <button type="submit" class="config-btn-primary px-5 py-2 text-xs font-bold bg-red-600 hover:bg-red-700"><%= isRtl ? 'تأكيد الحذف' : 'Confirm Delete' %></button>
+                    <button type="submit" id="removeDongleSlotsButton" class="config-btn-primary px-5 py-2 text-xs font-bold bg-red-600 hover:bg-red-700"><%= isRtl ? 'تأكيد الحذف' : 'Confirm Delete' %></button>
                 </div>
             </form>
         </div>
     </div>
+    <% } %>
 
     <!-- MODAL: CONNECT NEW PBX (1-CLICK SSH BOOTSTRAP) -->
     <div id="connectPbxModal" class="fixed inset-0 bg-black/75 backdrop-blur-md z-[99999] flex items-center justify-center hidden p-4 sm:p-6">
