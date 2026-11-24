@@ -84,7 +84,15 @@ if [ ! -f "$DONGLE_HELPER" ]; then
     DONGLE_HELPER="$(dirname "$0")/dongle-module.sh"
 fi
 . "$DONGLE_HELPER"
-. "$(dirname "$DONGLE_HELPER")/dongle-config.sh"
+DONGLE_CONFIG_HELPER="$INSTALL_DIR/scripts/dongle-config.sh"
+if [ ! -f "$DONGLE_CONFIG_HELPER" ] && [ -f "$(dirname "$DONGLE_HELPER")/dongle-config.sh" ]; then
+    DONGLE_CONFIG_HELPER="$(dirname "$DONGLE_HELPER")/dongle-config.sh"
+fi
+if [ ! -f "$DONGLE_CONFIG_HELPER" ]; then
+    echo "ERROR: Missing shared dongle configuration helper: $DONGLE_CONFIG_HELPER" >&2
+    exit 1
+fi
+. "$DONGLE_CONFIG_HELPER"
 dongle_module_require_idle || exit 1
 dongle_deployment_disable_watchdog
 
@@ -130,19 +138,19 @@ else
     echo "  Notice: $DONGLE_BAK not found, keeping current dongle config."
 fi
 
-RESTORE_MODULES_DIR=""
-for mod_dir in /usr/lib64/asterisk/modules /usr/lib/asterisk/modules; do
-    if [ -d "$mod_dir" ]; then
-        RESTORE_MODULES_DIR="$mod_dir"
-        break
-    fi
-done
-if [ -z "$RESTORE_MODULES_DIR" ]; then
-    echo "ERROR: No Asterisk modules directory found; binary restoration refused." >&2
-    exit 1
-fi
 DONGLE_SO_BAK="$BACKUP_DIR/chan_dongle.so.bak_${TARGET_TIMESTAMP}"
 if [ -f "$DONGLE_SO_BAK" ]; then
+    RESTORE_MODULES_DIR=""
+    for mod_dir in /usr/lib64/asterisk/modules /usr/lib/asterisk/modules; do
+        if [ -d "$mod_dir" ]; then
+            RESTORE_MODULES_DIR="$mod_dir"
+            break
+        fi
+    done
+    if [ -z "$RESTORE_MODULES_DIR" ]; then
+        echo "ERROR: No Asterisk modules directory found; binary restoration refused." >&2
+        exit 1
+    fi
     # Historical rollback artifacts intentionally do not use the release pin.
     dongle_module_install_file "$DONGLE_SO_BAK" "$RESTORE_MODULES_DIR" "backup snapshot $TARGET_TIMESTAMP"
 else
