@@ -212,7 +212,7 @@ test('views/gsm-dongles.ejs includes populate-hardware button in Card View only 
 
     // Button rendered in card view
     assert.match(viewContent, /data-dongle-action="populate-hardware"/, 'View must render populate-hardware action button');
-    assert.match(viewContent, /id="populateBtn-\$\{escapeHtml\(id\)\}"/, 'View must set populateBtn ID');
+    assert.match(viewContent, /id="populateBtn-\$\{escapeHtml\(dongleKey\)\}"/, 'View must set populateBtn ID');
 
     // Confirm it is only in the Card View section and not inside the minimal list view template
     const minimalViewBlockMatch = viewContent.match(/if \(currentViewMode === 'minimal'\) \{([\s\S]*?)\} else \{/);
@@ -286,7 +286,7 @@ test('views/gsm-dongles.ejs includes edit-ports button in Card View only and def
 
     // Button rendered in card view
     assert.match(viewContent, /data-dongle-action="edit-ports"/, 'View must render edit-ports action button');
-    assert.match(viewContent, /id="editPortsBtn-\$\{escapeHtml\(id\)\}"/, 'View must set editPortsBtn ID');
+    assert.match(viewContent, /id="editPortsBtn-\$\{escapeHtml\(dongleKey\)\}"/, 'View must set editPortsBtn ID');
 
     // Confirm it is only in the Card View section and not inside the minimal list view template
     const minimalViewBlockMatch = viewContent.match(/if \(currentViewMode === 'minimal'\) \{([\s\S]*?)\} else \{/);
