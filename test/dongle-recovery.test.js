@@ -240,7 +240,9 @@ test('a call appearing after the stop acknowledgement defers the actual config m
 function adoptionPass(f, { normalize = false, reclaim = false, repair = false } = {}) {
     const server = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
     const start = server.indexOf('async function runAdoptionPass(trigger) {');
+    assert.ok(start >= 0, 'runAdoptionPass anchor must exist');
     const end = server.indexOf('\n/**', start);
+    assert.ok(end > start, 'runAdoptionPass end anchor must exist');
     return vm.runInNewContext(`${server.slice(start, end)}\nrunAdoptionPass;`, {
         DONGLE_CONF_PATH: f.configPath,
         readDongleSections, slotIntentionallyDisabled, recoveryEligible,
@@ -341,7 +343,9 @@ test('unknown detail state is not made safe by zero numeric counters', async t =
 function manualAddHandler(f, apply) {
     const server = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
     const start = server.indexOf("app.post('/api/gsm-dongles/provision/add'");
+    assert.ok(start >= 0, 'provision/add anchor must exist');
     const end = server.indexOf('// API Endpoint to reload specific dongle', start);
+    assert.ok(end > start, 'provision/add end anchor must exist');
     let handler;
     const auth = () => {};
     const root = () => {};

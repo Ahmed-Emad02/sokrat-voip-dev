@@ -10665,6 +10665,9 @@ function updateDonglePortsInConf(dongleName, audioPort, dataPort) {
     if (!dName) throw new Error('Dongle name is required.');
     const cleanAudio = String(audioPort || '').trim();
     const cleanData = String(dataPort || '').trim();
+    if (cleanAudio && cleanData && cleanAudio.toLowerCase() === cleanData.toLowerCase()) {
+        throw new Error('Audio port and Data port cannot be the same device.');
+    }
     upsertSection(DONGLE_CONF_PATH, dName, { audio: cleanAudio, data: cleanData });
     return { dongleName: dName, audio: cleanAudio, data: cleanData };
 }
@@ -12315,7 +12318,7 @@ function readAsteriskFullLogTail(maxBytes = 512 * 1024) {
 const liveVoiceStateCache = new Map();
 const LIVE_VOICE_CACHE_MS = 15000;
 
-function isLiveDongleVoiceEnabled(dongleId) {
+async function isLiveDongleVoiceEnabled(dongleId) {
     const id = String(dongleId || '').trim().toLowerCase();
     if (!/^dongle[0-9]+$/.test(id)) return false;
     const now = Date.now();
@@ -12323,10 +12326,9 @@ function isLiveDongleVoiceEnabled(dongleId) {
     if (cached && (now - cached.at) < LIVE_VOICE_CACHE_MS) return cached.enabled;
     let enabled = false;
     try {
-        const output = execFileSync(ASTERISK_BIN, ['-rx', `dongle show device state ${id}`], {
+        const output = await execFileAsync(ASTERISK_BIN, ['-rx', `dongle show device state ${id}`], {
             encoding: 'utf8',
-            timeout: 2500,
-            stdio: ['ignore', 'pipe', 'ignore']
+            timeout: 2500
         }) || '';
         enabled = /^\s*Voice\s*:\s*Yes\s*$/mi.test(output);
     } catch (_) {}
@@ -12334,7 +12336,7 @@ function isLiveDongleVoiceEnabled(dongleId) {
     return enabled;
 }
 
-function annotateE173VoiceWarnings(devices) {
+async function annotateE173VoiceWarnings(devices) {
     const logTail = readAsteriskFullLogTail();
     const warnings = parseE173VoiceWarningState(logTail);
     const nonFatalWarnings = parseNonFatalWarningState(logTail);
@@ -12350,7 +12352,7 @@ function annotateE173VoiceWarnings(devices) {
         // Log entries can lag the live state. A modem already reporting
         // Voice: Yes has a usable PCM path; do not surface an old failed
         // AT^CVOICE=0 attempt from the log tail.
-        if (warning && !isLiveDongleVoiceEnabled(device.ID)) {
+        if (warning && !(await isLiveDongleVoiceEnabled(device.ID))) {
             device.voiceEnableWarning = {
                 attempts: warning.attempts,
                 messageEn: `Voice activation failed after ${warning.attempts} attempts. Audio may be missing on this dongle; retry AT^CVOICE=0 or restart the modem.`,
@@ -12407,11 +12409,11 @@ function getEnrichedDevices() {
                 if (!error && stdout) {
                     devices = parseDevicesOutput(stdout, false, astDbMappings);
                 }
-                enrichDongleRouting(devices).then(enriched => {
-                    cachedEnrichedDevices = annotateE173VoiceWarnings(withConfiguredEmptySlots(enriched));
+                enrichDongleRouting(devices).then(async enriched => {
+                    cachedEnrichedDevices = await annotateE173VoiceWarnings(withConfiguredEmptySlots(enriched));
                     lastEnrichedDevicesTime = Date.now();
                     resolve(cachedEnrichedDevices);
-                }).catch(() => resolve(annotateE173VoiceWarnings(withConfiguredEmptySlots(devices))));
+                }).catch(async () => resolve(await annotateE173VoiceWarnings(withConfiguredEmptySlots(devices))));
             });
         });
     });
@@ -13237,7 +13239,7 @@ async function countDongleChannels() {
         const out = String(await execFileAsync(ASTERISK_BIN, ['-rx', 'core show channels'], { timeout: 5000 }) || '');
         return out.split('\n').filter(line => /Dongle\//i.test(line)).length;
     } catch (_) {
-        return 0;
+        return null;
     }
 }
 
@@ -13702,7 +13704,14 @@ app.post('/api/gsm-dongles/virtual-replug/:dongleId', async (req, res) => {
         });
     }
 
-    if (await countDongleChannels() > 0) {
+    const activeChannels = await countDongleChannels();
+    if (activeChannels === null) {
+        return res.status(409).json({
+            success: false,
+            error: 'Cannot determine whether a dongle call is active; refusing a USB power cycle.'
+        });
+    }
+    if (activeChannels > 0) {
         return res.status(409).json({
             success: false,
             error: 'A dongle call is in progress; a USB power cycle would drop every line. Retry when idle.'
@@ -13714,6 +13723,21 @@ app.post('/api/gsm-dongles/virtual-replug/:dongleId', async (req, res) => {
         source: 'api:/api/gsm-dongles/virtual-replug'
     });
     try {
+        // Re-check immediately before the destructive step: a call may have
+        // arrived while the device lookup and audit write ran.
+        const rechecked = await countDongleChannels();
+        if (rechecked === null || rechecked > 0) {
+            appendDongleRestartAudit({
+                type: 'virtual_replug', phase: 'blocked_active_call', dongleId,
+                source: 'api:/api/gsm-dongles/virtual-replug'
+            });
+            return res.status(409).json({
+                success: false,
+                error: rechecked === null
+                    ? 'Cannot determine whether a dongle call is active; refusing a USB power cycle.'
+                    : 'A dongle call started while preparing the power cycle; it was not performed.'
+            });
+        }
         const method = await usbPowerCycleDevice(target.device);
         await new Promise(resolve => setTimeout(resolve, 6000));
         await execFileAsync(ASTERISK_BIN, ['-rx', 'module reload chan_dongle.so'], { timeout: 30000 }).catch(() => {});

@@ -100,7 +100,7 @@ function createDongleSlotsRouter({ configPath, withProvisionLock, readDevices, o
     router.use((req, res, next) => {
         res.set('Cache-Control', 'no-store');
         if (!req.session || req.session.username !== 'root' || req.apiKey != null ||
-            req.isApiKeyAuthenticated || req.trustedFederationPeer != null) {
+            req.isApiKeyAuthenticated || req.isFederationAuthenticated === true) {
             return res.status(403).json({ success: false, error: 'Interactive root access is required.' });
         }
         return next();
@@ -142,12 +142,15 @@ function createDongleSlotsRouter({ configPath, withProvisionLock, readDevices, o
 
     router.get('/', async (req, res) => {
         try {
-            const result = await withProvisionLock(async () => {
-                const sections = parseConfiguredState(configPath);
-                const devices = await runtimeDevices();
-                return { slots: listSlots(sections, devices), suggestedSlot: nextSlotNames(sections, devices, 1)?.[0] || null };
+            // Pure read: parse a committed snapshot without queueing behind an
+            // adoption pass or a recovery watchdog that holds the write lock.
+            const sections = parseConfiguredState(configPath);
+            const devices = await runtimeDevices();
+            return res.json({
+                success: true,
+                slots: listSlots(sections, devices),
+                suggestedSlot: nextSlotNames(sections, devices, 1)?.[0] || null
             });
-            return res.json({ success: true, ...result });
         } catch (error) {
             return failure(res, error);
         }
@@ -253,14 +256,20 @@ function createDongleSlotsRouter({ configPath, withProvisionLock, readDevices, o
                 };
             });
             await notify('remove', result.changedSlots, result.backup, req);
+            const partial = result.stopFailures.length > 0;
             return res.json({
                 success: true,
+                partial,
                 removedSlots: result.changedSlots,
                 slot: result.changedSlots.length === 1 ? result.changedSlots[0] : undefined,
                 slots: result.slots,
                 backup: result.backup,
                 stopped: result.stopped,
-                stopFailures: result.stopFailures
+                stopFailures: result.stopFailures,
+                ...(partial ? {
+                    warning: 'Configuration was removed, but the driver entry could not be stopped: '
+                        + result.stopFailures.map(failure => `${failure.slot}: ${failure.error}`).join('; ')
+                } : {})
             });
         } catch (error) {
             return failure(res, error);

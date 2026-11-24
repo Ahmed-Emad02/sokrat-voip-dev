@@ -9931,7 +9931,7 @@
             const targetText = checked.join(', ');
             const removesAssigned = checked.some(name => document.querySelector(`#removeSlotChecklist input[value="${name}"]`)?.dataset.assigned === '1');
             if (!confirm(removesAssigned
-                ? (isRtl ? `إزالة الفتحات التالية: ${targetText}؟ بعضها مخصص ومودمه غير متصل؛ ستُحذف إعداداته وستنقطع باقي الخطوط لثوانٍ أثناء إعادة تحميل الوحدة.` : `Remove ${targetText}? Some are assigned with no modem connected; their sections are deleted and the remaining lines reconnect for a few seconds while the module reloads.`)
+                ? (isRtl ? `إزالة الفتحات التالية: ${targetText}؟ بعضها مخصص ومودمه غير متصل؛ ستُحذف إعداداته ويسري التغيير عند إعادة تحميل السائق التالية (دون إعادة تحميل تلقائية).` : `Remove ${targetText}? Some are assigned with no modem connected; their sections are deleted and the change takes effect at the next driver reload (no automatic reload).`)
                 : (isRtl ? `إزالة الفتحات الفارغة غير المخصصة التالية فقط: ${targetText}؟ دون إعادة تحميل أو إعادة ضبط.` : `Remove only these empty, unassigned slots: ${targetText}? No reloads or resets.`))) return;
 
             dongleSlotMutationInProgress = true;
@@ -9949,9 +9949,10 @@
                 if (!res.ok || !data.success || !Array.isArray(data.removedSlots)) {
                     throw new Error(data.error || (isRtl ? 'فشل إزالة الفتحات' : 'Failed to remove slots'));
                 }
-                result.textContent = (isRtl ? 'تمت الإزالة: ' : 'Removed: ') + data.removedSlots.join(', ');
-                showToast(result.textContent, 'success');
-                closeModal('removeDongleSlotModal');
+                result.textContent = (isRtl ? 'تمت الإزالة: ' : 'Removed: ') + data.removedSlots.join(', ')
+                    + (data.partial && data.warning ? ' — ' + data.warning : '');
+                showToast(result.textContent, data.partial ? 'warning' : 'success');
+                if (!data.partial) closeModal('removeDongleSlotModal');
             } catch (err) {
                 result.textContent = err.message;
                 showToast(result.textContent, 'error');

@@ -8,7 +8,8 @@ const path = require('path');
 const http = require('http');
 const express = require('express');
 const { createDongleSlotsRouter } = require('../routes/dongle-slots');
-const { parseConfiguredState } = require('../lib/dongle-provisioning');
+const provisioning = require('../lib/dongle-provisioning');
+const { parseConfiguredState } = provisioning;
 
 const BASE_CONFIG = '; retained local configuration\n[general]\ninterval=15\n\n[defaults]\ncontext=from-dongle-custom\nrxgain=3\ntxgain=3\n';
 const API = '/api/gsm-dongles/slots';
@@ -36,7 +37,7 @@ async function fixture(t, { content = BASE_CONFIG, devices = [], readDevices, on
     app.use((req, res, next) => {
         if (req.headers['x-test-session']) req.session = JSON.parse(req.headers['x-test-session']);
         if (req.headers['x-test-api-key']) req.apiKey = JSON.parse(req.headers['x-test-api-key']);
-        if (req.headers['x-test-federation']) req.trustedFederationPeer = JSON.parse(req.headers['x-test-federation']);
+        if (req.headers['x-test-federation']) req.isFederationAuthenticated = true;
         if (req.headers['x-test-api-auth']) req.isApiKeyAuthenticated = true;
         next();
     });
@@ -44,7 +45,8 @@ async function fixture(t, { content = BASE_CONFIG, devices = [], readDevices, on
         configPath,
         withProvisionLock,
         readDevices: async () => {
-            assert.equal(locked, true, 'runtime inventory must be read under the provisioning lock');
+            // The GET inventory is a pure read and must not queue behind the
+            // provisioning lock; mutating requests still run inside it.
             runtimeReads += 1;
             return readDevices ? readDevices() : devices;
         },
@@ -426,4 +428,21 @@ test('bulk creation reports conflict when the batch exceeds free names', async t
     assert.equal(response.status, 409);
     assert.equal(f.bytes(), content);
     assert.deepEqual(f.changes, []);
+});
+
+test('provisioning rejects identical audio and data devices', async t => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'dongle-port-pair-'));
+    t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+    const configPath = path.join(directory, 'dongle.conf');
+    fs.writeFileSync(configPath, BASE_CONFIG + '\n[dongle0]\naudio=/dev/serial/by-path/audio-0\ndata=/dev/serial/by-path/data-0\n');
+    const before = fs.readFileSync(configPath, 'utf8');
+    assert.throws(
+        () => provisioning.upsertSection(configPath, 'dongle0', { audio: '/dev/ttyUSB2', data: '/dev/ttyUSB2' }),
+        /same device/
+    );
+    assert.equal(fs.readFileSync(configPath, 'utf8'), before, 'a rejected pair must not rewrite the file');
+    provisioning.upsertSection(configPath, 'dongle0', { audio: '/dev/ttyUSB2', data: '/dev/ttyUSB3' });
+    const section = provisioning.parseConfiguredState(configPath).get('dongle0');
+    assert.equal(section.audio, '/dev/ttyUSB2');
+    assert.equal(section.data, '/dev/ttyUSB3');
 });
