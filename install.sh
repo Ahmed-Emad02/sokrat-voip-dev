@@ -1998,8 +1998,11 @@ same => n,ExecIf($["${MY_SIM_NUMBER}" = "" | "${MY_SIM_NUMBER}" = "+1234567890"]
 same => n,ExecIf($["${DB(DONGLE_SETTINGS/${DONGLENAME})}" != "1"]?Goto(skip_dynamic))
 same => n,ExecIf($["${MY_SIM_NUMBER}" = "" | "${MY_SIM_NUMBER}" = "s" | "${MY_SIM_NUMBER}" = "+1234567890"]?Set(MY_SIM_NUMBER=${DB(sim_map/${DONGLEIMSI})}))
 same => n,ExecIf($["${MY_SIM_NUMBER}" = "" | "${MY_SIM_NUMBER}" = "s" | "${MY_SIM_NUMBER}" = "+1234567890"]?Set(MY_SIM_NUMBER=${DB(DONGLE_NUMBERS/${DONGLEIMSI})}))
-same => n,ExecIf($["${MY_SIM_NUMBER}" = "" | "${MY_SIM_NUMBER}" = "s" | "${MY_SIM_NUMBER}" = "+1234567890"]?Set(MY_SIM_NUMBER=${DB(dongle_map/${DONGLENAME})}))
-same => n,ExecIf($["${MY_SIM_NUMBER}" = "" | "${MY_SIM_NUMBER}" = "s" | "${MY_SIM_NUMBER}" = "+1234567890"]?Set(MY_SIM_NUMBER=${DB(DONGLE_NUMBERS/${DONGLEIMEI})}))
+; A missing dongle_map key makes DB() log a WARNING, so resolve it only when it exists.
+same => n,ExecIf($["${MY_SIM_NUMBER}" = "" | "${MY_SIM_NUMBER}" = "s" | "${MY_SIM_NUMBER}" = "+1234567890"]?GotoIf($["${DB_EXISTS(dongle_map/${DONGLENAME})}" = "1"]?dm_resolve))
+same => n,Goto(dm_next)
+same => n(dm_resolve),Set(MY_SIM_NUMBER=${DB(dongle_map/${DONGLENAME})})
+same => n(dm_next),ExecIf($["${MY_SIM_NUMBER}" = "" | "${MY_SIM_NUMBER}" = "s" | "${MY_SIM_NUMBER}" = "+1234567890"]?Set(MY_SIM_NUMBER=${DB(DONGLE_NUMBERS/${DONGLEIMEI})}))
 same => n(skip_dynamic),ExecIf($["${MY_SIM_NUMBER}" = "" | "${MY_SIM_NUMBER}" = "+1234567890"]?Set(MY_SIM_NUMBER=${EXTEN}))
 
 same => n,Set(CALLER_NUMBER=${FILTER(0123456789+,${CALLERID(num)})})
@@ -2901,54 +2904,16 @@ fi
 
 # 10d — Configure and apply dongle.conf
 echo "  [10d] Configuring and applying dongle.conf..."
-if [ -f /etc/asterisk/dongle.conf ] && grep -q '^\[dongle0\]' /etc/asterisk/dongle.conf; then
-    echo "  /etc/asterisk/dongle.conf already exists, preserving existing port & SIM configuration..."
-    cp -a /etc/asterisk/dongle.conf /etc/asterisk/dongle.conf.bak-install 2>/dev/null || true
-    if grep -q '^;callwaiting=' /etc/asterisk/dongle.conf; then
-        sed -i 's/^;callwaiting=.*/callwaiting=no/' /etc/asterisk/dongle.conf
-    elif ! grep -q '^callwaiting=' /etc/asterisk/dongle.conf; then
-        sed -i '/^\[defaults\]/a callwaiting=no' /etc/asterisk/dongle.conf
-    fi
-    if grep -q '^u2diag=0' /etc/asterisk/dongle.conf; then
-        sed -i 's/^u2diag=0.*/u2diag=-1                      ; -1 = do not send ^U2DIAG (21.x firmwares reject it); 0 = set ^U2DIAG=0 on older modems/' /etc/asterisk/dongle.conf
-    fi
-    if ! grep -q '^syscfg=' /etc/asterisk/dongle.conf; then
-        sed -i '/^\[defaults\]/a syscfg=2,0,3fffffff,1,2         ; Huawei band/RAT configuration (2=Auto 2G/3G, 0=Auto order, 3fffffff=All bands, 1=Roam, 2=All domains)' /etc/asterisk/dongle.conf
-    fi
-else
-    echo "  Configuring $NUM_DONGLES dongle(s)..."
-    TEMP_CONF="/tmp/dongle.conf.tmp"
-    rm -f "$TEMP_CONF"
-    sed -n '1,/^\[dongle0\]/ { /^\[dongle0\]/! p }' "$INSTALL_DIR/dongle.conf" > "$TEMP_CONF"
-    for ((i=0; i<NUM_DONGLES; i++)); do
-        audio_port=$((i * 3 + 1))
-        data_port=$((i * 3 + 2))
-        cat >> "$TEMP_CONF" << EOF
-
-[dongle$i]
-txgain=3
-rxgain=3
-audio=/dev/ttyUSB$audio_port
-data=/dev/ttyUSB$data_port
-imei=
-imsi=
-EOF
-    done
-    cp "$TEMP_CONF" /etc/asterisk/dongle.conf
-    rm -f "$TEMP_CONF"
-    echo "  dongle.conf successfully generated with $NUM_DONGLES dongle(s) at /etc/asterisk/dongle.conf"
+DONGLE_CONFIG_HELPER="$(dirname "$DONGLE_HELPER")/dongle-config.sh"
+if [ ! -f "$DONGLE_CONFIG_HELPER" ]; then
+    echo "ERROR: Missing shared dongle configuration installer: $DONGLE_CONFIG_HELPER" >&2
+    exit 1
 fi
+. "$DONGLE_CONFIG_HELPER"
+dongle_config_install "$INSTALL_DIR/dongle.conf" /etc/asterisk/dongle.conf "$NUM_DONGLES"
 
-# 10d2 — Ensure /var/log/asterisk/full captures VERBOSE messages (required for SMS/USSD parsing)
-echo "  [10d2] Enabling verbose logging in Asterisk logger.conf..."
-if grep -q '^full\s*=>' /etc/asterisk/logger.conf; then
-    if ! grep -q 'verbose' /etc/asterisk/logger.conf; then
-        sed -i 's/^\(full\s*=>.*\)/\1,verbose/' /etc/asterisk/logger.conf
-        echo "  verbose added to full log channel"
-    else
-        echo "  verbose already in full log channel"
-    fi
-fi
+# Logging is mandatory and must not activate a half-installed driver.
+bash "$(dirname "$DONGLE_HELPER")/enable-dongle-logging.sh" --no-reload
 
 # 10e — Permissions, udev & USB Autosuspend Disable
 echo "  [10e] Configuring permissions, udev, and disabling USB autosuspend..."
@@ -2975,22 +2940,6 @@ cp "$INSTALL_DIR/rules/99-dongle-auto-restart.rules" /etc/udev/rules.d/99-dongle
 chmod 644 /etc/udev/rules.d/99-dongle-auto-restart.rules
 echo "  99-dongle-auto-restart.rules installed"
 
-# Sokrat dongle autoconfiguration (port-based slots, idle-gated apply, rollback).
-if [ -f "$INSTALL_DIR/scripts/dongle-autoconfig.py" ]; then
-    install -d -m 0755 /etc/sokrat /var/lib/sokrat/dongle-autoconfig/backups
-    chmod 0755 "$INSTALL_DIR/scripts/dongle-autoconfig.py" 2>/dev/null || true
-    find "$INSTALL_DIR/scripts/dongle_autoconfig" -maxdepth 1 -name '*.py' -exec chmod 0755 {} + 2>/dev/null || true
-    install -m 0644 "$INSTALL_DIR/scripts/systemd/sokrat-dongle-autoconfig.service" /etc/systemd/system/sokrat-dongle-autoconfig.service
-    install -m 0644 "$INSTALL_DIR/scripts/systemd/sokrat-dongle-autoconfig.timer" /etc/systemd/system/sokrat-dongle-autoconfig.timer
-    install -m 0644 "$INSTALL_DIR/config/dongle-slots.example.json" /etc/sokrat/dongle-slots.example.json 2>/dev/null || true
-    systemctl daemon-reload
-    if [ -f /etc/sokrat/dongle-slots.json ]; then
-        systemctl enable --now sokrat-dongle-autoconfig.timer 2>/dev/null || true
-        echo "  dongle autoconfig timer enabled"
-    else
-        echo "  dongle autoconfig installed; create /etc/sokrat/dongle-slots.json via: python3 $INSTALL_DIR/scripts/dongle-autoconfig.py bootstrap --write"
-    fi
-fi
 # Disable USB autosuspend in GRUB kernel command line
 if [ -f /etc/default/grub ]; then
     if ! grep -q 'usbcore.autosuspend=-1' /etc/default/grub; then
@@ -3016,7 +2965,12 @@ fi
 
 # Disable USB autosuspend via modprobe & udev rules
 echo "options usbcore autosuspend=-1" > /etc/modprobe.d/usbcore.conf
-echo 'ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{power/control}="on"' > /etc/udev/rules.d/99-disable-usb-autosuspend.rules
+if [ -f "$INSTALL_DIR/rules/99-disable-usb-autosuspend.rules" ]; then
+    cp "$INSTALL_DIR/rules/99-disable-usb-autosuspend.rules" /etc/udev/rules.d/99-disable-usb-autosuspend.rules
+    chmod 644 /etc/udev/rules.d/99-disable-usb-autosuspend.rules
+else
+    echo 'ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{power/control}="on"' > /etc/udev/rules.d/99-disable-usb-autosuspend.rules
+fi
 
 # Prevent NetworkManager from managing or probing cellular WWAN interfaces (CDC NCM)
 mkdir -p /etc/NetworkManager/conf.d
@@ -3044,10 +2998,8 @@ chmod 666 /dev/ttyUSB* 2>/dev/null || true
 systemctl daemon-reload
 udevadm control --reload-rules 2>/dev/null || true
 udevadm trigger 2>/dev/null || true
-dongle_module_require_idle || exit 1
-systemctl restart asterisk
-echo "  Asterisk restarted"
-dongle_module_wait_running 20 || exit 1
+dongle_module_restart_verified 20 || exit 1
+systemctl start sokrat-asterisk-logrotate.timer
 
 # 10x — Overlay VPN clients (ZeroTier / Tailscale) for remote management
 echo "  [10x] Installing overlay VPN clients (ZeroTier / Tailscale)..."
@@ -3628,8 +3580,9 @@ Environment=LC_ALL=en_US.UTF-8
 WantedBy=multi-user.target
 UNIT
 systemctl daemon-reload
-systemctl enable --now sokrat-watchdog.service 2>/dev/null || true
-echo "  Sokrat system watchdog daemon enabled and started"
+# Autonomous Asterisk healing is an explicit operator decision.
+dongle_deployment_disable_watchdog
+echo "  Sokrat system watchdog daemon installed, disabled (enable manually if needed)"
 
 # Provision Sokrat Laya GSM Dongle Maintenance & Autonomous Watcher Daemon
 echo "  Provisioning Sokrat Laya GSM Dongle Maintenance Agent..."
@@ -3660,9 +3613,8 @@ Environment=LC_ALL=en_US.UTF-8
 WantedBy=multi-user.target
 UNIT
 systemctl daemon-reload
-systemctl enable sokrat-laya.service 2>/dev/null || true
-systemctl start sokrat-laya.service 2>/dev/null || true
-echo "  Sokrat Laya GSM autonomous maintenance daemon enabled and started"
+systemctl disable --now sokrat-laya.service
+echo "  Sokrat Laya GSM autonomous maintenance daemon installed, disabled (enable manually if needed)"
 
 # Decommission Webmin if present
 systemctl stop webmin 2>/dev/null || true
