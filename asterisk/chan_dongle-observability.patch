@@ -1,0 +1,207 @@
+--- a/chan_dongle.c	2026-11-24 00:48:51.511177854 +0200
++++ b/chan_dongle.c	2026-11-24 00:48:03.227676312 +0200
+@@ -291,6 +291,9 @@
+ {
+ 	struct cpvt * cpvt, * next;
+ 
++	ast_log(LOG_NOTICE, "[%s] session teardown: connected=%d channels=%d initialized=%d\n",
++		PVT_ID(pvt), pvt->connected, PVT_STATE(pvt, chansno), pvt->initialized);
++
+ 	if (!PVT_NO_CHANS(pvt))
+ 	{
+ 		ast_debug (1, "[%s] Dongle disconnecting, hanging up channels\n", PVT_ID(pvt));
+@@ -780,6 +783,10 @@
+ 		return;
+ 	}
+ 
++	ast_log(LOG_NOTICE, "[%s] connect begin: data='%s' audio='%s' desired=%s current=%s\n",
++		PVT_ID(pvt), PVT_STATE(pvt, data_tty), PVT_STATE(pvt, audio_tty),
++		dev_state2str(pvt->desired_state), dev_state2str(pvt->current_state));
++
+ 	pvt_stop(pvt);
+ 
+ 	if (pvt_discovery(pvt)) {
+@@ -790,14 +797,22 @@
+ 
+ 	pvt->data_fd = opentty_baud(PVT_STATE(pvt, data_tty), &pvt->dlock, CONF_UNIQ(pvt, baud));
+ 	if (pvt->data_fd < 0) {
++		ast_log(LOG_NOTICE, "[%s] connect failed: cannot open data tty '%s': %s\n",
++			PVT_ID(pvt), PVT_STATE(pvt, data_tty), strerror(errno));
+ 		return;
+ 	}
++	ast_log(LOG_NOTICE, "[%s] data tty open: '%s' fd=%d\n",
++		PVT_ID(pvt), PVT_STATE(pvt, data_tty), pvt->data_fd);
+ 
+ 	// TODO: delay until device activate voice call or at pvt_on_create_1st_channel()
+ 	pvt->audio_fd = opentty_baud(PVT_STATE(pvt, audio_tty), &pvt->alock, CONF_UNIQ(pvt, baud));
+ 	if (pvt->audio_fd < 0) {
++		ast_log(LOG_NOTICE, "[%s] connect failed: cannot open audio tty '%s': %s\n",
++			PVT_ID(pvt), PVT_STATE(pvt, audio_tty), strerror(errno));
+ 		goto cleanup_datafd;
+ 	}
++	ast_log(LOG_NOTICE, "[%s] audio tty open: '%s' fd=%d\n",
++		PVT_ID(pvt), PVT_STATE(pvt, audio_tty), pvt->audio_fd);
+ 
+ 	if (!start_monitor(pvt)) {
+ 		goto cleanup_audiofd;
+@@ -817,6 +832,8 @@
+ 	pvt->current_state = DEV_STATE_STARTED;
+ 	manager_event_device_status(PVT_ID(pvt), "Connect");
+ 	ast_verb(3, "[%s] Dongle has connected, initializing...\n", PVT_ID(pvt));
++	ast_log(LOG_NOTICE, "[%s] connect ok: data_fd=%d audio_fd=%d\n",
++		PVT_ID(pvt), pvt->data_fd, pvt->audio_fd);
+ 	return;
+ 
+ cleanup_audiofd:
+@@ -863,6 +880,8 @@
+ 
+ 			if(pvt->restart_time == RESTATE_TIME_NOW && pvt->desired_state != pvt->current_state)
+ 			{
++				ast_log(LOG_NOTICE, "[%s] discovery: applying %s -> %s\n",
++					PVT_ID(pvt), dev_state2str(pvt->current_state), dev_state2str(pvt->desired_state));
+ 				switch(pvt->desired_state)
+ 				{
+ 					case DEV_STATE_RESTARTED:
+@@ -1624,6 +1643,17 @@
+ }
+ 
+ #/* */
++static const char * restate_name(restate_time_t t)
++{
++	switch (t)
++	{
++		case RESTATE_TIME_NOW: return "now";
++		case RESTATE_TIME_GRACEFULLY: return "gracefully";
++		case RESTATE_TIME_CONVENIENT: return "when convenient";
++	}
++	return "unknown";
++}
++
+ static int pvt_time4restate(const struct pvt * pvt)
+ {
+ 	if(pvt->desired_state != pvt->current_state)
+@@ -1639,9 +1669,18 @@
+ {
+ 	if(pvt_time4restate(pvt))
+ 	{
++		ast_log(LOG_NOTICE, "[%s] idle: executing pending state change %s -> %s (policy was %s)\n",
++			PVT_ID(pvt), dev_state2str(pvt->current_state), dev_state2str(pvt->desired_state),
++			restate_name(pvt->restart_time));
+ 		pvt->restart_time = RESTATE_TIME_NOW;
+ 		discovery_restart(gpublic);
+ 	}
++	else if (pvt->desired_state != pvt->current_state)
++	{
++		ast_log(LOG_NOTICE, "[%s] idle but still busy: deferring state change %s -> %s (policy %s)\n",
++			PVT_ID(pvt), dev_state2str(pvt->current_state), dev_state2str(pvt->desired_state),
++			restate_name(pvt->restart_time));
++	}
+ }
+ 
+ #/* assume caller hold lock */
+@@ -1658,10 +1697,14 @@
+ 	{
+ 		/* check what changes require starting or stopping */
+ 		if(pvt->desired_state != SCONFIG(settings, initstate)) {
++			dev_state_t previous = pvt->desired_state;
+ 			pvt->desired_state = SCONFIG(settings, initstate);
+ 
+ 			pvt->restart_time = when;
+ 			rv = pvt_time4restate(pvt);
++			ast_log(LOG_NOTICE, "[%s] config: desired state %s -> %s; policy %s; %s\n",
++				PVT_ID(pvt), dev_state2str(previous), dev_state2str(pvt->desired_state),
++				restate_name(when), rv ? "applying now" : "deferred");
+ 			if (rv)
+ 				pvt->restart_time = RESTATE_TIME_NOW;
+ 		}
+@@ -1681,6 +1724,17 @@
+ 
+ 			pvt->restart_time = when;
+ 			rv = pvt_time4restate(pvt);
++			ast_log(LOG_NOTICE, "[%s] config drift: audio='%s'->'%s' data='%s'->'%s' imei='%s'->'%s' imsi='%s'->'%s' u2diag=%d->%d resetdongle=%d->%d callwaiting=%d->%d syscfg='%s'->'%s'; policy %s; %s\n",
++				PVT_ID(pvt),
++				CONF_UNIQ(pvt, audio_tty), UCONFIG(settings, audio_tty),
++				CONF_UNIQ(pvt, data_tty), UCONFIG(settings, data_tty),
++				CONF_UNIQ(pvt, imei), UCONFIG(settings, imei),
++				CONF_UNIQ(pvt, imsi), UCONFIG(settings, imsi),
++				CONF_SHARED(pvt, u2diag), SCONFIG(settings, u2diag),
++				CONF_SHARED(pvt, resetdongle), SCONFIG(settings, resetdongle),
++				CONF_SHARED(pvt, callwaiting), SCONFIG(settings, callwaiting),
++				CONF_SHARED(pvt, syscfg), SCONFIG(settings, syscfg),
++				restate_name(when), rv ? "applying now" : "deferred");
+ 			if (rv)
+ 				pvt->restart_time = RESTATE_TIME_NOW;
+ 		}
+@@ -1962,6 +2016,8 @@
+ {
+ 	unsigned dev_reload = 0;
+ 	reload_config(gpublic, 1, when, &dev_reload);
++	ast_log(LOG_NOTICE, "chan_dongle: configuration reload requested (policy %s), %u device(s) scheduled\n",
++		restate_name(when), dev_reload);
+ 	if(dev_reload > 0)
+ 		discovery_restart(gpublic);
+ }
+--- a/channel.c	2026-11-24 00:48:51.162174228 +0200
++++ b/channel.c	2026-11-24 00:48:03.228676323 +0200
+@@ -1278,6 +1278,8 @@
+ 		PVT_STATE(pvt, chan_count[newstate])++;
+ 
+ 		ast_debug (1, "[%s] call idx %d mpty %d, change state from '%s' to '%s' has%s channel\n", PVT_ID(pvt), call_idx, CPVT_TEST_FLAG(cpvt, CALL_FLAG_MULTIPARTY) ? 1 : 0, call_state2str(oldstate), call_state2str(newstate), channel ? "" : "'t");
++		ast_log (LOG_NOTICE, "[%s] call %d state: %s -> %s (cause %d)\n",
++			PVT_ID(pvt), call_idx, call_state2str(oldstate), call_state2str(newstate), cause);
+ 
+ 		/* update bits of devstate cache */
+ 		switch(newstate)
+--- a/at_response.c	2026-11-24 00:48:51.467177397 +0200
++++ b/at_response.c	2026-11-24 00:48:03.229676333 +0200
+@@ -815,6 +815,8 @@
+ 
+ 	ast_debug (1,	"[%s] CEND: call_index %d duration %d end_status %d cc_cause %d Line disconnected\n"
+ 				, PVT_ID(pvt), call_index, duration, end_status, cc_cause);
++	ast_log (LOG_NOTICE, "[%s] call %d ended: duration=%ds end_status=%d cc_cause=%d\n",
++		PVT_ID(pvt), call_index, duration, end_status, cc_cause);
+ 
+ 	cpvt = pvt_find_cpvt(pvt, call_index);
+ 	if (cpvt)
+@@ -1323,6 +1325,7 @@
+ 	if (index > -1)
+ 	{
+ 		ast_debug (1, "[%s] Incoming SMS message\n", PVT_ID(pvt));
++		ast_log (LOG_NOTICE, "[%s] sms notification: index %d\n", PVT_ID(pvt), index);
+ 
+ 		if (at_enqueue_retrieve_sms(&pvt->sys_chan, index, SUPPRESS_ERROR_DISABLED))
+ 		{
+@@ -1634,6 +1637,7 @@
+ 	cusd_utf8_str[res] = '\0';
+ 
+ 	ast_verb (1, "[%s] Got USSD type %d '%s': '%s'\n", PVT_ID(pvt), type, typestr, cusd_utf8_str);
++	ast_log (LOG_NOTICE, "[%s] ussd result: type=%d '%s': '%s'\n", PVT_ID(pvt), type, typestr, cusd_utf8_str);
+ 	ast_base64encode (text_base64, (unsigned char*)cusd_utf8_str, res, sizeof(text_base64));
+ 
+ 	// TODO: pass type
+@@ -1800,10 +1804,13 @@
+ 		if(!pvt->gsm_registered && CONF_SHARED(pvt, callwaiting) != CALL_WAITING_AUTO)
+ 			at_enqueue_set_ccwa(&pvt->sys_chan, CONF_SHARED(pvt, callwaiting));
+ 		pvt->gsm_registered = 1;
++		ast_log (LOG_NOTICE, "[%s] network: registered (lac '%s' ci '%s')\n",
++			PVT_ID(pvt), lac ? lac : "", ci ? ci : "");
+ 		manager_event_device_status(PVT_ID(pvt), "Register");
+ 	}
+ 	else
+ 	{
++		ast_log (LOG_NOTICE, "[%s] network: unregistered\n", PVT_ID(pvt));
+ 		pvt->gsm_registered = 0;
+ 		manager_event_device_status(PVT_ID(pvt), "Unregister");
+ 	}
+--- a/at_command.c	2026-11-24 00:48:51.467177397 +0200
++++ b/at_command.c	2026-11-24 00:48:03.229676333 +0200
+@@ -357,6 +357,9 @@
+ 
+ 	pvt->outgoing_sms = 1;
+ 
++	ast_log (LOG_NOTICE, "[%s] sms send queued: destination='%s' parts=%d uid=%d\n",
++		PVT_ID(pvt), destination, res, uid);
++
+ 	ast_free(pdus);
+ 	return 0;
+ }

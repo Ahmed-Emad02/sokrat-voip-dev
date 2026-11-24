@@ -1,0 +1,70 @@
+--- a/error.h	2026-09-19 22:13:45.000000000 +0300
++++ b/error.h	2026-11-23 17:43:22.823162149 +0200
+@@ -33,7 +33,8 @@
+ 	E_INVALID_CHARSET,
+ 	E_BUILD_SCA,
+ 	E_BUILD_PHONE_NUMBER,
+-	E_2BIG
++	E_2BIG,
++	E_SMS_UNSUPPORTED
+ };
+ 
+ INLINE_DECL const char *error2str(int err)
+@@ -66,7 +67,8 @@
+ 		"Invalid charset",
+ 		"Cannot build SCA",
+ 		"Cannot build phone number",
+-		"Input too large"
++		"Input too large",
++		"SMS is not supported by this device"
+ 	};
+ 	return enum2str(err,
+ 		 errors,
+--- a/chan_dongle.c	2026-11-23 17:43:43.912380706 +0200
++++ b/chan_dongle.c	2026-11-23 17:43:22.824162159 +0200
+@@ -499,12 +499,6 @@
+ 		goto e_cleanup;
+ 	}
+ 
+-	/* Poll first SMS, if any */
+-	if (at_poll_sms(pvt) == 0)
+-	{
+-		ast_debug (1, "[%s] Polling first SMS message\n", PVT_ID(pvt));
+-	}
+-
+ 	ast_mutex_unlock (&pvt->lock);
+ 
+ 
+--- a/at_response.c	2026-11-23 17:43:43.913380716 +0200
++++ b/at_response.c	2026-11-23 17:43:22.825162170 +0200
+@@ -197,6 +197,14 @@
+ 					ast_verb (3, "[%s] Dongle initialized and ready\n", PVT_ID(pvt));
+ 					manager_event_device_status(PVT_ID(pvt), "Initialize");
+ 					maybe_enable_e173_voice(pvt);
++
++					/* SMS support is confirmed: now it is safe to read the
++					 * inbox. Polling before CMGF/CNMI succeeded queued CMGR
++					 * commands that could never work on SMS-less modems. */
++					if (at_poll_sms(pvt) == 0)
++						ast_debug (1, "[%s] Polling first SMS message\n", PVT_ID(pvt));
++					else
++						ast_debug (1, "[%s] SMS polling disabled or failed\n", PVT_ID(pvt));
+ 				}
+ 				break;
+ 
+--- a/at_command.c	2026-11-23 17:43:43.914380727 +0200
++++ b/at_command.c	2026-11-23 17:43:22.825162170 +0200
+@@ -303,6 +303,13 @@
+ 	ssize_t res;
+ 	pvt_t* pvt = cpvt->pvt;
+ 
++	if (!pvt->has_sms)
++	{
++		chan_dongle_err = E_SMS_UNSUPPORTED;
++		ast_log (LOG_WARNING, "[%s] SMS unavailable: device has no SMS support\n", PVT_ID(pvt));
++		return -1;
++	}
++
+ 	/* set default validity period */
+ 	if (validity_minutes <= 0)
+ 		validity_minutes = 3 * 24 * 60;
