@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <poll.h>
 #include <pthread.h>
 #include <signal.h>
 #include <stdint.h>
@@ -144,12 +145,13 @@ static void busy_context(at_res_t result, int control, int detached) {
  struct pvt p; struct ast_channel a={0},b={0}; init(&p); struct cpvt *first=call(&p,detached?NULL:&a,1), *second=call(&p,&b,2); enqueue(first,CMD_AT_D,RES_OK,"ATD1;\r"); enqueue(second,CMD_AT_D,RES_OK,"ATD2;\r"); p.dialing=1;
  at_response_busy(&p,result,control); assert(a.controls==(detached?0:1)); if(!detached) assert(a.control==control && a.hangups==1 && !a.tech_pvt); assert(b.controls==0 && b.hangups==0 && b.tech_pvt==second); assert(p.state.chansno==1); assert(at_queue_head_task(&p)->cpvt==second); assert(at_queue_head_cmd(&p)->cmd==CMD_AT_D); assert(strstr(wire,"ATD2")); assert(at_queue_run(&p)==0); assert(strstr(wire,"ATD2")); at_queue_flush(&p); cpvt_free(second);
 }
+static void part(struct pvt *p);
 static void immediate_hangup(void) {
- struct pvt p; init(&p); struct cpvt c={0}; c.pvt=&p;
- c.call_idx=0; c.state=CALL_STATE_INIT; at_hangup_immediality(&c); assert(strcmp(wire,"AT+CHUP\r")==0);
- wire_len=0; wire[0]=0; c.call_idx=1; c.state=CALL_STATE_DIALING; at_hangup_immediality(&c); assert(strcmp(wire,"AT+CHUP\r")==0);
- wire_len=0; wire[0]=0; c.call_idx=1; c.state=CALL_STATE_ACTIVE; at_hangup_immediality(&c); assert(strcmp(wire,"AT+CHUP\r")==0);
+ struct pvt p; init(&p);
+ at_hangup_immediality(&p); assert(strcmp(wire,"AT+CHUP\r")==0);
+ wire_len=0; wire[0]=0; at_hangup_immediality(&p); assert(strcmp(wire,"AT+CHUP\r")==0);
  assert(!strstr(wire,"CHLD"));
+ init(&p); part(&p); wire_len=0; wire[0]=0; at_abort_pending_sms(&p); assert(wire_len==1 && wire[0]=='\x1b'); at_queue_flush(&p);
 }
 static void sms_ownership(void) {
  struct pvt p; init(&p); part(&p); assert(p.outgoing_sms==1); p.desired_state=DEV_STATE_RESTARTED; finish_part(&p,RES_OK); assert(p.outgoing_sms==0 && p.state.at_tasks==0 && p.state.at_cmds==0 && wakeups==1);

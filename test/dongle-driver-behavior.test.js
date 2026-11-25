@@ -55,7 +55,7 @@ test('release-patched C queue, terminal responses, SMS ownership and reload beha
   fs.writeFileSync(path.join(temp, 'driver-types.inc'), headers.map(file => withoutIncludes(read(file))).join('\n'));
   const functions = [
     ['chan_dongle.c', ['restate_name', 'pvt_time4restate', 'pvt_try_restate', 'pvt_on_remove_last_channel', 'pvt_dsp_setup', 'pvt_reconfigure', 'pvt_enabled']],
-    ['at_command.c', ['at_enqueue_pdu', 'at_enqueue_clcc', 'at_hangup_immediality']],
+    ['at_command.c', ['at_write_teardown', 'at_abort_pending_sms', 'at_hangup_immediality', 'at_enqueue_pdu', 'at_enqueue_clcc']],
     ['cpvt.c', ['cpvt_free']],
     ['channel.c', ['queue_control_channel', 'queue_hangup', 'disactivate_call', 'activate_call', 'change_channel_state']],
     ['at_response.c', ['request_clcc', 'at_response_busy', 'at_response_sms_prompt']],

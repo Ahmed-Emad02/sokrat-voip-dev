@@ -1,0 +1,224 @@
+--- a/at_command.c
++++ b/at_command.c
+@@ -20,6 +20,7 @@
+ #include <asterisk.h>			/* ast_shutting_down() */
+ 
+ #include <asterisk/utils.h>
++#include <poll.h>
+ 
+ #include "at_command.h"
+ //#include ".h"
+@@ -175,6 +176,8 @@
+ 		ATQ_CMD_DECLARE_ST(CMD_AT_CNMI, "AT+CNMI=2,1,0,2,0\r"),
+ 		/* Query Signal quality */
+ 		ATQ_CMD_DECLARE_ST(CMD_AT_CSQ, "AT+CSQ\r"),
++		/* Abort any call left active by a previous driver generation. */
++		ATQ_CMD_DECLARE_ST(CMD_AT_CHUP, "AT+CHUP\r"),
+ 	};
+ 
+ 	unsigned in, out;
+@@ -1065,17 +1068,76 @@
+ 
+ /*!
+  * \brief SEND AT+CHUP command to device IMMEDIALITY
+- * \param cpvt -- cpvt structure
++ * \param pvt -- device structure
+  */
+-EXPORT_DEF void at_hangup_immediality(struct cpvt* cpvt)
++static int at_write_teardown(struct pvt *pvt, const char *buf, size_t count)
+ {
++	size_t off = 0;
++	int retries = 0;
++	struct pollfd pfd;
++
++	if (!pvt || pvt->data_fd < 0)
++		return -1;
++
++	while (off < count)
++	{
++		ssize_t wrote = write(pvt->data_fd, buf + off, count - off);
++
++		if (wrote > 0)
++		{
++			off += (size_t) wrote;
++			retries = 0;
++			continue;
++		}
++		if (wrote < 0 && errno == EINTR)
++			continue;
++		if (wrote < 0 && errno == EAGAIN && retries++ < 5)
++		{
++			pfd.fd = pvt->data_fd;
++			pfd.events = POLLOUT;
++			pfd.revents = 0;
++			if (poll(&pfd, 1, 100) > 0 && (pfd.revents & POLLOUT))
++				continue;
++			if (errno == EINTR)
++				continue;
++		}
++		break;
++	}
++
++	if (off != count)
++	{
++		ast_log(LOG_WARNING, "[%s] teardown write failed: %zu/%zu bytes: %s\n",
++			PVT_ID(pvt), off, count, strerror(errno));
++		return -1;
++	}
++	return 0;
++}
++
++EXPORT_DEF void at_abort_pending_sms(struct pvt *pvt)
++{
++	const at_queue_cmd_t *ecmd;
++	static const char esc[] = "\x1b";
++
++	if (!pvt)
++		return;
++	ecmd = at_queue_head_cmd(pvt);
++	if (pvt->outgoing_sms > 0 ||
++	    (ecmd && (ecmd->cmd == CMD_AT_CMGS || ecmd->cmd == CMD_AT_SMSTEXT)))
++	{
++		if (at_write_teardown(pvt, esc, 1) != 0)
++			ast_log(LOG_WARNING, "[%s] could not cancel pending SMS prompt\n", PVT_ID(pvt));
++	}
++}
++
++EXPORT_DEF void at_hangup_immediality(struct pvt* pvt)
++{
+ 	/* Session teardown can run while an outgoing ATD is still unacknowledged.
+ 	 * Writing AT+CHLD=1x before ^ORIG/^CONF is Huawei HW BUG 1: the modem stops
+ 	 * answering every later AT command. AT+CHUP is the abort form for an
+ 	 * unconfirmed call and is safe for this final, best-effort teardown. */
+ 	static const char cmd_chup[] = "AT+CHUP\r";
+ 
+-	if (cpvt && cpvt->pvt)
+-		at_write(cpvt->pvt, cmd_chup, STRLEN(cmd_chup));
++	if (at_write_teardown(pvt, cmd_chup, STRLEN(cmd_chup)) != 0)
++		ast_log(LOG_WARNING, "[%s] could not send teardown AT+CHUP\n", PVT_ID(pvt));
+ }
+ 
+--- a/at_command.h
++++ b/at_command.h
+@@ -10,6 +10,8 @@
+ #include "dc_config.h"		/* call_waiting_t */
+ #include "mutils.h"		/* enum2str_def() ITEMS_OF() */
+ 
++struct pvt;
++
+ #define CCWA_CLASS_VOICE	1
+ #define	SMS_INDEX_MAX		256	/* exclusive */
+ 
+@@ -134,6 +136,7 @@
+ EXPORT_DECL int at_enqueue_activate(struct cpvt *cpvt);
+ EXPORT_DECL int at_enqueue_flip_hold(struct cpvt *cpvt);
+ EXPORT_DECL int at_enqueue_conference(struct cpvt *cpvt);
+-EXPORT_DECL void at_hangup_immediality(struct cpvt *cpvt);
++EXPORT_DECL void at_abort_pending_sms(struct pvt *pvt);
++EXPORT_DECL void at_hangup_immediality(struct pvt *pvt);
+ 
+ #endif /* CHAN_DONGLE_AT_SEND_H_INCLUDED */
+--- a/chan_dongle.c
++++ b/chan_dongle.c
+@@ -287,13 +287,40 @@
+ }
+ 
+ #/* phone monitor thread pvt cleanup */
+-static void disconnect_dongle (struct pvt* pvt)
++struct teardown_ttys {
++	int audio_fd;
++	int data_fd;
++	char *audio_lock;
++	char *data_lock;
++};
++
++static void close_teardown_ttys(struct teardown_ttys *ttys)
+ {
++	if (ttys->audio_fd >= 0)
++		close(ttys->audio_fd);
++	if (ttys->data_fd >= 0)
++		close(ttys->data_fd);
++	if (ttys->audio_lock)
++	{
++		unlink(ttys->audio_lock);
++		ast_free(ttys->audio_lock);
++	}
++	if (ttys->data_lock)
++	{
++		unlink(ttys->data_lock);
++		ast_free(ttys->data_lock);
++	}
++}
++
++static void disconnect_dongle (struct pvt* pvt, struct teardown_ttys *ttys)
++{
+ 	struct cpvt * cpvt, * next;
+ 
+ 	ast_log(LOG_NOTICE, "[%s] session teardown: connected=%d channels=%d initialized=%d\n",
+ 		PVT_ID(pvt), pvt->connected, PVT_STATE(pvt, chansno), pvt->initialized);
+ 
++	at_abort_pending_sms(pvt);
++
+ 	if (!PVT_NO_CHANS(pvt))
+ 	{
+ 		ast_debug (1, "[%s] Dongle disconnecting, hanging up channels\n", PVT_ID(pvt));
+@@ -301,7 +328,7 @@
+ 		/* One AT+CHUP aborts the radio call state for the whole port. Do not
+ 		 * write per call: a second write can land while an ATD is still
+ 		 * unacknowledged, which is the HW BUG 1 race this teardown avoids. */
+-		at_hangup_immediality(pvt->chans.first);
++		at_hangup_immediality(pvt);
+ 
+ 		for(cpvt = pvt->chans.first; cpvt; cpvt = next)
+ 		{
+@@ -313,11 +340,18 @@
+ 	at_queue_flush(pvt);
+ 	pvt->last_dialed_cpvt = NULL;
+ 
+-	closetty (pvt->audio_fd, &pvt->alock);
+-	closetty (pvt->data_fd, &pvt->dlock);
+-
+-	pvt->data_fd = -1;
++	/* Detach the ttys and lock files here, but close/unlink only after the
++	 * caller drops pvt->lock. close() can wait for the tty output queue when
++	 * CTS is stuck low; holding the pvt lock there blocks discovery and
++	 * channel operations for the driver's closing_wait. */
++	ttys->audio_fd = pvt->audio_fd;
++	ttys->data_fd = pvt->data_fd;
++	ttys->audio_lock = pvt->alock;
++	ttys->data_lock = pvt->dlock;
+ 	pvt->audio_fd = -1;
++	pvt->data_fd = -1;
++	pvt->alock = NULL;
++	pvt->dlock = NULL;
+ 
+ 	if(pvt->dsp)
+ 		ast_dsp_digitreset(pvt->dsp);
+@@ -678,10 +712,13 @@
+ 	pvt->terminate_monitor = 0;
+ 
+ e_restart:
+-	disconnect_dongle (pvt);
+-//	pvt->monitor_running = 0;
+-	ast_mutex_unlock (&pvt->lock);
++	{
++		struct teardown_ttys ttys = { -1, -1, NULL, NULL };
+ 
++		disconnect_dongle (pvt, &ttys);
++		ast_mutex_unlock (&pvt->lock);
++		close_teardown_ttys (&ttys);
++	}
+ 	/* TODO: wakeup discovery thread after some delay */
+ 	return NULL;
+ }
+@@ -845,8 +882,10 @@
+ 
+ cleanup_audiofd:
+ 	closetty(pvt->audio_fd, &pvt->alock);
++	pvt->audio_fd = -1;
+ cleanup_datafd:
+ 	closetty(pvt->data_fd, &pvt->dlock);
++	pvt->data_fd = -1;
+ }
+ 
+ #/* */

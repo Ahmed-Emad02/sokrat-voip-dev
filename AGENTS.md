@@ -65,6 +65,13 @@ Guidance and operational gotchas for AI agents working in `/opt/sokrat-voip`.
     `at_hangup_immediality()` uses `AT+CHUP`; `CHLD` before `^ORIG`/`^CONF` is
     Huawei HW BUG 1 and wedges the modem. Regression:
     `test/dongle-driver-behavior.test.js` (`immediate_hangup`).
+  * Before CHUP, teardown writes ESC when an SMS task is pending or
+    `outgoing_sms > 0`; a modem at the `AT+CMGS` prompt otherwise treats CHUP
+    as message text and stops answering AT. Initialization ends with CHUP to
+    clear a call left by a previous driver generation.
+  * Detach tty fds under `pvt->lock`, but close them after unlocking: a
+    CTS-stalled `close()` must not block discovery. Reset fds to `-1` on
+    `pvt_start()` cleanup.
   * A timeout alone does not prove firmware failure; parser/framing bugs can lose valid replies.
   * Compact `+CLCC`/`+CMGR` framing must preserve final payload fields and terminal replies.
   * A lost CLCC poll must not immediately transmit the next queued SMS command.
