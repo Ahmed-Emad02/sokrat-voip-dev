@@ -3,7 +3,7 @@
 **Target:** `chan_dongle` (Huawei 3G GSM Channel Driver for Asterisk 18.19.0)  
 **Source Path:** `/tmp/opencode/asterisk-chan-dongle/`  
 **Active Production Patch:** `asterisk/chan_dongle.patch` (1030 lines, 63 hunks across 14 C/header files)  
-**Precompiled Driver Binary:** `installer-bundle/binaries/chan_dongle.so` (SHA-256: `7462078563b5999823e5c65eef647a338a5164373f76521ee334bb022fe719a7`)  
+**Precompiled Driver Binary:** `installer-bundle/binaries/chan_dongle.so` (SHA-256: `5b43ee561e91fb99eb901ec4506fce80f2c5c864e82ea79c8431078bae2993ec`)  
 **Deployment Nodes:** Central `.50`, Spoke `.92`, Spoke `.57`  
 **Audit & Patch Rebase Date:** October 31, 2026 (Exhaustive 4-Round Audit & Patch Rebase Completed)  
 **Status:** Audit & Patch Rebase Completed; production driver synchronized and verified.
@@ -116,7 +116,7 @@ The Sokrat VoIP platform requires strict adherence to four fundamental architect
   1. `install.sh` (Fresh single-script online installer)
   2. `installer-bundle/install-sokrat.sh` (Offline bundle installer)
   3. `scripts/safe-upgrade.sh` (Non-destructive in-place upgrader)
-* **Integrity:** Driver binary SHA-256 (`7462078563b5999823e5c65eef647a338a5164373f76521ee334bb022fe719a7`) must remain identical across all cluster nodes (`.50`, `.92`, `.57`).
+* **Integrity:** Driver binary SHA-256 (`5b43ee561e91fb99eb901ec4506fce80f2c5c864e82ea79c8431078bae2993ec`) must remain identical across all cluster nodes (`.50`, `.92`, `.57`).
 
 ### 4. Invariant: Daemon Restart vs Dynamic Module Reload
 * **Rule:** Replacing `/usr/lib64/asterisk/modules/chan_dongle.so` requires a full Asterisk daemon restart (`systemctl restart asterisk`).
@@ -300,7 +300,7 @@ The Sokrat VoIP platform requires strict adherence to four fundamental architect
 ### 2.4 Unsafe `AT+CHLD=1x` During Session Teardown
 * **File & Lines:** `at_command.c:1070` (`at_hangup_immediality`) and `chan_dongle.c:304` (`disconnect_dongle`)
 * **Patch Status:** `FIXED IN PATCH`
-* **Production Resolution:** `at_hangup_immediality()` always sends `AT+CHUP\r`. The targeted `AT+CHLD=1x` form is never used on the immediate teardown path. `at_enqueue_hangup()` keeps its `call_idx > 0` guard for normal channel hangups.
+* **Production Resolution:** `disconnect_dongle()` writes one `AT+CHUP\r` per port, not one per call, and `at_hangup_immediality()` never sends `AT+CHLD=1x`. The targeted form is reserved for normal channel hangups and keeps its `call_idx > 0` guard.
 * **Code Reference:**
   ```c
   EXPORT_DEF void at_hangup_immediality(struct cpvt* cpvt) {

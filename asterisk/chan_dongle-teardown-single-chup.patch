@@ -1,0 +1,18 @@
+--- a/chan_dongle.c
++++ b/chan_dongle.c
+@@ -298,10 +298,14 @@
+ 	{
+ 		ast_debug (1, "[%s] Dongle disconnecting, hanging up channels\n", PVT_ID(pvt));
+ 
++		/* One AT+CHUP aborts the radio call state for the whole port. Do not
++		 * write per call: a second write can land while an ATD is still
++		 * unacknowledged, which is the HW BUG 1 race this teardown avoids. */
++		at_hangup_immediality(pvt->chans.first);
++
+ 		for(cpvt = pvt->chans.first; cpvt; cpvt = next)
+ 		{
+ 			next = cpvt->entry.next;
+-			at_hangup_immediality(cpvt);
+ 			CPVT_RESET_FLAGS(cpvt, CALL_FLAG_NEED_HANGUP);
+ 			change_channel_state(cpvt, CALL_STATE_RELEASED, 0);
+ 		}

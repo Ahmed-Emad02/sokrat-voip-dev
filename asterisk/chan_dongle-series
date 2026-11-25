@@ -11,3 +11,4 @@ chan_dongle-clcc-timeout.patch
 chan_dongle-observability.patch
 chan_dongle-session-safety.patch
 chan_dongle-hangup-guard.patch
+chan_dongle-teardown-single-chup.patch
