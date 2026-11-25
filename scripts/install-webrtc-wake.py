@@ -25,8 +25,7 @@ NAME = 'extensions_sokrat_webrtc_wake.conf'
 DISPATCHER_MARKER = 'Authenticated WebRTC wake dispatcher v1.'
 WAKE = r'''
 [sub-sokrat-webrtc-wake]
-exten => s,1,Gosub(sokrat-jb,s,1(${CALLERID(num)},))
- same => n,GotoIf($["${DB(DEVICE/${ARG1}/tech)}"!="pjsip"]?done)
+exten => s,1,GotoIf($["${DB(DEVICE/${ARG1}/tech)}"!="pjsip"]?done)
  same => n,GotoIf($["${DB(DND/${ARG1})}"!=""]?done)
  same => n,GotoIf($["${DB(CF/${ARG1})}"!=""]?done)
  same => n,GotoIf($["${DB(CFU/${ARG1})}"!="" & ("${EXTENSION_STATE(${ARG1})}"="UNAVAILABLE" | "${EXTENSION_STATE(${ARG1})}"="UNKNOWN")]?done)
@@ -41,8 +40,7 @@ exten => s,1,Gosub(sokrat-jb,s,1(${CALLERID(num)},))
  same => n,Set(CHANNEL(hangup_handler_push)=sub-sokrat-webrtc-wake-cancel,s,1)
  same => n,Set(SOKRAT_BEFORE_DIAL=${PJSIP_DIAL_CONTACTS(${ARG1})})
  same => n,Set(SOKRAT_BEFORE_COUNT=${FIELDQTY(SOKRAT_BEFORE_DIAL,&)})
- same => n,Set(SOKRAT_WS_CONTACT=${REGEX("transport=W" ${PJSIP_DIAL_CONTACTS(${ARG1})})})
- same => n,Set(SOKRAT_WAKE_WAIT=${SHELL(/usr/bin/python3 /usr/local/bin/sokrat-webrtc-wake-dispatch.py "${URIENCODE(${ARG1})}" "${URIENCODE(${CALLERID(num)})}" "${URIENCODE(${CALLERID(name)})}" "${SOKRAT_CALL_ID}" "${SOKRAT_WS_CONTACT}")})
+ same => n,Set(SOKRAT_WAKE_WAIT=${SHELL(/usr/bin/python3 /usr/local/bin/sokrat-webrtc-wake-dispatch.py "${URIENCODE(${ARG1})}" "${URIENCODE(${CALLERID(num)})}" "${URIENCODE(${CALLERID(name)})}" "${SOKRAT_CALL_ID}")})
  same => n,GotoIf($["${SOKRAT_WAKE_WAIT}"!="1"]?done)
  same => n,Ringing()
  same => n,Set(SOKRAT_WAKE_ITER=0)
@@ -74,9 +72,8 @@ exten => s,1,GotoIf($["${ARG1}"=""]?done)
  same => n,Set(SOKRAT_GROUP_TOTAL=$[${SOKRAT_GROUP_TOTAL}+1])
  same => n,GotoIf($["${SOKRAT_WAKE_SENT_${SOKRAT_GROUP_MEMBER}}"="1"]?next)
  same => n,Set(__SOKRAT_WAKE_SENT_${SOKRAT_GROUP_MEMBER}=1)
- same => n,Set(SOKRAT_GROUP_HAS_WS=${REGEX("transport=W" ${PJSIP_DIAL_CONTACTS(${SOKRAT_GROUP_MEMBER})})})
  same => n,Set(__SOKRAT_WAKE_CALLEES=${IF($["${SOKRAT_WAKE_CALLEES}"=""]?${SOKRAT_GROUP_MEMBER}:${SOKRAT_WAKE_CALLEES}-${SOKRAT_GROUP_MEMBER})})
- same => n,System(/usr/bin/python3 /usr/local/bin/sokrat-webrtc-wake-dispatch.py "${URIENCODE(${SOKRAT_GROUP_MEMBER})}" "${URIENCODE(${CALLERID(num)})}" "${URIENCODE(${CALLERID(name)})}" "${SOKRAT_CALL_ID}" "${SOKRAT_GROUP_HAS_WS}" >/dev/null 2>&1 &)
+ same => n,System(/usr/bin/python3 /usr/local/bin/sokrat-webrtc-wake-dispatch.py "${URIENCODE(${SOKRAT_GROUP_MEMBER})}" "${URIENCODE(${CALLERID(num)})}" "${URIENCODE(${CALLERID(name)})}" "${SOKRAT_CALL_ID}" >/dev/null 2>&1 &)
  same => n(next),Set(SOKRAT_GROUP_IDX=$[${SOKRAT_GROUP_IDX}+1])
  same => n,Goto(dispatch)
  same => n(wait),GotoIf($["${SOKRAT_GROUP_TOTAL}"="0"]?done)
@@ -156,34 +153,26 @@ def read(path, missing=''):
     return path.read_text()
 
 
-def contexts(text):
+def contexts(text, merge_duplicates=False):
     result = {}
     name = None
     for line in text.splitlines():
         header = re.fullmatch(r'\s*\[([^\]]+)\](?:\([^)]*\))?\s*(?:;.*)?', line)
         if header:
             name = header.group(1)
-            if name in result:
+            if name in result and not merge_duplicates:
                 raise ValueError('Duplicate context/section: ' + name)
-            result[name] = []
+            result.setdefault(name, [])
         elif name:
             result[name].append(line)
     return result
 
 
 def endpoint_ids(text):
-    # PJSIP normally repeats endpoint/auth/aor names; merge them instead of
-    # applying the dialplan "duplicate context" rule.
-    sections = {}
-    name = None
-    for line in text.splitlines():
-        header = re.fullmatch(r'\s*\[([^\]]+)\](?:\([^)]*\))?\s*(?:;.*)?', line)
-        if header:
-            name = header.group(1)
-            sections.setdefault(name, [])
-        elif name:
-            sections[name].append(line)
-    return sorted(name for name, lines in sections.items()
+    # PJSIP repeats an object name for its endpoint/auth/aor sections. Merge
+    # those repeated sections only for endpoint discovery; generated dialplan
+    # and override contexts stay strict.
+    return sorted(name for name, lines in contexts(text, merge_duplicates=True).items()
                   if re.fullmatch(r'[0-9]{1,12}', name)
                   and any(re.fullmatch(r'\s*webrtc\s*=\s*yes\s*(?:;.*)?', line, re.I) for line in lines))
 

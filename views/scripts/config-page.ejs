@@ -1963,12 +1963,12 @@
             document.getElementById('extJbTarget').value = '40';
             updateJitterBufferUi();
             resetEmployeeProfileFields();
-            openModal('extensionModal');
             try {
                 await loadEmployeeGroups();
             } catch (error) {
                 showToast(error.message, 'error');
             }
+            openModal('extensionModal');
         }
 
         async function editExtension(extNum, name, secret, voicemail, tech, denoise, vadGate, vadDb, agc, jbMode, jbMax, jbResync, jbTarget, autoAnswer, dnd, disableCancel) {
@@ -2002,7 +2002,6 @@
             document.getElementById('extVadDb').dispatchEvent(new Event('change', { bubbles: true }));
             document.getElementById('extAgc').dispatchEvent(new Event('change', { bubbles: true }));
             resetEmployeeProfileFields();
-            openModal('extensionModal');
 
             try {
                 const [groupsResponse, extrasResponse] = await Promise.all([
@@ -2029,6 +2028,7 @@
                 setEmployeeGroupOptions([], '');
                 showToast(error.message, 'error');
             }
+            openModal('extensionModal');
         }
 
         async function saveExtension(event) {
@@ -5597,6 +5597,21 @@
 
         let draggedOutboundRouteIndex = null;
 
+        function preloadOutboundTrunks() {
+            return fetch('/api/config/trunks')
+                .then(res => {
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    return res.json();
+                })
+                .then(data => {
+                    if (data && data.success && Array.isArray(data.trunks)) {
+                        loadedTrunksList = data.trunks;
+                        renderOutboundTrunkSelect();
+                    }
+                })
+                .catch(() => {});
+        }
+
         function fetchOutboundRoutes() {
             return fetch('/api/config/routes/outbound')
                 .then(res => {
@@ -5824,6 +5839,20 @@
             }
         }
 
+        function renderOutboundTrunkSelect() {
+            const sel = document.getElementById('sequenceTrunkSelect');
+            if (!sel) return;
+            const previous = sel.value;
+            sel.innerHTML = '<option value="">-- Choose Trunk --</option>';
+            (loadedTrunksList || []).forEach(t => {
+                const opt = document.createElement('option');
+                opt.value = t.trunkid;
+                opt.textContent = `${t.name} (${t.tech})`;
+                sel.appendChild(opt);
+            });
+            if (previous) sel.value = previous;
+        }
+
         function openOutboundModal() {
             openModal('outboundModal');
             document.getElementById('outboundModalTitle').textContent = isRtl ? 'إضافة مسار صادر' : 'Add Outbound Route';
@@ -5840,16 +5869,7 @@
             const btn = document.getElementById('addPatternBtn');
             if (btn) btn.textContent = isRtl ? '+ إضافة نمط' : '+ Add Pattern';
 
-            const sel = document.getElementById('sequenceTrunkSelect');
-            if (sel) {
-                sel.innerHTML = '<option value="">-- Choose Trunk --</option>';
-                (loadedTrunksList || []).forEach(t => {
-                    const opt = document.createElement('option');
-                    opt.value = t.trunkid;
-                    opt.textContent = `${t.name} (${t.tech})`;
-                    sel.appendChild(opt);
-                });
-            }
+            renderOutboundTrunkSelect();
 
             renderModalPatterns();
             renderModalTrunksSequence();
@@ -5883,16 +5903,7 @@
                     modalTrunksSequence = trs.map(t => String(t.trunk_id));
                 } catch(e) { modalTrunksSequence = []; }
             }
-            const sel = document.getElementById('sequenceTrunkSelect');
-            if (sel) {
-                sel.innerHTML = '<option value="">-- Choose Trunk --</option>';
-                (loadedTrunksList || []).forEach(t => {
-                    const opt = document.createElement('option');
-                    opt.value = t.trunkid;
-                    opt.textContent = `${t.name} (${t.tech})`;
-                    sel.appendChild(opt);
-                });
-            }
+            renderOutboundTrunkSelect();
 
             renderModalPatterns();
             renderModalTrunksSequence();
@@ -6133,6 +6144,7 @@
 
         // Initialize on load
         function initConfigPage() {
+            const embedMode = document.documentElement.classList.contains('config-embed');
             initTopPillBarWheelScroll();
             window.setPbxNavLayout(localStorage.getItem('pbx_nav_layout') || 'topbar');
             const tabButtons = ['extensions', 'ringgroups', 'inbound', 'trunks', 'outbound', 'queues', 'timegroups', 'timeconditions', 'voicemail', 'ivr', 'recordings', 'stt', 'diagram', 'announcements', 'modem', 'callcodes', 'dongles', 'terminal'];
@@ -6150,7 +6162,7 @@
             } else if (tabParam && document.getElementById('tab-btn-' + tabParam)) {
                 defaultTab = tabParam;
             }
-            if (defaultTab) {
+            if (defaultTab && !embedMode) {
                 switchTab(defaultTab, { updateUrl: false });
             }
             const dialInput = document.getElementById('trunkDialString');
@@ -6303,9 +6315,31 @@
                 announcement: () => openAnnouncementModal(),
                 voicemail: null
             };
+            const targetLoaders = {
+                extension: () => fetchExtensions(),
+                inbound: () => Promise.all([fetchInboundRoutes(), ensureAllConfigListsLoaded()]),
+                outbound: () => preloadOutboundTrunks(),
+                trunk: () => Promise.all([fetchTrunks(), ensureAllConfigListsLoaded()]),
+                ringgroup: () => Promise.all([fetchRingGroups(), ensureAllConfigListsLoaded()]),
+                queue: () => Promise.all([fetchQueues(), ensureAllConfigListsLoaded()]),
+                ivr: () => Promise.all([fetchIvrs(), ensureAllConfigListsLoaded()]),
+                timecondition: () => Promise.all([fetchTimeConditions(), fetchTimeGroups(), ensureAllConfigListsLoaded()]),
+                timegroup: () => fetchTimeGroups(),
+                announcement: () => Promise.all([fetchAnnouncements(), ensureAllConfigListsLoaded()])
+            };
+            const targetType = addType || editType;
+            let targetDataReady = !targetLoaders[targetType];
+            if (targetLoaders[targetType]) {
+                Promise.resolve()
+                    .then(() => targetLoaders[targetType]())
+                    .catch(() => {})
+                    .then(() => { targetDataReady = true; });
+            }
+            if (editType === 'outbound') fetchOutboundRoutes();
             let attempts = 0;
             const openTarget = () => {
                 if (addType) {
+                    if (!targetDataReady) return false;
                     const action = addActions[addType];
                     if (addType === 'voicemail' || typeof action === 'function') {
                         cleanParams();
@@ -6313,6 +6347,7 @@
                         return true;
                     }
                 }
+                if (editType && targetLoaders[editType] && !targetDataReady) return false;
                 if (editType === 'extension') {
                     const ext = (loadedExtensionsList || []).find(item => String(item.extension) === String(editId));
                     if (ext) {
@@ -6400,6 +6435,11 @@
                         if (typeof showToast === 'function') {
                             showToast(isRtl ? 'تعذر فتح نموذج الإعداد الكلاسيكي.' : 'Could not open the classic editor form.', 'error');
                         }
+                    } else if (typeof enhanceSelectElements === 'function') {
+                        setTimeout(() => {
+                            const modal = document.querySelector('.fixed.inset-0:not(.hidden)');
+                            enhanceSelectElements(modal || document);
+                        }, 80);
                     }
                     return;
                 }
@@ -9761,151 +9801,204 @@
         }
         window.deleteMohCategory = deleteMohCategory;
         window.uploadMohFile = uploadMohAudio;
-        function openAddDongleSlotModal() {
-            openModal('addDongleSlotModal');
-            const cards = document.querySelectorAll('#modemDonglesGrid [data-dongle-id]');
-            const existingNames = Array.from(cards).map(c => c.getAttribute('data-dongle-id'));
-            let nextIndex = 0;
-            while (existingNames.includes(`dongle${nextIndex}`)) {
-                nextIndex++;
+        let dongleSlotMutationInProgress = false;
+        let suggestedDongleSlot = null;
+        let slotInventory = [];
+
+        function canManageDongleSlots() {
+            // This script is cached by language; identity comes from the root-only page markup.
+            const modal = document.getElementById('addDongleSlotModal');
+            return Boolean(modal) && modal.dataset.currentUser === 'root';
+        }
+
+        async function loadDongleSlotInventory() {
+            if (!canManageDongleSlots()) throw new Error('Root access required');
+            const res = await fetch('/api/gsm-dongles/slots', { cache: 'no-store' });
+            const data = await res.json();
+            if (!res.ok || !data.success || !Array.isArray(data.slots)) {
+                throw new Error(data.error || (isRtl ? 'فشل تحميل الفتحات' : 'Failed to load slots'));
             }
-            const countEl = document.getElementById('newSlotCount');
-            if (countEl) countEl.value = '1';
-            const prefixEl = document.getElementById('newSlotPrefix');
-            if (prefixEl) prefixEl.value = 'dongle';
-            const nameEl = document.getElementById('newSlotName');
-            if (nameEl) nameEl.value = `dongle${nextIndex}`;
-            const audioEl = document.getElementById('newSlotAudio');
-            if (audioEl) audioEl.value = `/dev/ttyUSB${nextIndex * 3 + 1}`;
-            const dataEl = document.getElementById('newSlotData');
-            if (dataEl) dataEl.value = `/dev/ttyUSB${nextIndex * 3 + 2}`;
+            suggestedDongleSlot = data.suggestedSlot || null;
+            slotInventory = data.slots;
+            return data.slots;
+        }
+
+        function renderRemovableDongleSlots(slots) {
+            const container = document.getElementById('removeSlotChecklist');
+            if (!container) return;
+            container.textContent = '';
+            if (!slots.length) {
+                container.textContent = isRtl ? 'لا توجد فتحات' : 'No slots found';
+                return;
+            }
+            slots.forEach(slot => {
+                const removable = slot.removable === true;
+                const absentAssigned = removable && slot.assigned === true;
+                const label = document.createElement('label');
+                label.className = 'flex items-center gap-2 text-xs ' + (removable ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed');
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.name = 'removeDongleSlot';
+                checkbox.value = slot.slot;
+                checkbox.dataset.assigned = absentAssigned ? '1' : '';
+                checkbox.disabled = !removable;
+                checkbox.className = 'rounded border-[var(--border-primary)] text-red-500 focus:ring-red-500';
+                const text = document.createElement('span');
+                text.textContent = slot.slot + ' — ' + (slot.orphan
+                    ? (isRtl ? 'مدخل يتيم والمودم غير متصل (قابل للمسح)' : 'Orphaned entry, modem not connected (clearable)')
+                    : absentAssigned
+                    ? (isRtl ? 'مخصصة والمودم غير متصل (قابلة للحذف)' : 'Assigned, modem not connected (removable)')
+                    : removable
+                        ? (isRtl ? 'فارغة وغير مخصصة' : 'Empty, unassigned')
+                        : (isRtl ? 'متصلة أو قيد الاستخدام — محمية' : 'Connected or in service — protected'));
+                label.appendChild(checkbox);
+                label.appendChild(text);
+                container.appendChild(label);
+            });
+        }
+
+        async function refreshDongleSlotViews() {
+            const container = document.getElementById('removeSlotChecklist');
+            if (container) container.textContent = isRtl ? 'جاري تحميل الفتحات...' : 'Loading slots...';
+            try {
+                renderRemovableDongleSlots(await loadDongleSlotInventory());
+            } catch (err) {
+                suggestedDongleSlot = null;
+                if (container) container.textContent = err.message;
+                showToast(isRtl ? 'تعذر تحديث قائمة الفتحات: ' + err.message : 'Could not refresh slot inventory: ' + err.message, 'error');
+            }
+            updateDongleSlotPreview();
+            await Promise.allSettled([fetchModemConfig(), fetchDongleMappingsTab()]);
+        }
+
+        async function openAddDongleSlotModal() {
+            if (!canManageDongleSlots() || dongleSlotMutationInProgress) return;
+            document.getElementById('newSlotCount').value = '1';
+            document.getElementById('newSlotResultText').textContent = '';
+            suggestedDongleSlot = null;
+            updateDongleSlotPreview();
+            openModal('addDongleSlotModal');
+            try {
+                await loadDongleSlotInventory();
+            } catch (err) {
+                showToast(err.message, 'error');
+            }
             updateDongleSlotPreview();
         }
         window.openAddDongleSlotModal = openAddDongleSlotModal;
 
         function updateDongleSlotPreview() {
-            const count = Math.max(1, parseInt(document.getElementById('newSlotCount')?.value, 10) || 1);
-            const prefix = (document.getElementById('newSlotPrefix')?.value || 'dongle').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_') || 'dongle';
-            const customName = document.getElementById('newSlotName')?.value.trim().toLowerCase();
-            const cards = document.querySelectorAll('#modemDonglesGrid [data-dongle-id]');
-            const existingSlotNames = new Set(Array.from(cards).map(c => c.getAttribute('data-dongle-id')));
-
-            const previews = [];
-            let nextIndex = 0;
-            for (let i = 0; i < count; i++) {
-                let targetName = '';
-                if (count === 1 && customName) {
-                    targetName = customName;
-                } else {
-                    while (existingSlotNames.has(`${prefix}${nextIndex}`)) {
-                        nextIndex++;
-                    }
-                    targetName = `${prefix}${nextIndex}`;
-                    existingSlotNames.add(targetName);
-                }
-                previews.push(targetName);
-            }
+            if (!canManageDongleSlots()) return;
+            const count = Number(document.getElementById('newSlotCount')?.value);
             const previewEl = document.getElementById('newSlotPreviewText');
-            if (previewEl) previewEl.textContent = previews.join(', ');
+            if (!previewEl) return;
+            if (!Number.isInteger(count) || count < 1 || count > 32) {
+                previewEl.textContent = isRtl ? 'أدخل عدداً صحيحاً من 1 إلى 32.' : 'Enter a whole number from 1 to 32.';
+                return;
+            }
+            previewEl.textContent = (isRtl ? `${count} فتحة؛ تُحدد الأسماء عند الإنشاء.` : `${count} slot(s); names are allocated when created.`)
+                + (suggestedDongleSlot ? (isRtl ? ` الاسم التالي المقترح: ${suggestedDongleSlot}` : ` Next suggested name: ${suggestedDongleSlot}`) : '');
         }
         window.updateDongleSlotPreview = updateDongleSlotPreview;
 
         async function saveNewDongleSlot(e) {
             e.preventDefault();
-            const count = Math.max(1, parseInt(document.getElementById('newSlotCount').value, 10) || 1);
-            const prefix = document.getElementById('newSlotPrefix').value.trim();
-            const dongleName = document.getElementById('newSlotName').value.trim().toLowerCase();
-            const audio = document.getElementById('newSlotAudio').value.trim();
-            const dataPort = document.getElementById('newSlotData').value.trim();
-            const rxgain = parseInt(document.getElementById('newSlotRxGain').value, 10) || 0;
-            const txgain = parseInt(document.getElementById('newSlotTxGain').value, 10) || 0;
-
-            showToast(isRtl ? `جاري إضافة ${count} فتحة مودم جديدة...` : `Adding ${count} new dongle slot(s) to dongle.conf...`, 'info');
-
+            if (!canManageDongleSlots() || dongleSlotMutationInProgress) return;
+            const countEl = document.getElementById('newSlotCount');
+            const count = Number(countEl.value);
+            if (!Number.isInteger(count) || count < 1 || count > 32) {
+                showToast(isRtl ? 'أدخل عدداً صحيحاً من 1 إلى 32.' : 'Enter a whole number from 1 to 32.', 'error');
+                return;
+            }
+            dongleSlotMutationInProgress = true;
+            const button = document.getElementById('createDongleSlotsButton');
+            button.disabled = true;
+            countEl.disabled = true;
+            const result = document.getElementById('newSlotResultText');
+            result.textContent = isRtl ? 'جاري إنشاء الفتحات الفارغة...' : 'Creating empty slots...';
             try {
-                const res = await fetch('/api/config/modem/dongle-slot', {
+                const res = await fetch('/api/gsm-dongles/slots', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ count, prefix, dongleName, audio, data: dataPort, rxgain, txgain })
+                    body: JSON.stringify({ count })
                 });
                 const data = await res.json();
-                if (data.success) {
-                    showToast(data.message, 'success');
-                    closeModal('addDongleSlotModal');
-                    fetchModemConfig();
-                    fetchDongleMappingsTab();
-                } else {
-                    showToast(data.error || 'Failed to add dongle slot(s)', 'error');
+                if (!res.ok || !data.success || !Array.isArray(data.addedSlots)) {
+                    throw new Error(data.error || (isRtl ? 'فشل إنشاء الفتحات' : 'Failed to create slots'));
                 }
-            } catch(err) {
-                showToast('Error: ' + err.message, 'error');
+                result.textContent = (isRtl ? 'تم إنشاء: ' : 'Created: ') + data.addedSlots.join(', ');
+                showToast(result.textContent, 'success');
+                closeModal('addDongleSlotModal');
+            } catch (err) {
+                result.textContent = err.message;
+                showToast(result.textContent, 'error');
+            } finally {
+                await refreshDongleSlotViews();
+                countEl.disabled = false;
+                button.disabled = false;
+                dongleSlotMutationInProgress = false;
             }
         }
         window.saveNewDongleSlot = saveNewDongleSlot;
 
-        function openRemoveDongleSlotModal() {
-            openModal('removeDongleSlotModal');
+        async function openRemoveDongleSlotModal() {
+            if (!canManageDongleSlots() || dongleSlotMutationInProgress) return;
             const container = document.getElementById('removeSlotChecklist');
-            if (!container) return;
-            container.innerHTML = '<div class="text-center text-xs text-[var(--text-muted)] py-2">' + (isRtl ? 'جاري تحميل الشرائح...' : 'Loading slots...') + '</div>';
-            const countEl = document.getElementById('removeSlotCount');
-            if (countEl) countEl.value = '1';
-            fetch('/api/config/modem')
-                .then(res => res.json())
-                .then(data => {
-                    const dongles = data && data.dongles ? Object.keys(data.dongles) : [];
-                    container.innerHTML = '';
-                    if (dongles.length === 0) {
-                        container.innerHTML = '<div class="text-center text-xs text-[var(--text-muted)] py-2">' + (isRtl ? 'لا توجد فتحات شرائح في dongle.conf' : 'No dongle slots found in dongle.conf') + '</div>';
-                    } else {
-                        dongles.forEach(dId => {
-                            const label = document.createElement('label');
-                            label.className = 'flex items-center gap-2 text-xs cursor-pointer hover:text-white';
-                            label.innerHTML = `<input type="checkbox" name="removeDongleSlot" value="${dId}" class="rounded border-[var(--border-primary)] text-red-500 focus:ring-red-500"> <span>${dId}</span>`;
-                            container.appendChild(label);
-                        });
-                    }
-                })
-                .catch(() => {
-                    container.innerHTML = '<div class="text-center text-xs text-red-400 py-2">' + (isRtl ? 'فشل تحميل الشرائح' : 'Failed to load slots') + '</div>';
-                });
+            const button = document.getElementById('removeDongleSlotsButton');
+            document.getElementById('removeSlotResultText').textContent = '';
+            container.textContent = isRtl ? 'جاري تحميل الفتحات...' : 'Loading slots...';
+            button.disabled = true;
+            openModal('removeDongleSlotModal');
+            try {
+                renderRemovableDongleSlots(await loadDongleSlotInventory());
+            } catch (err) {
+                container.textContent = err.message;
+                showToast(err.message, 'error');
+            } finally {
+                button.disabled = false;
+            }
         }
         window.openRemoveDongleSlotModal = openRemoveDongleSlotModal;
 
         async function executeRemoveDongleSlot(e) {
             e.preventDefault();
-            const checked = Array.from(document.querySelectorAll('input[name="removeDongleSlot"]:checked')).map(cb => cb.value);
-            const count = Math.max(1, parseInt(document.getElementById('removeSlotCount').value, 10) || 1);
-
-            const payload = {};
-            if (checked.length > 0) {
-                payload.dongleNames = checked;
-            } else {
-                payload.count = count;
+            if (!canManageDongleSlots() || dongleSlotMutationInProgress) return;
+            const checked = Array.from(document.querySelectorAll('#removeSlotChecklist input[name="removeDongleSlot"]:checked:not(:disabled)')).map(cb => cb.value);
+            if (!checked.length) {
+                showToast(isRtl ? 'اختر فتحة فارغة غير مخصصة لإزالتها.' : 'Select an empty, unassigned slot to remove.', 'error');
+                return;
             }
+            const targetText = checked.join(', ');
+            const removesAssigned = checked.some(name => document.querySelector(`#removeSlotChecklist input[value="${name}"]`)?.dataset.assigned === '1');
+            if (!confirm(removesAssigned
+                ? (isRtl ? `إزالة الفتحات التالية: ${targetText}؟ بعضها مخصص ومودمه غير متصل؛ ستُحذف إعداداته وستنقطع باقي الخطوط لثوانٍ أثناء إعادة تحميل الوحدة.` : `Remove ${targetText}? Some are assigned with no modem connected; their sections are deleted and the remaining lines reconnect for a few seconds while the module reloads.`)
+                : (isRtl ? `إزالة الفتحات الفارغة غير المخصصة التالية فقط: ${targetText}؟ دون إعادة تحميل أو إعادة ضبط.` : `Remove only these empty, unassigned slots: ${targetText}? No reloads or resets.`))) return;
 
-            const targetText = checked.length > 0 ? checked.join(', ') : `${count} last slot(s)`;
-            if (!confirm(isRtl ? `حذف الفتحات '${targetText}' نهائياً من dongle.conf؟` : `Remove dongle slot(s) '${targetText}' permanently from dongle.conf?`)) return;
-
-            showToast(isRtl ? 'جاري حذف الشرائح...' : 'Removing dongle slot(s)...', 'info');
-
+            dongleSlotMutationInProgress = true;
+            const button = document.getElementById('removeDongleSlotsButton');
+            button.disabled = true;
+            const result = document.getElementById('removeSlotResultText');
+            result.textContent = isRtl ? 'جاري إزالة الفتحات المحددة...' : 'Removing selected slots...';
             try {
-                const res = await fetch('/api/config/modem/dongle-slot', {
+                const res = await fetch('/api/gsm-dongles/slots', {
                     method: 'DELETE',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
+                    body: JSON.stringify({ slots: checked })
                 });
                 const data = await res.json();
-                if (data.success) {
-                    showToast(data.message, 'success');
-                    closeModal('removeDongleSlotModal');
-                    fetchModemConfig();
-                    fetchDongleMappingsTab();
-                } else {
-                    showToast(data.error || 'Failed to remove dongle slot(s)', 'error');
+                if (!res.ok || !data.success || !Array.isArray(data.removedSlots)) {
+                    throw new Error(data.error || (isRtl ? 'فشل إزالة الفتحات' : 'Failed to remove slots'));
                 }
-            } catch(err) {
-                showToast('Error: ' + err.message, 'error');
+                result.textContent = (isRtl ? 'تمت الإزالة: ' : 'Removed: ') + data.removedSlots.join(', ');
+                showToast(result.textContent, 'success');
+                closeModal('removeDongleSlotModal');
+            } catch (err) {
+                result.textContent = err.message;
+                showToast(result.textContent, 'error');
+            } finally {
+                await refreshDongleSlotViews();
+                button.disabled = false;
+                dongleSlotMutationInProgress = false;
             }
         }
         window.executeRemoveDongleSlot = executeRemoveDongleSlot;
@@ -10511,29 +10604,6 @@
         }
         window.saveAllDongleGains = saveAllDongleGains;
         window.saveModemConfig = saveAllDongleGains;
-
-        async function rollbackDongleAutoconfig() {
-            const message = isRtl
-                ? 'سيتم استعادة النسخة الأصلية من dongle.conf قبل الإعداد التلقائي، تعطيل الإعداد التلقائي، وإعادة تحميل chan_dongle. لن يُسمح بالتنفيذ أثناء وجود مكالمات نشطة. هل تريد المتابعة؟'
-                : 'This restores the original pre-autoconfig dongle.conf backup, disables automatic dongle reconciliation, and reloads chan_dongle. It will refuse while calls are active. Continue?';
-            if (!window.confirm(message)) return;
-            try {
-                const res = await fetch('/api/config/modem/autoconfig/rollback', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
-                });
-                const data = await res.json();
-                if (data.success) {
-                    showToast(data.message || (isRtl ? 'تم التراجع عن الإعداد التلقائي.' : 'Autoconfig rolled back.'), 'success');
-                    if (typeof fetchModemConfig === 'function') fetchModemConfig();
-                } else {
-                    showToast(data.error || (isRtl ? 'تعذر التراجع عن الإعداد التلقائي.' : 'Failed to rollback autoconfig.'), 'error');
-                }
-            } catch (e) {
-                showToast((isRtl ? 'خطأ في التراجع: ' : 'Rollback error: ') + e.message, 'error');
-            }
-        }
-        window.rollbackDongleAutoconfig = rollbackDongleAutoconfig;
 
         async function loadAudioGlobals() {
             const threshEl = document.getElementById('dspVadThreshold') || document.getElementById('globalVadThreshold');

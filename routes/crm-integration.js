@@ -1886,7 +1886,7 @@ results['pjsip_reload_out'] = (stdout || '') + (stderr || '');
                 dnd: policy.dnd || 'user_choice',
                 disable_outbound_ringing_cancel: Boolean(policy.disable_outbound_ringing_cancel),
                 api_url: `http://${host}:8080/api/integrations/v1`,
-                softphone_api_url: `http://${host}:8090`
+                softphone_api_url: `https://${host}:8443`
             });
         } catch (err) {
             res.status(500).json({ success: false, error: err.message });

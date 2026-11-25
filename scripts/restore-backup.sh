@@ -78,6 +78,16 @@ fi
 
 echo "Target Snapshot Timestamp: $TARGET_TIMESTAMP"
 
+# Check call safety before touching any restored config, module or database.
+DONGLE_HELPER="$INSTALL_DIR/scripts/dongle-module.sh"
+if [ ! -f "$DONGLE_HELPER" ]; then
+    DONGLE_HELPER="$(dirname "$0")/dongle-module.sh"
+fi
+. "$DONGLE_HELPER"
+. "$(dirname "$DONGLE_HELPER")/dongle-config.sh"
+dongle_module_require_idle || exit 1
+dongle_deployment_disable_watchdog
+
 # Determine MySQL auth parameters
 detect_mysql_auth() {
     local pwd
@@ -120,15 +130,21 @@ else
     echo "  Notice: $DONGLE_BAK not found, keeping current dongle config."
 fi
 
+RESTORE_MODULES_DIR=""
+for mod_dir in /usr/lib64/asterisk/modules /usr/lib/asterisk/modules; do
+    if [ -d "$mod_dir" ]; then
+        RESTORE_MODULES_DIR="$mod_dir"
+        break
+    fi
+done
+if [ -z "$RESTORE_MODULES_DIR" ]; then
+    echo "ERROR: No Asterisk modules directory found; binary restoration refused." >&2
+    exit 1
+fi
 DONGLE_SO_BAK="$BACKUP_DIR/chan_dongle.so.bak_${TARGET_TIMESTAMP}"
 if [ -f "$DONGLE_SO_BAK" ]; then
-    for mod_dir in /usr/lib64/asterisk/modules /usr/lib/asterisk/modules; do
-        if [ -d "$mod_dir" ]; then
-            cp -a "$DONGLE_SO_BAK" "$mod_dir/chan_dongle.so"
-            echo "  Restored $mod_dir/chan_dongle.so"
-            break
-        fi
-    done
+    # Historical rollback artifacts intentionally do not use the release pin.
+    dongle_module_install_file "$DONGLE_SO_BAK" "$RESTORE_MODULES_DIR" "backup snapshot $TARGET_TIMESTAMP"
 else
     echo "  Notice: $DONGLE_SO_BAK not found, keeping current chan_dongle module."
 fi
@@ -151,19 +167,16 @@ else
     echo "  Notice: $CDR_SQL not found, skipping CDR database restore."
 fi
 
-# 4. Reload Asterisk
-echo "[4/5] Reloading Asterisk dialplan and dongle drivers..."
-if command -v asterisk &>/dev/null && pgrep -x asterisk >/dev/null 2>&1; then
-    asterisk -rx "dialplan reload" >/dev/null 2>&1 || true
-    asterisk -rx "dongle reload now" >/dev/null 2>&1 || true
-    echo "  Asterisk dialplan and dongles reloaded."
-fi
+# 4. Activate restored binaries in a new daemon generation, not a config reload.
+echo "[4/5] Activating restored Asterisk configuration and drivers..."
+bash "$(dirname "$DONGLE_HELPER")/enable-dongle-logging.sh" --no-reload
+dongle_module_restart_verified 20 asterisk "$RESTORE_MODULES_DIR" || exit 1
 
 # 5. Restart Sokrat Daemons
 echo "[5/5] Restarting Sokrat VoIP services..."
-systemctl daemon-reload 2>/dev/null || true
+systemctl daemon-reload
+systemctl start sokrat-asterisk-logrotate.timer
 systemctl restart sokrat-voip.service 2>/dev/null || true
-systemctl restart sokrat-watchdog.service 2>/dev/null || true
 systemctl restart sokrat-stt.service 2>/dev/null || true
 
 echo "========================================================"

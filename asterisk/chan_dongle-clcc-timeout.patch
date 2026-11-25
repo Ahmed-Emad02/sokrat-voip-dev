@@ -1,0 +1,220 @@
+--- a/at_command.c
++++ b/at_command.c
+@@ -997,7 +997,17 @@
+ EXPORT_DEF int at_enqueue_clcc(struct cpvt *cpvt)
+ {
+ 	static const at_queue_cmd_t at_cmd = ATQ_CMD_DECLARE_ST(CMD_AT_CLCC, cmd_clcc);
++	const at_queue_task_t *task;
+ 
++	/* One queued or quarantined CLCC is enough, including periodic polls. */
++	AST_LIST_TRAVERSE(&cpvt->pvt->at_queue, task, entry)
++	{
++		unsigned i;
++		for (i = task->cindex; i < task->cmdsno; ++i)
++			if (task->cmds[i].cmd == CMD_AT_CLCC)
++				return 0;
++	}
++
+ 	if (at_queue_insert_const(cpvt, &at_cmd, 1, 1) != 0) {
+ 		chan_dongle_err = E_QUEUE;
+ 		return -1;
+--- a/at_queue.c
++++ b/at_queue.c
+@@ -249,6 +249,9 @@
+ 	int fail = 0;
+ 	at_queue_cmd_t * cmd = at_queue_head_cmd_nc(pvt);
+ 
++	if (pvt->at_recovery)
++		return 0;
++
+ 	if(cmd)
+ 	{
+ 		if(cmd->length > 0)
+@@ -333,6 +336,8 @@
+ #/* */
+ EXPORT_DEF void at_queue_handle_result (struct pvt* pvt, at_res_t res)
+ {
++	if (pvt->at_recovery)
++		return;
+ 	/* move queue */
+ 	at_queue_remove_cmd(pvt, res);
+ }
+@@ -347,6 +352,8 @@
+ {
+ 	struct at_queue_task* task;
+ 
++	pvt->at_recovery = 0;
++
+ 	while ((task = AST_LIST_FIRST (&pvt->at_queue)))
+ 	{
+ 		at_queue_remove(pvt);
+@@ -382,13 +389,82 @@
+ 	int ms_timeout = -1;
+ 	const at_queue_cmd_t * cmd = at_queue_head_cmd(pvt);
+ 
++	if (pvt->at_recovery)
++	{
++		struct timespec now;
++		long ms;
++		if (clock_gettime(CLOCK_MONOTONIC, &now))
++			return 0;
++		ms = (pvt->at_recovery_deadline.tv_sec - now.tv_sec) * 1000 +
++			(pvt->at_recovery_deadline.tv_nsec - now.tv_nsec) / 1000000;
++		return ms > 0 ? (int)ms : 0;
++	}
++
+ 	if(cmd)
+ 	{
+ 		if(cmd->length == 0)
+ 		{
+ 			ms_timeout = ast_tvdiff_ms(cmd->timeout, ast_tvnow());
++			if (ms_timeout < 0)
++				ms_timeout = 0;
+ 		}
+ 	}
+ 
+ 	return ms_timeout;
+ }
++
++/* Quarantine the CLCC head until a distinctive read-only reply establishes
++ * an ordered terminal boundary. Never transmit a queued SMS across this gap. */
++EXPORT_DEF int at_queue_recover(struct pvt *pvt)
++{
++	const at_queue_cmd_t *cmd = at_queue_head_cmd(pvt);
++	static const char probe[] = "AT+CSQ\r";
++
++	if (pvt->at_recovery || !cmd || cmd->cmd != CMD_AT_CLCC)
++		return -1;
++	if (clock_gettime(CLOCK_MONOTONIC, &pvt->at_recovery_deadline))
++		return -1;
++	pvt->at_recovery_deadline.tv_sec += ATQ_CMD_TIMEOUT_MEDIUM;
++	pvt->at_recovery = 1;
++	ast_log(LOG_WARNING, "[%s] CLCC timeout: quarantining queue for CSQ resync\n", PVT_ID(pvt));
++	return at_write(pvt, probe, sizeof(probe) - 1) ? -1 : 0;
++}
++
++EXPORT_DEF int at_queue_recovery_response(struct pvt *pvt, at_res_t res, int valid_csq)
++{
++	if (!pvt->at_recovery)
++		return 1;
++	if (at_queue_timeout(pvt) == 0)
++		return -1;
++	switch (res)
++	{
++		case RES_CSQ:
++			if (!valid_csq)
++				return -1;
++			pvt->at_recovery = 2;
++			return 0;
++		case RES_OK:
++			if (pvt->at_recovery == 2)
++			{
++				pvt->at_recovery = 0;
++				at_queue_handle_result(pvt, RES_PARSE_ERROR);
++			}
++			return 0;
++		case RES_ERROR:
++		case RES_CME_ERROR:
++		case RES_CMS_ERROR:
++		case RES_BUSY:
++		case RES_NO_CARRIER:
++		case RES_NO_DIALTONE:
++			/* Before the marker these belong to the timed-out CLCC. */
++			return pvt->at_recovery == 2 ? -1 : 0;
++		case RES_CLCC:
++		case RES_CMGR:
++		case RES_CMGS:
++		case RES_SMS_PROMPT:
++		case RES_UNKNOWN:
++			return 0;
++		default:
++			return 1;
++	}
++}
+--- a/at_queue.h
++++ b/at_queue.h
+@@ -95,6 +95,9 @@
+ EXPORT_DECL const at_queue_cmd_t * at_queue_head_cmd(const struct pvt * pvt);
+ EXPORT_DECL int at_queue_timeout(const struct pvt * pvt);
+ EXPORT_DECL int at_queue_run (struct pvt * pvt);
++EXPORT_DECL int at_queue_recover (struct pvt * pvt);
++/* -1 fatal, 0 consumed by quarantine, 1 ordinary unsolicited response */
++EXPORT_DECL int at_queue_recovery_response (struct pvt * pvt, at_res_t res, int valid_csq);
+ 
+ INLINE_DECL at_cmd_suppress_error_t at_cmd_suppress_error_mode(int flags)
+ {
+--- a/at_response.c
++++ b/at_response.c
+@@ -1957,6 +1957,15 @@
+ 		}
+ 		str[len] = '\0';
+ 
++		if (pvt->at_recovery)
++		{
++			int rssi;
++			int recovery = at_queue_recovery_response(pvt, at_res,
++				at_res == RES_CSQ && at_parse_csq(str, &rssi) == 0);
++			if (recovery <= 0)
++				return recovery;
++		}
++
+ // 		ast_debug (5, "[%s] [%.*s]\n", PVT_ID(pvt), (int) len, str);
+ 
+ 		if(ecmd && ecmd->cmd == CMD_USER) {
+--- a/chan_dongle.c
++++ b/chan_dongle.c
+@@ -572,12 +572,21 @@
+ 		t = at_queue_timeout(pvt);
+ 		if(t < 0)
+ 			t = pvt->timeout;
++		/* Check absolute deadlines even when continuous URCs keep fd readable. */
++		if (t == 0)
++			goto command_timeout;
+ 
+ 		ast_mutex_unlock (&pvt->lock);
+ 
+ 		if (!at_wait (fd, &t))
+ 		{
+ 			ast_mutex_lock (&pvt->lock);
++command_timeout:
++			if (pvt->at_recovery)
++			{
++				ast_log(LOG_ERROR, "[%s] CSQ resync timed out\n", dev);
++				goto e_cleanup;
++			}
+ 			ecmd = at_queue_head_cmd (pvt);
+ 			if(ecmd)
+ 			{
+@@ -591,6 +600,13 @@
+ 					ast_mutex_unlock (&pvt->lock);
+ 					continue;
+ 				}
++				if (ecmd->cmd == CMD_AT_CLCC)
++				{
++					if (at_queue_recover(pvt))
++						goto e_cleanup;
++					ast_mutex_unlock (&pvt->lock);
++					continue;
++				}
+ 				if (ecmd->cmd == CMD_AT_COPS_INIT || ecmd->cmd == CMD_AT_COPS)
+ 				{
+ 					ast_log (LOG_WARNING, "[%s] Timed out waiting response to %s, skipping command to prevent disconnect\n", dev, at_cmd2str(ecmd->cmd));
+--- a/chan_dongle.h
++++ b/chan_dongle.h
+@@ -13,6 +13,7 @@
+ #define CHAN_DONGLE_H_INCLUDED
+ 
+ #include "ast_config.h"
++#include <time.h>
+ 
+ #include <asterisk/lock.h>
+ #include <asterisk/linkedlists.h>
+@@ -113,6 +114,8 @@
+ 
+ 	ast_mutex_t		lock;				/*!< pvt lock */
+ 	AST_LIST_HEAD_NOLOCK (, at_queue_task) at_queue;	/*!< queue for commands to modem */
++	unsigned int		at_recovery;			/*!< 0 normal, 1 awaiting +CSQ, 2 awaiting probe terminal */
++	struct timespec		at_recovery_deadline;		/*!< monotonic, never renewed by URCs */
+ 
+ 	AST_LIST_HEAD_NOLOCK (, cpvt)		chans;		/*!< list of channels */
+ 	struct cpvt		sys_chan;			/*!< system channel */

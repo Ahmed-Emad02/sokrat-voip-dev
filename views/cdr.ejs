@@ -74,9 +74,7 @@ function fmtDur(s) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sokrat VOIP - Call Logs</title>
     <link rel="icon" type="image/png" href="/favicon.png">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/fonts.css?v=<%= typeof assetVersion !== 'undefined' ? assetVersion : '1' %>">
     <script src="/js/tailwindcss-browser.js"></script>
     <link rel="stylesheet" href="/css/flatpickr.min.css">
     <script src="/js/flatpickr.min.js"></script>
@@ -391,6 +389,14 @@ function fmtDur(s) {
                 <h2 class="text-2xl font-vibrant-display text-white tracking-tight <%= isRtl ? 'text-right' : '' %>"><%= t.title %> <span class="accent-orange"><%= t.subtitle %></span></h2>
             </div>
             <div class="flex items-center gap-2 flex-wrap">
+                <button type="button" id="cdrViewCallsBtn" onclick="setCdrView('calls')" class="inline-flex items-center h-10 px-3.5 rounded-lg border text-[11px] font-bold transition cursor-pointer <%= (typeof voicemailView !== 'undefined' && voicemailView) ? 'border-[var(--border-primary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]' : 'bg-[var(--accent-color)] border-[var(--accent-color)] text-white shadow-sm' %>">
+                    <%= isRtl ? 'المكالمات' : 'Calls' %>
+                    <span class="ms-1 font-mono opacity-80"><%= pagination.total %></span>
+                </button>
+                <button type="button" id="cdrViewVmBtn" onclick="setCdrView('voicemails')" class="inline-flex items-center h-10 px-3.5 rounded-lg border text-[11px] font-bold transition cursor-pointer <%= (typeof voicemailView !== 'undefined' && voicemailView) ? 'bg-[var(--accent-color)] border-[var(--accent-color)] text-white shadow-sm' : 'border-[var(--border-primary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]' %>">
+                    <%= isRtl ? 'الرسائل الصوتية' : 'Voicemails' %>
+                    <span class="ms-1 font-mono opacity-80"><%= (typeof voicemails !== 'undefined' && voicemails) ? voicemails.length : 0 %></span>
+                </button>
                 <!-- Columns Customize Button (Icon Only) -->
                 <button type="button" onclick="openCdrColumnsModal()" class="icon-tool-btn group" title="<%= isRtl ? 'تخصيص الأعمدة' : 'Customize Columns' %>" aria-label="<%= isRtl ? 'تخصيص الأعمدة' : 'Customize Columns' %>">
                     <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -474,6 +480,7 @@ function fmtDur(s) {
         %>
         <!-- Compact Balanced Filter Form -->
         <form id="cdrFilterForm" action="/cdr" method="GET" class="mb-4 flex flex-col relative z-30 bg-transparent border-0 border-none shadow-none <%= hasActiveFilters ? '' : 'filters-collapsed' %>">
+            <% if (typeof voicemailView !== 'undefined' && voicemailView) { %><input type="hidden" name="view" value="voicemails"><% } %>
             <input type="hidden" name="lang" value="<%= currentLang %>">
             <input type="hidden" name="page" value="1">
             
@@ -711,7 +718,7 @@ function fmtDur(s) {
         </form>
 
         <!-- Top Pagination -->
-        <% if (pagination.totalPages > 1) { %>
+        <% if (!(typeof voicemailView !== 'undefined' && voicemailView) && pagination.totalPages > 1) { %>
         <div class="flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 px-2 sm:px-4 py-3 mb-2">
             <span class="text-xs text-zinc-500 font-bold">
                 <%= t.pagShowing %> <%= (pagination.page - 1) * pagination.perPage + 1 %>-<%= Math.min(pagination.page * pagination.perPage, pagination.total) %> <%= t.pagOf %> <%= pagination.total %> <%= t.pagResults %>
@@ -726,6 +733,7 @@ function fmtDur(s) {
         </div>
         <% } %>
 
+        <div id="cdrCallsView" class="<%= (typeof voicemailView !== 'undefined' && voicemailView) ? 'hidden' : '' %>">
         <div id="cdrTableContainer" class="rounded-2xl overflow-hidden bg-transparent border-0 border-none shadow-none">
             <div class="overflow-x-auto">
                 <table id="cdrTable" class="w-full text-start border-collapse">
@@ -880,8 +888,8 @@ function fmtDur(s) {
                                                     <button type="button" onclick="triggerAudioDownload(event, '/audio/<%= call.uniqueid %>?download=1')" class="shrink-0 w-8 h-8 rounded-full bg-transparent hover:bg-transparent border-0 border-none flex items-center justify-center transition cursor-pointer group/dl" title="<%= t.download %>">
                                                         <svg class="w-5 h-5 text-[var(--text-muted)] group-hover/dl:text-white transition" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14m0 0l-4-4m4 4l4-4M5 19h14"/></svg>
                                                     </button>
-                                                    <button type="button" onclick="openCdrTranscript(event, '<%= call.uniqueid %>')" id="cdr_stt_<%= call.uniqueid %>" class="shrink-0 w-8 h-8 rounded-full bg-transparent hover:bg-transparent border-0 border-none text-blue-400 hover:text-white flex items-center justify-center transition cursor-pointer group/stt" title="<%= call.transcript ? (isRtl ? 'عرض تفريغ المكالمة' : 'View Transcript') : (isRtl ? 'تفريغ المكالمة الآن' : 'Transcribe Call') %>">
-                                                        <svg class="w-5 h-5 <%= call.transcript ? 'text-emerald-400' : 'text-blue-400' %> group-hover/stt:text-white transition" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0-4a3 3 0 003-3V7a3 3 0 10-6 0v8a3 3 0 003 3z"/></svg>
+                                                    <button type="button" onclick="openCdrTranscript(event, '<%= call.uniqueid %>')" id="cdr_stt_<%= call.uniqueid %>" class="shrink-0 w-8 h-8 rounded-full bg-transparent hover:bg-transparent border-0 border-none text-blue-400 hover:text-white flex items-center justify-center transition cursor-pointer group/stt" title="<%= call.has_transcript ? (isRtl ? 'عرض تفريغ المكالمة' : 'View Transcript') : (isRtl ? 'تفريغ المكالمة الآن' : 'Transcribe Call') %>">
+                                                        <svg class="w-5 h-5 <%= call.has_transcript ? 'text-emerald-400' : 'text-blue-400' %> group-hover/stt:text-white transition" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0-4a3 3 0 003-3V7a3 3 0 10-6 0v8a3 3 0 003 3z"/></svg>
                                                     </button>
 
                                                 </div>
@@ -926,6 +934,81 @@ function fmtDur(s) {
                 <% } %>
             </div>
         </div>
+        </div>
+
+        <% const vmList = (typeof voicemails !== 'undefined' && Array.isArray(voicemails)) ? voicemails : []; %>
+        <div id="cdrVoicemailsView" class="<%= (typeof voicemailView !== 'undefined' && voicemailView) ? '' : 'hidden' %>">
+            <div class="rounded-2xl overflow-hidden bg-transparent border-0 border-none shadow-none">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-start border-collapse">
+                        <thead>
+                            <tr class="bg-black/40 text-zinc-400 text-xs font-bold uppercase border-b border-[#27272a]">
+                                <th class="p-4 tracking-wider text-start whitespace-nowrap"><%= t.thTime %></th>
+                                <th class="p-4 tracking-wider text-start whitespace-nowrap"><%= t.thSrc %></th>
+                                <th class="p-4 tracking-wider text-start whitespace-nowrap"><%= isRtl ? 'صندوق البريد' : 'Mailbox' %></th>
+                                <th class="p-4 tracking-wider text-start whitespace-nowrap"><%= isRtl ? 'خط الربط' : 'Line' %></th>
+                                <th class="p-4 tracking-wider text-start whitespace-nowrap"><%= t.thAir %></th>
+                                <th class="p-4 tracking-wider text-start whitespace-nowrap"><%= t.thState %></th>
+                                <th class="p-4 tracking-wider text-end min-w-[340px] whitespace-nowrap"><%= t.thRec %></th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-zinc-800/30 text-sm font-mono">
+                            <% if (vmList.length === 0) { %>
+                                <tr><td colspan="7" class="p-8 text-center text-zinc-500 font-mono"><%= isRtl ? 'لا توجد رسائل صوتية في هذا النطاق الزمني.' : 'No voicemail messages in this time range.' %></td></tr>
+                            <% } else { %>
+                                <% vmList.forEach(vm => { %>
+                                    <tr class="hover:bg-zinc-900/60 transition">
+                                        <td data-col="time" class="px-4 py-1.5 whitespace-nowrap leading-none">
+                                            <div class="flex flex-col gap-0.5 justify-center leading-none">
+                                                <span class="text-xs text-white font-mono font-bold"><%= vm.origtime ? moment(vm.origtime).format('YYYY-MM-DD') : '-' %></span>
+                                                <span class="text-[11px] text-zinc-300 font-mono font-semibold"><%= vm.origtime ? moment(vm.origtime).format('HH:mm:ss') : '' %></span>
+                                            </div>
+                                        </td>
+                                        <td data-col="src" class="p-4 font-bold text-white font-mono whitespace-nowrap">
+                                            <%= vm.callerid || 'Unknown' %>
+                                        </td>
+                                        <td data-col="dst" class="p-4 whitespace-nowrap">
+                                            <span class="text-white font-mono"><%= isRtl ? 'صندوق' : 'Mailbox' %> <%= vm.mailbox %></span>
+                                            <span class="block text-[10px] font-mono text-[var(--text-muted)]"><%= isRtl ? 'رسالة صوتية' : 'Voicemail' %></span>
+                                        </td>
+                                        <td data-col="trunk" class="p-4 whitespace-nowrap font-mono text-xs text-zinc-600">-</td>
+                                        <td data-col="airtime" class="p-4 text-zinc-400 whitespace-nowrap"><%= fmtDur(vm.duration) %></td>
+                                        <td data-col="state" class="p-4 whitespace-nowrap">
+                                            <span class="inline-flex items-center justify-center text-[10px] font-mono font-black tracking-wider uppercase whitespace-nowrap text-rose-300"><%= isRtl ? 'رسالة صوتية' : 'VOICEMAIL' %></span>
+                                        </td>
+                                        <td data-col="rec" class="p-4 text-end min-w-[340px]">
+                                            <% if (vm.audioUrl) { %>
+                                            <div class="audio-player flex items-center gap-2 min-w-[320px] max-w-[380px] <%= isRtl ? 'flex-row-reverse ml-auto' : 'ml-auto' %>">
+                                                <audio preload="none" data-player-audio><source src="<%= vm.audioUrl %>"></audio>
+                                                <button data-player-playpause class="shrink-0 flex items-center justify-center bg-transparent border-0 text-[var(--accent-color)] hover:text-[var(--accent-hover)] transition cursor-pointer p-0" title="Play / Pause">
+                                                    <svg data-icon-play class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M4.5 5.65c0-1.43 1.53-2.33 2.78-1.64l11.54 6.35c1.29.71 1.29 2.57 0 3.28L7.28 19.99c-1.25.69-2.78-.21-2.78-1.64V5.65z" clip-rule="evenodd"/></svg>
+                                                    <svg data-icon-pause class="w-5 h-5 hidden" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M6.75 5.25a.75.75 0 01.75.75v12a.75.75 0 01-1.5 0v-12a.75.75 0 01.75-.75zm10.5 0a.75.75 0 01.75.75v12a.75.75 0 01-1.5 0v-12a.75.75 0 01.75-.75z" clip-rule="evenodd"/></svg>
+                                                </button>
+                                                <span data-player-current class="text-[10px] font-mono font-bold text-[var(--text-muted)] shrink-0">0:00</span>
+                                                <input data-player-slider type="range" min="0" max="100" value="0" step="0.1" class="media-slider flex-1 min-w-[80px] cursor-pointer focus:outline-none" style="--seek-before-width: 0%;" aria-label="Seek Media Slider">
+                                                <span data-player-duration class="text-[10px] font-mono font-bold text-[var(--text-muted)] shrink-0"><%= fmtDur(vm.duration) %></span>
+                                            </div>
+                                            <% } else { %>
+                                                <span class="text-xs font-mono text-zinc-500/30 font-bold italic select-none"><%= isRtl ? 'لا يوجد صوت' : 'No audio' %></span>
+                                            <% } %>
+                                            <% if (vm.transcript) { %>
+                                                <p class="mt-1.5 text-[10px] leading-relaxed text-[var(--text-secondary)] max-w-[380px] <%= isRtl ? 'ms-auto text-end' : 'ms-auto text-start' %> max-h-12 overflow-hidden"><%= vm.transcript %></p>
+                                            <% } %>
+                                        </td>
+                                    </tr>
+                                <% }) %>
+                            <% } %>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="px-6 py-4 border-t border-[#27272a]/60 bg-transparent">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold uppercase tracking-widest text-zinc-500"><%= isRtl ? 'البريد الصوتي' : 'Voicemail' %></span>
+                        <span class="text-sm font-black text-white"><%= isRtl ? 'الإجمالي' : 'Total' %> <span class="text-[var(--accent-color)]"><%= vmList.length %></span></span>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -937,6 +1020,28 @@ function fmtDur(s) {
             window.location.href = url;
         }
         window.triggerAudioDownload = triggerAudioDownload;
+
+        function setCdrView(view) {
+            var isVm = view === 'voicemails';
+            var callsView = document.getElementById('cdrCallsView');
+            var vmView = document.getElementById('cdrVoicemailsView');
+            var callsBtn = document.getElementById('cdrViewCallsBtn');
+            var vmBtn = document.getElementById('cdrViewVmBtn');
+            if (callsView) callsView.classList.toggle('hidden', isVm);
+            if (vmView) vmView.classList.toggle('hidden', !isVm);
+            var activeCls = 'bg-[var(--accent-color)] border-[var(--accent-color)] text-white shadow-sm';
+            var idleCls = 'border-[var(--border-primary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]';
+            var baseCls = 'inline-flex items-center h-10 px-3.5 rounded-lg border text-[11px] font-bold transition cursor-pointer ';
+            if (callsBtn) callsBtn.className = baseCls + (isVm ? idleCls : activeCls);
+            if (vmBtn) vmBtn.className = baseCls + (isVm ? activeCls : idleCls);
+            try {
+                var url = new URL(window.location.href);
+                if (isVm) url.searchParams.set('view', 'voicemails');
+                else url.searchParams.delete('view');
+                window.history.replaceState({}, '', url.toString());
+            } catch (_) {}
+        }
+        window.setCdrView = setCdrView;
 
         function goToPage(page) {
             // The pagination navigates by URL instead of submitting the filter

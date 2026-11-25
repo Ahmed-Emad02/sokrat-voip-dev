@@ -1,0 +1,12 @@
+[Unit]
+Description=Check the 250M Asterisk rotation threshold every minute (not a hard size cap)
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=1min
+AccuracySec=1s
+RandomizedDelaySec=0
+Unit=sokrat-asterisk-logrotate.service
+
+[Install]
+WantedBy=timers.target

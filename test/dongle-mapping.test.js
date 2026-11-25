@@ -178,7 +178,9 @@ test('a manual disable keeps the DID cached but disables dynamic routing', () =>
     const slots = slotMap(result);
     assert.equal(slots.dongle0.phone_number, DID_A);
     assert.equal(slots.dongle0.dynamic_enabled, 0);
-    assert.ok(actionKeys(result.astdbDeletes).includes('dongle_map/dongle0'));
+    // The number stays readable in AstDB; only dynamic routing is disabled.
+    assert.ok(actionKeys(result.astdbWrites).includes('dongle_map/dongle0'));
+    assert.ok(!actionKeys(result.astdbDeletes).includes('dongle_map/dongle0'));
     assert.ok(actionKeys(result.astdbWrites).includes(`sim_map/${IMSI_A}`));
 });
 
@@ -192,7 +194,7 @@ test('an absent dongle is unmapped without deleting the persistent SIM mapping',
 
     const slots = slotMap(result);
     assert.equal(slots.dongle0.dynamic_enabled, 0);
-    assert.ok(actionKeys(result.astdbDeletes).includes('dongle_map/dongle0'));
+    assert.ok(!actionKeys(result.astdbDeletes).includes('dongle_map/dongle0'));
     assert.ok(!actionKeys(result.astdbDeletes).some(key => key.startsWith('sim_map/')));
 });
 

@@ -16,7 +16,7 @@ SOKRAT_CHAN_DONGLE_COMMIT="${SOKRAT_CHAN_DONGLE_COMMIT:-7db8e75bc2b7c81b173e1bb4
 # Release-pinned module shipped in installer-bundle/binaries/chan_dongle.so.
 # This digest is mandatory for bundle installs only: compiler output from a
 # source build is not byte-identical and is never compared with it.
-SOKRAT_CHAN_DONGLE_BUNDLE_SHA256="cb93bf719ebed984a20634b09fc857dc73540fe58ddc4c87273d175420ff40b0"
+SOKRAT_CHAN_DONGLE_BUNDLE_SHA256="7baa5c939d0f2c47decb1f71d6656a5803ca248aebf3d33a979a0f816c1b72f0"
 
 # Strip URL userinfo (user:password@) from any line passed on stdin. Used for
 # every origin string that reaches installer output, including git's own
@@ -199,6 +199,60 @@ dongle_module_source_origin() {
     fi
 }
 
+# Apply the complete release patch series in the caller's staged source tree.
+# A source build must not silently omit a fix because an unrelated upstream
+# line happens to match a marker. patch/git validate the actual hunks instead.
+dongle_module_apply_source_patches() {
+    local canonical="${1:-}" log_file="${2:-/dev/null}"
+    local patch_dir series name first=1 count=0
+    patch_dir=$(dirname "$canonical")
+    series="$patch_dir/chan_dongle-series"
+    if [ ! -f "$series" ]; then
+        echo "  ERROR: missing required driver patch series: $series" >&2
+        return 1
+    fi
+    while IFS= read -r name || [ -n "$name" ]; do
+        case "$name" in
+            ''|\#*) continue ;;
+            *[!a-zA-Z0-9._-]*)
+                echo "  ERROR: invalid driver patch name in $series" >&2
+                return 1 ;;
+        esac
+        if [ "$first" -eq 1 ] && [ "$name" != "$(basename "$canonical")" ]; then
+            echo "  ERROR: driver patch series must start with $(basename "$canonical")" >&2
+            return 1
+        fi
+        first=0
+        if [ ! -f "$patch_dir/$name" ]; then
+            echo "  ERROR: missing required driver patch: $patch_dir/$name" >&2
+            return 1
+        fi
+        if command -v patch >/dev/null 2>&1; then
+            if patch --batch -p1 --forward --dry-run < "$patch_dir/$name" >>"$log_file" 2>&1; then
+                patch --batch -p1 --forward < "$patch_dir/$name" >>"$log_file" 2>&1 || return 1
+            elif patch --batch -p1 --reverse --dry-run < "$patch_dir/$name" >>"$log_file" 2>&1; then
+                echo "  Driver patch already applied: $name"
+            else
+                echo "  ERROR: required driver patch does not apply: $name" >&2
+                return 1
+            fi
+        elif git apply --check "$patch_dir/$name" >>"$log_file" 2>&1; then
+            git apply "$patch_dir/$name" >>"$log_file" 2>&1 || return 1
+        elif git apply --reverse --check "$patch_dir/$name" >>"$log_file" 2>&1; then
+            echo "  Driver patch already applied: $name"
+        else
+            echo "  ERROR: required driver patch does not apply: $name" >&2
+            return 1
+        fi
+        count=$((count + 1))
+    done < "$series"
+    if [ "$count" -eq 0 ]; then
+        echo "  ERROR: driver patch series is empty: $series" >&2
+        return 1
+    fi
+    echo "  Applied complete driver series ($count patches)"
+}
+
 dongle_module_build_source() {
     local origin="${1:-}"
     local commit="${2:-}"
@@ -254,83 +308,7 @@ dongle_module_build_source() {
     if ! (
         cd "$staging" || exit 1
 
-        if command -v patch >/dev/null 2>&1; then
-            if patch -p1 -N --dry-run < "$patch_file" >/dev/null 2>&1; then
-                patch -p1 < "$patch_file" >/dev/null || exit 1
-                echo "  Applied Sokrat chan_dongle patch"
-            elif patch -p1 -R --dry-run < "$patch_file" >/dev/null 2>&1; then
-                echo "  Sokrat chan_dongle patch already applied"
-            else
-                echo "  ERROR: chan_dongle patch does not apply to $commit" >&2
-                exit 1
-            fi
-        elif git apply --check "$patch_file" >/dev/null 2>&1; then
-            git apply "$patch_file" || exit 1
-            echo "  Applied Sokrat chan_dongle patch"
-        elif git apply --reverse --check "$patch_file" >/dev/null 2>&1; then
-            echo "  Sokrat chan_dongle patch already applied"
-        else
-            echo "  ERROR: chan_dongle patch does not apply to $commit" >&2
-            exit 1
-        fi
-
-        # Apply the separate CLCC answer-polling fix after the main patch.
-        # The patch is optional for older bundles but mandatory for source
-        # builds; keep it separate so the large audio patch remains unchanged.
-        clcc_patch="${patch_file%/*}/chan_dongle-clcc-poll.patch"
-        if [ -f "$clcc_patch" ] && ! grep -q "Huawei firmware does not reliably emit" chan_dongle.c 2>/dev/null; then
-            if command -v patch >/dev/null 2>&1; then
-                patch -p1 -N < "$clcc_patch" >/dev/null 2>&1 || \
-                    echo "  WARNING: chan_dongle CLCC polling patch did not apply" >&2
-            elif git apply --check "$clcc_patch" >/dev/null 2>&1; then
-                git apply "$clcc_patch" >/dev/null 2>&1 || \
-                    echo "  WARNING: chan_dongle CLCC polling patch did not apply" >&2
-            fi
-        fi
-
-        # Drop stale PCM in the shared TX mixbuffer when a call detaches or a
-        # new call activates. This prevents previous-call audio from playing
-        # before/over the next announcement on all dongles.
-        tx_patch="${patch_file%/*}/chan_dongle-tx-buffer-reset.patch"
-        if [ -f "$tx_patch" ] && ! grep -q "Drop PCM left in the shared TX ring" channel.c 2>/dev/null; then
-            if command -v patch >/dev/null 2>&1; then
-                patch -p1 -N < "$tx_patch" >>"$log_file" 2>&1 || {
-                    echo "  ERROR: chan_dongle TX buffer reset patch did not apply" >&2
-                    exit 1
-                }
-            elif git apply --check "$tx_patch" >/dev/null 2>&1; then
-                git apply "$tx_patch" || {
-                    echo "  ERROR: chan_dongle TX buffer reset patch did not apply" >&2
-                    exit 1
-                }
-            else
-                echo "  ERROR: chan_dongle TX buffer reset patch does not apply" >&2
-                exit 1
-            fi
-            echo "  Applied Sokrat chan_dongle TX buffer reset patch"
-        fi
-
-        # Some firmware reports voice support while its PCM path is disabled.
-        # Enable voice explicitly for every dongle; unsupported devices fail
-        # through the bounded retry path without aborting initialization.
-        voice_patch="${patch_file%/*}/chan_dongle-voice-enable.patch"
-        if [ -f "$voice_patch" ] && ! grep -q "E173_VOICE_MAX_ATTEMPTS" at_response.c 2>/dev/null; then
-            if command -v patch >/dev/null 2>&1; then
-                patch -p1 -N < "$voice_patch" >>"$log_file" 2>&1 || {
-                    echo "  ERROR: chan_dongle voice enable patch did not apply" >&2
-                    exit 1
-                }
-            elif git apply --check "$voice_patch" >/dev/null 2>&1; then
-                git apply "$voice_patch" || {
-                    echo "  ERROR: chan_dongle voice enable patch did not apply" >&2
-                    exit 1
-                }
-            else
-                echo "  ERROR: chan_dongle voice enable patch does not apply" >&2
-                exit 1
-            fi
-            echo "  Applied Sokrat chan_dongle voice enable patch"
-        fi
+        dongle_module_apply_source_patches "$patch_file" "$log_file" || exit 1
 
         cp "$header_file" ./dongle_rx_condition.h || exit 1
 
@@ -379,16 +357,22 @@ dongle_module_build_source() {
 _dongle_module_status() {
     local ast="${1:-asterisk}"
     local output
-    output=$("$ast" -rx "module show like chan_dongle.so" 2>/dev/null) || return 1
+    output=$(_dongle_module_cli "$ast" "module show like chan_dongle.so") || return 1
     printf '%s\n' "$output" | awk '$1 == "chan_dongle.so" {
         for (i = 1; i <= NF; i++) if ($i == "Not" && $(i + 1) == "Running") { print "NotRunning"; exit }
         for (i = 1; i <= NF; i++) if ($i == "Running") { print "Running"; exit }
     }'
 }
 
+_dongle_module_cli() {
+    local ast="$1"
+    shift
+    timeout 10 "$ast" -rx "$*" 2>/dev/null
+}
+
 dongle_module_require_idle() {
     local ast="${1:-asterisk}"
-    local output active
+    local output active status devices slot details field value
 
     if ! command -v pgrep >/dev/null 2>&1; then
         echo "  ERROR: cannot determine whether Asterisk is running; refusing an unsafe dongle reload" >&2
@@ -401,7 +385,7 @@ dongle_module_require_idle() {
         echo "  ERROR: Asterisk is running but its CLI is unavailable; refusing an unsafe dongle reload" >&2
         return 1
     fi
-    if ! output=$("$ast" -rx "core show channels" 2>/dev/null); then
+    if ! output=$(_dongle_module_cli "$ast" "core show channels"); then
         echo "  ERROR: cannot determine active channels; refusing an unsafe dongle reload" >&2
         return 1
     fi
@@ -412,6 +396,31 @@ dongle_module_require_idle() {
             return 1
             ;;
         0)
+            # Asterisk channels do not include queued/in-flight SMS work.
+            # An absent module is safe during bootstrap; an unknown CLI is not.
+            status=$(_dongle_module_status "$ast") || return 1
+            [ -n "$status" ] || return 0
+            if ! devices=$(_dongle_module_cli "$ast" "dongle show devices") \
+                || ! printf '%s\n' "$devices" | grep -q '^ID[[:space:]]'; then
+                echo "  ERROR: cannot determine dongle work queues; refusing a restart" >&2
+                return 1
+            fi
+            for slot in $(printf '%s\n' "$devices" | awk '$1 ~ /^dongle[0-9]+$/ {print $1}'); do
+                details=$(_dongle_module_cli "$ast" "dongle show device state $slot") || return 1
+                for field in "Tasks in queue" "Commands in queue" "Calls/Channels"; do
+                    value=$(printf '%s\n' "$details" | awk -F: -v f="$field" \
+                        '{k=$1; gsub(/^[ \t]+|[ \t]+$/, "", k); if(k==f) {gsub(/[ \t]/, "", $2); print $2; exit}}')
+                    case "$value" in
+                        0) ;;
+                        ''|*[!0-9]*)
+                            echo "  ERROR: unknown $slot work queue; refusing a restart" >&2
+                            return 1 ;;
+                        *)
+                            echo "  ERROR: $slot has pending work ($field=$value); retry when idle" >&2
+                            return 1 ;;
+                    esac
+                done
+            done
             return 0
             ;;
     esac
@@ -522,5 +531,71 @@ dongle_module_wait_stopped() {
     done
 
     echo "  ERROR: chan_dongle.so is still running after ${timeout}s; refusing to claim a reload" >&2
+    return 1
+}
+
+# core restart gracefully closes voice admission and re-execs the daemon; the
+# PID may stay the same. A CLI acknowledgement alone is not a binary reload.
+# Require a new daemon generation AND the new module's actual mapped inode.
+dongle_module_restart_verified() {
+    local timeout_seconds="${1:-30}" ast="${2:-asterisk}"
+    local modules_dir="${3:-/usr/lib64/asterisk/modules}"
+    local proc_root="${SOKRAT_PROC_ROOT:-/proc}"
+    local before_pid="" before_uptime="" before_map="" before_epoch=0
+    local pid uptime mapping output expected_inode deadline generation=0 epoch
+    case "$timeout_seconds" in ''|*[!0-9]*) return 1 ;; esac
+    command -v timeout >/dev/null 2>&1 && command -v systemctl >/dev/null 2>&1 \
+        && command -v pgrep >/dev/null 2>&1 && command -v "$ast" >/dev/null 2>&1 || {
+        echo "  ERROR: verified restart requires systemctl, timeout, pgrep and Asterisk CLI" >&2
+        return 1
+    }
+    expected_inode=$(stat -c %i "$modules_dir/chan_dongle.so") || return 1
+    if pgrep -x asterisk >/dev/null 2>&1; then
+        systemctl is-active --quiet asterisk || {
+            echo "  ERROR: refusing to restart an unmanaged Asterisk daemon" >&2
+            return 1
+        }
+        dongle_module_require_idle "$ast" || return 1
+        before_pid=$(pgrep -x asterisk)
+        case "$before_pid" in ''|*[!0-9]*) echo "  ERROR: ambiguous Asterisk PID" >&2; return 1 ;; esac
+        output=$(_dongle_module_cli "$ast" "core show uptime seconds") || return 1
+        before_uptime=$(printf '%s\n' "$output" | awk '/^System uptime:/ {print $3; exit}')
+        case "$before_uptime" in ''|*[!0-9]*) echo "  ERROR: unknown Asterisk uptime" >&2; return 1 ;; esac
+        before_epoch=$(($(date +%s) - before_uptime))
+        before_map=$(awk '$NF ~ /\/chan_dongle\.so$/ {print $1 ":" $5; exit}' "$proc_root/$before_pid/maps") || return 1
+        if ! output=$(_dongle_module_cli "$ast" "core restart gracefully") \
+            || printf '%s\n' "$output" | grep -Eqi 'no such command|unable|failed|not found|already shutting'; then
+            echo "  ERROR: Asterisk refused the graceful binary restart" >&2
+            return 1
+        fi
+    else
+        systemctl start asterisk || return 1
+        generation=1
+    fi
+    deadline=$((SECONDS + timeout_seconds))
+    while [ "$SECONDS" -le "$deadline" ]; do
+        pid=$(pgrep -x asterisk || true)
+        case "$pid" in ''|*[!0-9]*) sleep 1; continue ;; esac
+        if output=$(_dongle_module_cli "$ast" "core show uptime seconds"); then
+            uptime=$(printf '%s\n' "$output" | awk '/^System uptime:/ {print $3; exit}')
+            case "$uptime" in ''|*[!0-9]*) sleep 1; continue ;; esac
+            mapping=$(awk '$NF ~ /\/chan_dongle\.so$/ {print $1 ":" $5; exit}' "$proc_root/$pid/maps" 2>/dev/null) || mapping=""
+            epoch=$(($(date +%s) - uptime))
+            if [ "$pid" != "$before_pid" ] || [ "$mapping" != "$before_map" ] \
+                || { [ -n "$before_uptime" ] && [ "$uptime" -lt "$before_uptime" ]; } \
+                || [ "$epoch" -gt "$((before_epoch + 1))" ]; then
+                generation=1
+            fi
+            if [ "$generation" -eq 1 ] \
+                && awk -v f="$modules_dir/chan_dongle.so" -v inode="$expected_inode" \
+                    '$NF == f && $5 == inode {found=1} END {exit !found}' "$proc_root/$pid/maps" 2>/dev/null \
+                && [ "$(_dongle_module_status "$ast")" = "Running" ]; then
+                echo "  Asterisk restarted gracefully; chan_dongle maps the installed binary"
+                return 0
+            fi
+        fi
+        sleep 1
+    done
+    echo "  ERROR: installed chan_dongle binary was not activated within ${timeout_seconds}s" >&2
     return 1
 }

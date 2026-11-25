@@ -372,6 +372,27 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
         #switchboardGrid .panel-surface.state-idle .border-t {
             border-color: rgba(255, 255, 255, 0.25) !important;
         }
+        /* The card sits on a deep crimson fill, so its dropdown trigger label,
+           timer and icons must not fall back to the light-mode dark text. */
+        #switchboardGrid .panel-surface.state-idle .config-dropdown-label,
+        #switchboardGrid .panel-surface.state-idle .config-dropdown-label *,
+        #switchboardGrid .panel-surface.state-idle .config-dropdown-label svg,
+        #switchboardGrid .panel-surface.state-idle .config-dropdown-label svg *,
+        #switchboardGrid .panel-surface.state-idle .config-dropdown-trigger,
+        #switchboardGrid .panel-surface.state-idle .config-dropdown-trigger svg,
+        #switchboardGrid .panel-surface.state-idle .config-dropdown-trigger svg *,
+        #switchboardGrid .panel-surface.state-idle .text-\[var\(--accent-color\)\],
+        .light-theme #switchboardGrid .panel-surface.state-idle .config-dropdown-label,
+        .light-theme #switchboardGrid .panel-surface.state-idle .config-dropdown-label *,
+        .light-theme #switchboardGrid .panel-surface.state-idle .config-dropdown-label svg,
+        .light-theme #switchboardGrid .panel-surface.state-idle .config-dropdown-label svg *,
+        .light-theme #switchboardGrid .panel-surface.state-idle .config-dropdown-trigger,
+        .light-theme #switchboardGrid .panel-surface.state-idle .config-dropdown-trigger svg,
+        .light-theme #switchboardGrid .panel-surface.state-idle .config-dropdown-trigger svg *,
+        .light-theme #switchboardGrid .panel-surface.state-idle .text-\[var\(--accent-color\)\] {
+            color: #ffffff !important;
+            stroke: #ffffff !important;
+        }
         #switchboardGrid .panel-surface.state-idle .action-select,
         .light-theme #switchboardGrid .panel-surface.state-idle .action-select {
             background-color: rgba(0, 0, 0, 0.28) !important;
@@ -2114,7 +2135,12 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
             const allCards = Array.from(gridRoot.querySelectorAll('article[id^="card-"]'));
             if (!allCards.length) return;
 
+            allCards.forEach(card => card.setAttribute('draggable', 'true'));
+
             let draggedCard = null;
+            let dndAllowed = false;
+            let dndPointerX = 0;
+            let dndPointerY = 0;
 
             // FLIP animation: when a drop changes the order/group, the cards that
             // shift out of the way glide to their new positions instead of snapping.
@@ -2329,28 +2355,27 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
                 });
             }
 
-            function setDraggable(card, enabled) {
-                if (enabled) card.setAttribute('draggable', 'true');
-                else card.removeAttribute('draggable');
-            }
-
             // Only allow starting a drag from the card surface itself,
-            // never from interactive controls inside the card.
+            // never from interactive controls inside the card. Cards stay
+            // draggable all the time: toggling this in pointerdown makes
+            // Chrome anchor the drag image at the card edge.
             gridRoot.addEventListener('pointerdown', e => {
+                dndAllowed = false;
                 if (e.button !== 0 || !e.target.closest) return;
                 const card = e.target.closest('article[id^="card-"]');
                 if (!card || !gridRoot.contains(card)) return;
                 if (e.target.closest('select, option, button, input, textarea, a, label')) return;
-                setDraggable(card, true);
-            }, true);
-
-            document.addEventListener('pointerup', () => {
-                gridRoot.querySelectorAll('article[id^="card-"][draggable]').forEach(card => setDraggable(card, false));
+                dndAllowed = true;
+                dndPointerX = e.clientX;
+                dndPointerY = e.clientY;
             }, true);
 
             gridRoot.addEventListener('dragstart', e => {
                 const card = e.target.closest && e.target.closest('article[id^="card-"]');
-                if (!card) return;
+                if (!card || !dndAllowed) {
+                    e.preventDefault();
+                    return;
+                }
                 draggedCard = card;
                 card.classList.add('dnd-dragging');
                 gridRoot.classList.add('dnd-active');
@@ -2365,6 +2390,16 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
                 if (e.dataTransfer) {
                     e.dataTransfer.effectAllowed = 'move';
                     try { e.dataTransfer.setData('text/plain', extOf(card)); } catch (_) {}
+                    try {
+                        const badge = document.createElement('div');
+                        const label = (card.querySelector('h4') && card.querySelector('h4').textContent || extOf(card)).trim();
+                        badge.textContent = label || extOf(card);
+                        badge.style.cssText = `position:fixed;left:${dndPointerX}px;top:${dndPointerY}px;transform:translate(-50%,-50%);z-index:2147483647;pointer-events:none;white-space:nowrap;max-width:180px;overflow:hidden;text-overflow:ellipsis;padding:5px 9px;border:1px solid rgba(255,255,255,.28);border-radius:8px;background:#111827;color:#fff;font:700 11px/1.2 ui-monospace,SFMono-Regular,monospace;box-shadow:0 8px 24px rgba(0,0,0,.45)`;
+                        document.body.appendChild(badge);
+                        const rect = badge.getBoundingClientRect();
+                        e.dataTransfer.setDragImage(badge, rect.width / 2, rect.height / 2);
+                        setTimeout(() => badge.remove(), 0);
+                    } catch (_) {}
                 }
             });
 
@@ -2551,8 +2586,8 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
                         { duration: 280, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' }
                     );
                 }
-                setDraggable(settlingCard, false);
                 draggedCard = null;
+                dndAllowed = false;
                 if (dropRafId) { cancelAnimationFrame(dropRafId); dropRafId = null; }
                 pendingDropJob = null;
                 lastAppliedSlot = { key: '', at: 0, x: 0, y: 0 };

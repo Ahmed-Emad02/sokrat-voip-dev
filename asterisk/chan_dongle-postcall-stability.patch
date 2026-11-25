@@ -1,0 +1,72 @@
+--- a/at_response.c	2026-11-23 17:14:30.687211310 +0200
++++ b/at_response.c	2026-11-23 17:14:03.136925795 +0200
+@@ -347,10 +347,16 @@
+ 			case CMD_AT:
+ 			case CMD_AT_Z:
+ 			case CMD_AT_E:
+-			case CMD_AT_CLCC:
+ 				log_cmd_response_error(pvt, ecmd, "[%s] Command '%s' failed\n", PVT_ID(pvt), at_cmd2str (ecmd->cmd));
+ 				/* mean disconnected from device */
+ 				goto e_return;
++			case CMD_AT_CLCC:
++				/* CLCC is polled after every call end (^CEND, CHUP, BUSY,
++				 * NO CARRIER). An ERROR here is a normal modem answer for a
++				 * poll it cannot satisfy; treating it as fatal closed both
++				 * ttys and reconnected the modem right after a call. */
++				log_cmd_response_error(pvt, ecmd, "[%s] Command '%s' failed; ignoring this poll\n", PVT_ID(pvt), at_cmd2str (ecmd->cmd));
++				break;
+ 
+ 			/* not critical errors */
+ 			case CMD_AT_U2DIAG:
+@@ -1043,7 +1049,18 @@
+ 						{
+ 							ast_log (LOG_NOTICE, "[%s] Dropping waiting call idx %u because callwaiting=no, rejecting with AT+CHLD=0\n", PVT_ID(pvt), call_idx);
+ 							at_enqueue_reject_waiting(&pvt->sys_chan);
+-							continue;
++							if (p)
++							{
++								++p;
++								if (p[0] == '\n')
++									++p;
++								if (p[0])
++								{
++									str = p;
++									continue;
++								}
++							}
++							break;
+ 						}
+ 						if(state == CALL_STATE_INCOMING)
+ 							PVT_STAT(pvt, in_calls) ++;
+--- a/chan_dongle.c	2026-11-23 17:14:30.628210699 +0200
++++ b/chan_dongle.c	2026-11-23 17:14:03.137925805 +0200
+@@ -591,6 +591,9 @@
+ 				{
+ 					ast_log (LOG_WARNING, "[%s] Timed out waiting response to AT^DTMF, skipping DTMF command\n", dev);
+ 					at_queue_handle_result (pvt, RES_PARSE_ERROR);
++					/* send the next queued command now: a skipped command
++					 * would otherwise stall the queue until an unrelated URC */
++					at_queue_run (pvt);
+ 					ast_mutex_unlock (&pvt->lock);
+ 					continue;
+ 				}
+@@ -598,6 +601,9 @@
+ 				{
+ 					ast_log (LOG_WARNING, "[%s] Timed out waiting response to %s, skipping command to prevent disconnect\n", dev, at_cmd2str(ecmd->cmd));
+ 					at_queue_handle_result (pvt, RES_PARSE_ERROR);
++					/* send the next queued command now: a skipped command
++					 * would otherwise stall the queue until an unrelated URC */
++					at_queue_run (pvt);
+ 					ast_mutex_unlock (&pvt->lock);
+ 					continue;
+ 				}
+@@ -605,6 +611,9 @@
+ 				{
+ 					ast_log (LOG_WARNING, "[%s] Timed out waiting response to %s, skipping CCWA command to prevent disconnect\n", dev, at_cmd2str(ecmd->cmd));
+ 					at_queue_handle_result (pvt, RES_PARSE_ERROR);
++					/* send the next queued command now: a skipped command
++					 * would otherwise stall the queue until an unrelated URC */
++					at_queue_run (pvt);
+ 					ast_mutex_unlock (&pvt->lock);
+ 					continue;
+ 				}

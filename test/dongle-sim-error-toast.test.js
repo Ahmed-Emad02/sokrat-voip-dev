@@ -78,16 +78,17 @@ describe('Dongle SIM IMSI Error Toast Notification', () => {
         assert.ok(!serverCode.includes('SIM card is not connected properly on'), 'server.js must not assert SIM removal from an IMSI log line');
     });
 
-    test('verifies views/gsm-dongles.ejs replaces and clears alerts by dongle', () => {
+    test('views/gsm-dongles.ejs no longer raises dongle popups', () => {
+        // The top-centre alert overlay was removed on operator request. Health
+        // signal now lives in the card state, the audit trail and diagnostics,
+        // so the view must not re-introduce a popup layer for these events.
         const donglesCode = fs.readFileSync(path.join(__dirname, '../views/gsm-dongles.ejs'), 'utf8');
-        assert.ok(donglesCode.includes('dongleSimError'), 'views/gsm-dongles.ejs must listen to dongleSimError');
-        assert.ok(donglesCode.includes('dongleOffline'), 'views/gsm-dongles.ejs must listen to dongleOffline');
-        assert.ok(donglesCode.includes('dongleRecovered'), 'views/gsm-dongles.ejs must listen to dongleRecovered');
-        assert.ok(donglesCode.includes('dongleEscalated'), 'views/gsm-dongles.ejs must listen to dongleEscalated');
-        assert.ok(donglesCode.includes('removeDongleAlerts'), 'views/gsm-dongles.ejs must remove stale alerts by dongle');
-        assert.ok(donglesCode.includes('data.messageEn'), 'views/gsm-dongles.ejs must use the server-provided message');
-        assert.ok(donglesCode.includes('IMSI Read Alert'), 'views/gsm-dongles.ejs must label the alert as an IMSI read issue');
-        assert.ok(donglesCode.includes('فشلت قراءة IMSI'), 'views/gsm-dongles.ejs must have the corrected Arabic message');
+        assert.ok(!donglesCode.includes('showTopCenterAlert'), 'views/gsm-dongles.ejs must not render top-centre popups');
+        assert.ok(!donglesCode.includes('top-alert-container'), 'views/gsm-dongles.ejs must not ship the popup container');
+        assert.ok(!donglesCode.includes("socket.on('dongleSimError'"), 'IMSI failures must not raise a popup');
+        assert.ok(!donglesCode.includes("socket.on('dongleRestartFailed'"), 'restart failures must not raise a popup');
+        assert.ok(!donglesCode.includes("socket.on('dongleEscalated'"), 'escalations must not raise a popup');
+        assert.ok(donglesCode.includes("socket.on('dongleRecovered'"), 'recovery must still refresh the device list');
         assert.ok(!donglesCode.includes('SIM card is not connected properly'), 'views/gsm-dongles.ejs must not claim the SIM is unplugged');
     });
 

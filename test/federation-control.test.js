@@ -67,7 +67,9 @@ test('Federation control: management, auth and API-key endpoints stay local', ()
     assert.equal(isDeniedActionPath('/api/admin/api-keys'), true);
     assert.equal(isDeniedActionPath('/api/peer/20/'), true);
     assert.equal(isDeniedActionPath('/api/gsm-dongles'), false);
-    assert.equal(isDeniedActionPath('/api/config/modem/dongle-slot'), false);
+    assert.equal(isDeniedActionPath('/api/gsm-dongles/slots'), true);
+    assert.equal(isDeniedActionPath('/api/gsm-dongles/slots/dongle3'), true);
+    assert.equal(isDeniedActionPath('/api/gsm-dongles/slots?site=20'), true);
 });
 
 test('Federation control: write policy follows the resource being changed', () => {
@@ -75,7 +77,7 @@ test('Federation control: write policy follows the resource being changed', () =
     assert.equal(requiredPolicyForAction('/api/contacts/12', 'PUT'), 'allow_contact_write');
     assert.equal(requiredPolicyForAction('/api/campaigns/3/start', 'POST'), 'allow_campaign_control');
     assert.equal(requiredPolicyForAction('/api/operator/hangup', 'POST'), 'allow_internal_dialing');
-    assert.equal(requiredPolicyForAction('/api/config/modem/dongle-slot', 'POST'), 'allow_config_write');
+    assert.equal(requiredPolicyForAction('/api/config/modem/gain', 'POST'), 'allow_config_write');
     assert.equal(requiredPolicyForAction('/api/gsm-dongles', 'GET'), null, 'reads never need a write policy');
 });
 
@@ -109,8 +111,8 @@ test('Federation control: a blocked policy never reaches the peer', async () => 
         localSiteCode: '10',
         actor: 'root',
         method: 'POST',
-        path: '/api/config/modem/dongle-slot',
-        body: { count: 1 },
+        path: '/api/config/modem/gain',
+        body: { gainMap: { dongle0: { txgain: 3, rxgain: 3 } } },
         decryptFn: () => 'key',
         requestFn: async () => { called += 1; return { status: 200, data: {} }; }
     });

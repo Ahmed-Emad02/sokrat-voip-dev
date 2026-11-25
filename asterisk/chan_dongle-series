@@ -1,0 +1,12 @@
+chan_dongle.patch
+chan_dongle-clcc-poll.patch
+chan_dongle-tx-buffer-reset.patch
+chan_dongle-voice-enable.patch
+chan_dongle-diagnostics.patch
+chan_dongle-call-teardown.patch
+chan_dongle-postcall-stability.patch
+chan_dongle-restart-deferral.patch
+chan_dongle-sms-capability.patch
+chan_dongle-clcc-timeout.patch
+chan_dongle-observability.patch
+chan_dongle-session-safety.patch

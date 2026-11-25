@@ -1,0 +1,51 @@
+--- a/chan_dongle.c
++++ b/chan_dongle.c
+@@ -50,6 +50,8 @@
+ #include <pthread.h>			/* pthread_t pthread_kill() pthread_join() */
+ #include <fcntl.h>			/* O_RDWR O_NOCTTY */
+ #include <signal.h>			/* SIGURG */
++#include <errno.h>			/* errno for port failure diagnostics */
++#include <string.h>			/* strerror() */
+ 
+ #include "ast_compat.h"			/* asterisk compatibility fixes */
+ 
+@@ -531,10 +533,23 @@
+ 			last_clcc_check = now;
+ 		}
+ 
+-		if (port_status (pvt->data_fd) || port_status (pvt->audio_fd))
+ 		{
+-			ast_log (LOG_ERROR, "[%s] Lost connection to Dongle\n", dev);
+-			goto e_cleanup;
++			/* Report the failing endpoint and the kernel error: "Lost
++			   connection" alone cannot tell a USB removal from a port
++			   that the driver closed or a transient tcgetattr() EIO. */
++			int data_st = port_status (pvt->data_fd);
++			if (data_st)
++			{
++				ast_log (LOG_ERROR, "[%s] Lost connection to Dongle: data port %s (fd %d) tcgetattr failed: %s\n",
++					dev, PVT_STATE(pvt, data_tty), pvt->data_fd, strerror(errno));
++				goto e_cleanup;
++			}
++			if (port_status (pvt->audio_fd))
++			{
++				ast_log (LOG_ERROR, "[%s] Lost connection to Dongle: audio port %s (fd %d) tcgetattr failed: %s\n",
++					dev, PVT_STATE(pvt, audio_tty), pvt->audio_fd, strerror(errno));
++				goto e_cleanup;
++			}
+ 		}
+ 
+ 		if(pvt->terminate_monitor)
+--- a/helpers.c
++++ b/helpers.c
+@@ -156,6 +156,10 @@
+ 	if (!pvt) {
+ 		return -1;
+ 	}
++	/* AT+CFUN=1,1 makes the modem re-enumerate on the USB bus: every ttyUSB
++	   number can change and any call on the device dies. Log the request so a
++	   spontaneous bus drop can be told apart from an operator/AMI reset. */
++	ast_log(LOG_WARNING, "[%s] Reset requested: sending AT+CFUN=1,1 (device will re-enumerate)\n", dev_name);
+ 	int res = at_enqueue_reset(&pvt->sys_chan);
+ 	free_pvt(pvt);
+ 	return res;

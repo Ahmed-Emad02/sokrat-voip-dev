@@ -1,0 +1,57 @@
+--- a/chan_dongle.c	2026-11-23 17:23:56.815078336 +0200
++++ b/chan_dongle.c	2026-11-23 17:25:37.973126682 +0200
+@@ -1653,8 +1653,10 @@
+ 		if(pvt->desired_state != SCONFIG(settings, initstate)) {
+ 			pvt->desired_state = SCONFIG(settings, initstate);
+ 
++			pvt->restart_time = when;
+ 			rv = pvt_time4restate(pvt);
+-			pvt->restart_time = rv ? RESTATE_TIME_NOW : when;
++			if (rv)
++				pvt->restart_time = RESTATE_TIME_NOW;
+ 		}
+ 
+ 		/* check what config changes require restaring */
+@@ -1670,8 +1672,10 @@
+ 			/* TODO: schedule restart */
+ 			pvt->desired_state = DEV_STATE_RESTARTED;
+ 
++			pvt->restart_time = when;
+ 			rv = pvt_time4restate(pvt);
+-			pvt->restart_time = rv ? RESTATE_TIME_NOW : when;
++			if (rv)
++				pvt->restart_time = RESTATE_TIME_NOW;
+ 		}
+ 
+ 		pvt_dsp_setup(pvt, UCONFIG(settings, id), SCONFIG(settings, dtmf));
+--- a/at_response.c	2026-11-23 17:23:56.814078326 +0200
++++ b/at_response.c	2026-11-23 17:23:47.530982121 +0200
+@@ -468,10 +468,14 @@
+ 
+ 						pvt->timeout = DATA_READ_TIMEOUT;
+ 						pvt->initialized = 1;
+-					/* FIXME: say 'initialized and ready' but disconnect */
+-//						ast_verb (3, "[%s] Dongle initialized and ready\n", PVT_ID(pvt));
++						ast_verb (3, "[%s] Dongle initialized and ready (voice only)\n", PVT_ID(pvt));
++						manager_event_device_status(PVT_ID(pvt), "Initialize");
++						maybe_enable_e173_voice(pvt);
++						/* keep the AT session: SMS capability is optional */
++						break;
+ 					}
+-					goto e_return;
++					/* no voice and no SMS: keep the session up, do not
++					 * reconnect-loop a modem that answered every command */
+ 				}
+ 				break;
+ 
+--- a/at_command.c	2026-11-23 17:14:30.572210118 +0200
++++ b/at_command.c	2026-11-23 17:23:47.531982132 +0200
+@@ -348,6 +348,8 @@
+ 		}
+ 	}
+ 
++	pvt->outgoing_sms = 1;
++
+ 	ast_free(pdus);
+ 	return 0;
+ }

@@ -26,6 +26,18 @@ const ffmpeg = require('fluent-ffmpeg');
 const axios = require('axios');
 const crypto = require('crypto');
 const { createWgAdmissionRouter } = require('./lib/wg-admission');
+const {
+    parseConfiguredState: parseProvisioningState,
+    freeSlots: listFreeSlots,
+    annotateCandidates,
+    validateAddRequest,
+    appendSection,
+    upsertSection,
+    planAdoption,
+    validateRefreshRequest
+} = require('./lib/dongle-provisioning');
+const { readDongleSections, slotIntentionallyDisabled, recoveryEligible, createDongleRuntime } = require('./lib/dongle-recovery');
+const DONGLE_CONF_PATH = '/etc/asterisk/dongle.conf';
 
 let XLSX = null;
 try {
@@ -33,6 +45,8 @@ try {
 } catch (_) {}
 
 const createCrmRouter = require('./routes/crm-integration');
+const { createDongleSlotsRouter } = require('./routes/dongle-slots');
+const dongleGroupsConfig = require('./lib/dongle-groups');
 const createExtensionContactsRouter = require('./routes/extension-contacts');
 const { requireExtensionSignature } = require('./lib/extension-auth');
 const { parseCallStateLines } = require('./lib/call-state');
@@ -52,6 +66,8 @@ const {
 const { dbToAsteriskVolume } = require('./lib/call-volume');
 const { createWakeAnswerCancel } = require('./lib/webrtc-wake-answer');
 const { resolveDongleMappingState } = require('./lib/dongle-mapping');
+const { mergeEmptySlotDevices } = require('./lib/dongle-slot-devices');
+const { nextFireAt, usbEnumerationPending } = require('./lib/dongle-hotplug');
 const { parseSmsPartLog, parseSmsFullLog, smsPartKey, collectSmsIndices } = require('./lib/sms-index');
 const { DEFAULT_OUTBOUND_DIAL_PATTERNS, resolveOutboundDialPatterns } = require('./lib/outbound-routes');
 const createExtensionChatRouter = require('./routes/extension-chat');
@@ -524,6 +540,49 @@ function buildCdrSource(scope) {
 }
 app.set('view engine', 'ejs');
 app.use((req, res, next) => { res.locals.assetVersion = ASSET_VERSION; next(); });
+
+// Serve pre-compressed JS/CSS from /js and /css. express.static streams files and
+// therefore bypasses the res.send compressor above; this trims the largest
+// render-blocking assets (notably tailwindcss-browser.js) on first load.
+const STATIC_COMPRESS_RE = /\.(?:js|css|svg|json)$/i;
+const staticCompressCache = new Map();
+app.use((req, res, next) => {
+    if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+    const accept = req.headers['accept-encoding'] || '';
+    const useBrotli = /\bbr\b/.test(accept);
+    const useGzip = !useBrotli && /\bgzip\b/.test(accept);
+    if (!useBrotli && !useGzip) return next();
+    const urlPath = String(req.path || '').split('?')[0];
+    if (!urlPath.startsWith('/js/') && !urlPath.startsWith('/css/')) return next();
+    if (!STATIC_COMPRESS_RE.test(urlPath)) return next();
+    let filePath;
+    try {
+        filePath = path.join(__dirname, 'public', decodeURIComponent(urlPath));
+        const stat = fs.statSync(filePath);
+        if (!stat.isFile()) return next();
+        const key = `${filePath}:${stat.mtimeMs}:${useBrotli ? 'br' : 'gzip'}`;
+        let compressed = staticCompressCache.get(key);
+        if (!compressed) {
+            const raw = fs.readFileSync(filePath);
+            compressed = useBrotli
+                ? zlib.brotliCompressSync(raw, { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 4, [zlib.constants.BROTLI_PARAM_SIZE_HINT]: raw.length } })
+                : zlib.gzipSync(raw, { level: 6 });
+            if (staticCompressCache.size > 200) staticCompressCache.clear();
+            staticCompressCache.set(key, compressed);
+        }
+        if (!compressed || compressed.length >= stat.size) return next();
+        const ext = path.extname(filePath).toLowerCase();
+        res.setHeader('Content-Type', ext === '.css' ? 'text/css; charset=utf-8' : ext === '.svg' ? 'image/svg+xml' : 'application/javascript; charset=utf-8');
+        res.setHeader('Content-Encoding', useBrotli ? 'br' : 'gzip');
+        res.setHeader('Vary', 'Accept-Encoding');
+        res.setHeader('Cache-Control', 'public, max-age=604800');
+        res.setHeader('Content-Length', compressed.length);
+        return res.end(req.method === 'HEAD' ? undefined : compressed);
+    } catch (_) {
+        return next();
+    }
+});
+
 const staticCacheOptions = { maxAge: '7d', etag: true };
 app.use(express.static(path.join(__dirname, 'public'), staticCacheOptions));
 app.use('/public', express.static(path.join(__dirname, 'public'), staticCacheOptions));
@@ -1797,6 +1856,11 @@ async function initAuthDb() {
     } catch (_) {
         federationCdrViewReady = false;
     }
+    try {
+        await purgeNonConfiguredDongleStateLogs(conn);
+    } catch (purgeErr) {
+        console.error('DONGLE-STATE-LOG: boot purge error:', purgeErr.message);
+    }
     await conn.end();
     await syncAllExtensionsAstdb();
     ensurePjsipWebRtcTransports();
@@ -1850,9 +1914,6 @@ async function initAuthDb() {
     } catch (fcErr) {
         console.error('Feature-code hand-off boot sync error:', fcErr.message);
     }
-    try {
-        await loadClientNameFromDb();
-    } catch (_) {}
     try {
         await loadWebhookConfigFromDb();
     } catch (_) {}
@@ -2917,9 +2978,7 @@ app.use('/api/config', (req, res, next) => {
         subTab = 'ivrs';
     } else if (req.path.startsWith('/recordings')) {
         subTab = 'recordings';
-        subTab = 'ivrs';
-    } else if (req.path.startsWith('/recordings')) {
-        subTab = 'ivrs';
+    } else if (req.path.startsWith('/moh')) {
         subTab = 'recordings';
     } else if (req.path.startsWith('/trunks')) {
         subTab = 'trunks';
@@ -2939,6 +2998,8 @@ app.use('/api/config', (req, res, next) => {
         subTab = 'announcements';
     } else if (req.path.startsWith('/modem')) {
         subTab = 'modem';
+    } else if (req.path.startsWith('/dongle-groups')) {
+        subTab = 'dongles';
     } else if (req.path === '/reload') {
         const perms = req.session.userPermissions || [];
         const hasAnyConfig = perms.includes('config') || perms.some(p => p.startsWith('config-'));
@@ -2947,6 +3008,12 @@ app.use('/api/config', (req, res, next) => {
     }
 
     if (!subTab) return next();
+
+    if (req.isApiKeyAuthenticated && req.apiKey) {
+        const scopes = getApiKeyScopes(req);
+        if (hasAnyScope(scopes, ['config', `config-${subTab}`])) return next();
+        return res.status(403).json({ success: false, error: 'Forbidden. API key missing required scope: config-' + subTab });
+    }
 
     const perms = req.session.userPermissions || [];
     if (perms.includes('config') || perms.includes('config-' + subTab)) {
@@ -4668,11 +4735,42 @@ io.on('connection', async (socket) => {
     });
 });
 
+// ── Dongle provisioning ──────────────────────────────────────────────────
+// Adding a modem is an explicit root action, never a background scan: it
+// rewrites dongle.conf and reloads chan_dongle for every dongle, so it must
+// never happen while calls are up or on a timer.
+async function probeUnconfiguredModems() {
+    const stdout = await execFileAsync('python3', [path.join(__dirname, 'scripts', 'probe-dongle-serial.py')], {
+        timeout: 30000,
+        maxBuffer: 1024 * 1024
+    });
+    const parsed = JSON.parse(String(stdout || '[]'));
+    return Array.isArray(parsed) ? parsed : [];
+}
+
+async function countActiveChannels() {
+    const output = String(await execFileAsync(ASTERISK_BIN, ['-rx', 'core show channels count'], { timeout: 5000 }) || '');
+    const match = /(\d+)\s+active channels?/i.exec(output);
+    return match ? Number(match[1]) : 0;
+}
+
 // ── Dongle Auto-Heal: restart once if stuck in "Not Initialized" for >3s ──
 const dongleNotInitTimestamps = {};
 const dongleRestartedOnce = {};
 let donglePortPresence = null;
+let donglePhysicalSignature = null;
 let dongleHotplugCheckInFlight = false;
+
+/** Every physical USB serial port slot, independent of dongle.conf. A modem
+ *  that has never been configured is invisible to the configured-presence
+ *  map, so new hardware is detected from this set instead. */
+function listSerialByPathLinks() {
+    try {
+        return fs.readdirSync('/dev/serial/by-path').sort();
+    } catch (_) {
+        return [];
+    }
+}
 
 async function checkDongleHotplugPresence() {
     if (dongleHotplugCheckInFlight) return;
@@ -4693,10 +4791,24 @@ async function checkDongleHotplugPresence() {
             );
         }
 
+        const physicalLinks = listSerialByPathLinks();
+        const physicalSignature = physicalLinks.join('|');
+        const previousLinks = donglePhysicalSignature === null
+            ? null
+            : donglePhysicalSignature.split('|').filter(Boolean);
+        const appearedLinks = previousLinks === null
+            ? []
+            : physicalLinks.filter(link => !previousLinks.includes(link));
+
         if (donglePortPresence === null) {
             donglePortPresence = currentPresence;
+            donglePhysicalSignature = physicalSignature;
             await reconcileDongleMappings('startup');
             io.emit('usbDevicesUpdated');
+            // Whatever happened while the service was down (a modem pulled, a
+            // SIM swapped, a socket changed) is reconciled once at startup.
+            const scheduled = scheduleAutoAdopt('startup');
+            if (scheduled) console.log(`DONGLE-HOTPLUG: startup reconciliation pass scheduled in ${Math.round(scheduled.scheduledInMs / 1000)}s`);
             return;
         }
 
@@ -4713,10 +4825,20 @@ async function checkDongleHotplugPresence() {
             }
         }
         donglePortPresence = currentPresence;
-        if (!presenceChanged) return;
+        donglePhysicalSignature = physicalSignature;
+        if (!presenceChanged && !appearedLinks.length) return;
 
         for (const dongleName of newlyPresent) {
             console.log(`DONGLE-HOTPLUG: ${dongleName} appeared on USB; scheduling mapping reconciliation`);
+        }
+        // A slot that just enumerated is either new hardware or a configured
+        // modem that moved sockets; both need an adoption/repair pass.
+        if (appearedLinks.length) {
+            console.log(`DONGLE-HOTPLUG: ${appearedLinks.length} new USB serial port(s) appeared: ${appearedLinks.join(', ')}`);
+        }
+        if (newlyPresent.length || appearedLinks.length) {
+            const scheduled = scheduleAutoAdopt('hotplug', { settleMs: AUTO_ADOPT_QUIET_MS, waitForComplete: true });
+            if (scheduled) console.log(`DONGLE-HOTPLUG: adoption pass scheduled in ${Math.round(scheduled.scheduledInMs / 1000)}s`);
         }
         for (const dongleName of disappeared) {
             console.log(`DONGLE-HOTPLUG: ${dongleName} disappeared; scheduling mapping reconciliation`);
@@ -4765,6 +4887,36 @@ async function recordDongleStateLog(dongleName, state, simNumber = null, imsi = 
     }
 }
 
+// Recovery shares the provisioning lock and checks live radio/AT queues as well
+// as persisted operator intent immediately before each targeted mutation.
+const dongleRuntime = createDongleRuntime({
+    configPath: DONGLE_CONF_PATH,
+    run: command => execFileAsync(ASTERISK_BIN, ['-rx', command], { timeout: 30000 }),
+    readStates: dongleStates,
+    isHealthy: isHealthyDongleState,
+    isCallState: isCallStateValue,
+    audit: appendDongleRestartAudit,
+    usbTarget: usbSysfsDeviceForDongle,
+    usbRebind: usbPowerCycleDevice,
+    notifyFailure: event => io.emit('dongleRestartFailed', buildRestartFailedEvent(event))
+});
+let dongleRecoveryQueued = false;
+
+async function runDongleRecoveryWatchdog(slotStates) {
+    if (dongleRecoveryQueued) return;
+    dongleRecoveryQueued = true;
+    try {
+        return await withProvisionLock(async () => {
+            await dongleRuntime.retryPendingRollbacks();
+            return dongleRuntime.watchdog(slotStates);
+        });
+    } finally {
+        dongleRecoveryQueued = false;
+    }
+}
+
+const dongleImsiDrift = new Map();
+
 function autoHealDongles() {
     checkDongleHotplugPresence();
     getDevicesOutputCached((err, stdout) => {
@@ -4799,9 +4951,56 @@ function autoHealDongles() {
                 }
             }
         } catch (_) {}
+
+        // A SIM swap does not touch USB, so no hotplug fires: compare the live
+        // IMSI with the section and schedule one pass when they diverge. The
+        // latch keeps that pass from being postponed by every 3s tick.
+        try {
+            const sections = parseProvisioningState(DONGLE_CONF_PATH);
+            for (const dev of devices) {
+                const id = String(dev.ID || '').toLowerCase();
+                if (!/^dongle\d+$/.test(id)) continue;
+                const section = sections.get(id);
+                if (!section) continue;
+                const liveImsi = String(dev.IMSI || '').trim();
+                const configuredImsi = String(section.imsi || '').trim();
+                if (!liveImsi || liveImsi === '-' || !/^\d{5,}$/.test(liveImsi)) continue;
+                if (liveImsi === configuredImsi) {
+                    if (dongleImsiDrift.delete(id)) console.log(`DONGLE-IMSI: ${id} matches config again`);
+                    continue;
+                }
+                const latched = dongleImsiDrift.get(id);
+                if (latched && latched.imsi === liveImsi && Date.now() - latched.at < 5 * 60 * 1000) continue;
+                dongleImsiDrift.set(id, { imsi: liveImsi, at: Date.now() });
+                console.log(`DONGLE-IMSI: ${id} reports IMSI ${liveImsi}, config has ${configuredImsi || '(none)'}; scheduling sync`);
+                scheduleAutoAdopt('sim-change');
+            }
+        } catch (_) {}
+
     });
 }
 setInterval(autoHealDongles, 3000);
+// USB enumeration is visible within a second; catch a new serial link here so
+// adoption starts after a ~4s debounce instead of waiting for the 3s health tick.
+let fastLinkSignature = null;
+setInterval(() => {
+    const links = listSerialByPathLinks();
+    const signature = links.join('|');
+    if (fastLinkSignature !== null && signature !== fastLinkSignature) {
+        const before = new Set(fastLinkSignature.split('|').filter(Boolean));
+        const appeared = links.filter(link => !before.has(link));
+        if (appeared.length) {
+            console.log(`DONGLE-HOTPLUG: fast watcher saw ${appeared.length} new link(s): ${appeared.join(', ')}`);
+            scheduleAutoAdopt('hotplug', { settleMs: AUTO_ADOPT_QUIET_MS, waitForComplete: true });
+        }
+    }
+    fastLinkSignature = signature;
+}, 1000);
+// The recovery watchdog reads the live device table itself, so it cannot be
+// starved by a stale cache or a modem that stops answering.
+setInterval(() => {
+    dongleStates().then(states => runDongleRecoveryWatchdog(states)).catch(() => {});
+}, 3000);
 checkDongleHotplugPresence();
 
 // --- IN-MEMORY CACHES FOR FAST ZERO-DATABASE GLOBAL MIDDLEWARE ---
@@ -4809,6 +5008,12 @@ let cachedBaseRoster = null;
 let cachedBaseRosterTimestamp = 0;
 let cachedEmployeeGroupNames = [];
 let cachedEmployeeGroupTimestamp = 0;
+let cachedAgentStatusMap = {};
+let cachedAgentStatusDefinitions = [];
+let cachedAgentStatusTimestamp = 0;
+let cachedGreetingConfigTimestamp = 0;
+let cachedServerTimezone = null;
+let cachedServerTimezoneTimestamp = 0;
 let cachedFedSettings = { local_site_code: '10', local_node_name: 'Main PBX', panel_role: 'local' };
 let cachedFedPeers = [];
 let cachedFedRemoteExts = [];
@@ -4964,25 +5169,31 @@ app.use(async (req, res, next) => {
                 cachedEmployeeGroupTimestamp = now;
             } catch (_) {}
         }
-        let agentStatusMap = {};
-        try {
-            const [statusRows] = await pool.query('SELECT extension, status, display_name, last_update FROM asterisk.synq_agent_status');
-            if (Array.isArray(statusRows)) {
-                statusRows.forEach(r => {
-                    agentStatusMap[String(r.extension)] = r;
-                });
-            }
-        } catch (_) {}
-
-        let customStatusDefinitions = [];
-        try {
-            const [defRows] = await pool.query(
-                'SELECT status_key, label_ar, label_en, desc_ar, desc_en, color, target_group FROM asterisk.synq_agent_status_definitions WHERE is_active = 1 ORDER BY sort_order ASC, id ASC'
-            );
-            if (Array.isArray(defRows)) {
-                customStatusDefinitions = defRows;
-            }
-        } catch (_) {}
+        let agentStatusMap = cachedAgentStatusMap;
+        let customStatusDefinitions = cachedAgentStatusDefinitions;
+        if (now - cachedAgentStatusTimestamp > 5000) {
+            try {
+                const [statusRows] = await pool.query('SELECT extension, status, display_name, last_update FROM asterisk.synq_agent_status');
+                if (Array.isArray(statusRows)) {
+                    const freshMap = {};
+                    statusRows.forEach(r => {
+                        freshMap[String(r.extension)] = r;
+                    });
+                    cachedAgentStatusMap = freshMap;
+                    agentStatusMap = freshMap;
+                }
+            } catch (_) {}
+            try {
+                const [defRows] = await pool.query(
+                    'SELECT status_key, label_ar, label_en, desc_ar, desc_en, color, target_group FROM asterisk.synq_agent_status_definitions WHERE is_active = 1 ORDER BY sort_order ASC, id ASC'
+                );
+                if (Array.isArray(defRows)) {
+                    cachedAgentStatusDefinitions = defRows;
+                    customStatusDefinitions = defRows;
+                }
+            } catch (_) {}
+            cachedAgentStatusTimestamp = now;
+        }
         if (getTenantId(req)) {
             const tenantExtSet = new Set((req.session.tenantExtensions || []).map(String));
             roster = roster.filter(emp => tenantExtSet.has(String(emp.extension)));
@@ -5036,11 +5247,22 @@ app.use(async (req, res, next) => {
         const currentTheme = req.session.theme || 'dark';
         res.locals.currentTheme = currentTheme;
 
-        reloadGreetingConfig();
+        if (now - cachedGreetingConfigTimestamp > 5000) {
+            reloadGreetingConfig();
+            cachedGreetingConfigTimestamp = now;
+        }
         res.locals.greetingMode = greetingConfig.mode || 'none';
         res.locals.greetingExtensions = greetingConfig.extensions || [];
-        res.locals.clientName = cachedClientName || '';
-        res.locals.serverTimezone = getSystemTimezone();
+        if (!clientNameLoaded) {
+            try { await ensureClientNameLoaded(); } catch (_) {}
+        }
+        res.locals.clientName = cachedClientName || '—';
+        res.locals.clientNameConfigured = cachedClientName || '';
+        if (!cachedServerTimezone || now - cachedServerTimezoneTimestamp > 60000) {
+            cachedServerTimezone = getSystemTimezone();
+            cachedServerTimezoneTimestamp = now;
+        }
+        res.locals.serverTimezone = cachedServerTimezone;
         res.locals.serverTimestamp = Date.now();
         if (now - cachedFedTimestamp > 30000) {
             try {
@@ -6186,6 +6408,21 @@ app.get('/api/settings/alerts/watchdog-status', requireAuth, (req, res) => {
 
 // --- CLIENT SETTINGS ROUTES ---
 let cachedClientName = '';
+let clientNameLoaded = false;
+let clientNameLoadPromise = null;
+
+async function ensureClientNameLoaded() {
+    if (clientNameLoaded) return cachedClientName;
+    if (!clientNameLoadPromise) {
+        clientNameLoadPromise = loadClientNameFromDb()
+            .catch(() => cachedClientName)
+            .finally(() => {
+                clientNameLoaded = true;
+                clientNameLoadPromise = null;
+            });
+    }
+    return clientNameLoadPromise;
+}
 
 async function loadClientNameFromDb() {
     try {
@@ -6209,11 +6446,11 @@ async function loadClientNameFromDb() {
     return cachedClientName;
 }
 
+ensureClientNameLoaded().catch(() => {});
+
 app.get('/api/settings/client', requireAuth, async (req, res) => {
     try {
-        if (!cachedClientName) {
-            await loadClientNameFromDb();
-        }
+        await ensureClientNameLoaded();
         res.json({ success: true, clientName: cachedClientName });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
@@ -6244,6 +6481,7 @@ const handleClientSettingsUpdate = async (req, res) => {
         }
 
         cachedClientName = clientName;
+        clientNameLoaded = true;
 
         // Synchronize machine hostname with client name
         let systemHostname = '';
@@ -7919,8 +8157,7 @@ app.get('/cdr', async (req, res) => {
         let countQuery = `
             SELECT COUNT(*) as total
             FROM ${cdrSource.table} c
-            LEFT JOIN ${tables.users} u ON c.src = u.extension
-            LEFT JOIN \`asteriskcdrdb\`.\`cdr_transcriptions\` stt ON stt.uniqueid = c.uniqueid
+            ${searchTranscript ? 'LEFT JOIN `asteriskcdrdb`.`cdr_transcriptions` stt ON stt.uniqueid = c.uniqueid' : ''}
             WHERE c.calldate BETWEEN ? AND ?
             ${tenantClause}
             ${cdrSource.filtersSql}
@@ -7932,7 +8169,7 @@ app.get('/cdr', async (req, res) => {
             SELECT c.calldate, c.src, c.dst, c.dcontext, c.lastdata, c.duration, c.billsec, ${CDR_DISPOSITION_SQL} as disposition, c.uniqueid, c.recordingfile, c.channel, c.dstchannel, c.did, c.userfield,
             COALESCE(u.name, NULLIF(TRIM(c.cnam), ''), 'No Name') as src_name,
             COALESCE(u_dst.name, 'No Name') as dst_name${nodeColumns},
-            stt.transcript, stt.status as stt_status, stt.duration_sec as stt_duration, stt.language as stt_lang,
+            (stt.uniqueid IS NOT NULL) as has_transcript, stt.status as stt_status, stt.duration_sec as stt_duration, stt.language as stt_lang,
             ${directionCase} as direction,
             ${callScopeCase} as call_scope
             FROM ${cdrSource.table} c
@@ -8087,8 +8324,31 @@ app.get('/cdr', async (req, res) => {
                 trunk: resolveTrunkForCdr(row, cdrTrunksList, cdrDonglesList)
             };
         });
+
+        // Voicemails are a separate view; call rows stay call-only.
+        let voicemailList = [];
+        try {
+            const rangeStartMs = moment(startDate).valueOf();
+            const rangeEndMs = moment(endDate).valueOf();
+            voicemailList = (await scanVoicemailsCached())
+                .filter(vm => {
+                    if (!vm.origtime) return true;
+                    return vm.origtime >= rangeStartMs && vm.origtime <= rangeEndMs;
+                })
+                .map(vm => ({
+                    ...vm,
+                    audioUrl: vm.wavFile
+                        ? `/vm-audio/${encodeURIComponent(vm.mailbox)}/${encodeURIComponent(vm.wavFile)}`
+                        : null
+            }));
+        } catch (vmErr) {
+            console.error('CDR voicemail merge error:', vmErr.message);
+        }
+
         res.render('cdr', {
             calls: formattedRows,
+            voicemails: voicemailList,
+            voicemailView: req.query.view === 'voicemails',
             availableTrunks,
             filters: { startDate, endDate, targetExtension: targetExtensionFilter, statusFilter: statusFilterList, searchSrc, searchDst, searchDid, searchUniqueId, searchTranscript, directionFilter, callScopeFilter, durationMin, durationMax, durationUnit, trunkFilter: trunkFilterList, page, perPage },
             pagination: { total, totalPages, page, perPage },
@@ -8928,8 +9188,23 @@ async function scanVoicemails() {
     return messages;
 }
 
-app.get('/voicemails', async (req, res) => {
-    const allMsgs = await scanVoicemails();
+let voicemailScanCache = { at: 0, data: null };
+const VOICEMAIL_SCAN_TTL_MS = 15000;
+
+async function scanVoicemailsCached(maxAgeMs = VOICEMAIL_SCAN_TTL_MS) {
+    const now = Date.now();
+    if (voicemailScanCache.data && (now - voicemailScanCache.at) < maxAgeMs) {
+        return voicemailScanCache.data;
+    }
+    const data = await scanVoicemails();
+    voicemailScanCache = { at: now, data };
+    return data;
+}
+
+app.get('/voicemails', (req, res) => res.redirect(302, '/cdr?view=voicemails'));
+
+app.get('/voicemails-legacy', async (req, res) => {
+    const allMsgs = await scanVoicemailsCached();
     const searchTranscript = req.query.searchTranscript ? String(req.query.searchTranscript).trim() : '';
     const searchCallerid = req.query.searchCallerid || '';
     const searchMailbox = req.query.searchMailbox || '';
@@ -8966,7 +9241,7 @@ app.get('/voicemails', async (req, res) => {
 });
 
 app.get('/api/voicemails', async (req, res) => {
-    const allMsgs = await scanVoicemails();
+    const allMsgs = await scanVoicemailsCached();
     const searchTranscript = req.query.searchTranscript ? String(req.query.searchTranscript).trim() : '';
     const searchCallerid = req.query.searchCallerid || '';
     const searchMailbox = req.query.searchMailbox || '';
@@ -9035,7 +9310,7 @@ app.get('/vm-audio/:mailbox/:file', requireAuth, (req, res) => {
 });
 
 app.get('/vm-export', async (req, res) => {
-    const allMsgs = await scanVoicemails();
+    const allMsgs = await scanVoicemailsCached();
     const searchCallerid = req.query.searchCallerid || '';
     const searchMailbox = req.query.searchMailbox || '';
     const startDate = req.query.startDate ? moment(req.query.startDate).format('YYYY-MM-DD HH:mm:ss') : '';
@@ -10372,6 +10647,44 @@ function parseDongleConfGain() {
     return { defaults, dongles };
 }
 
+// Slots actually declared in dongle.conf. Analytics rows for anything else are
+// orphans left behind by removed/renamed slots; they must never reach the UI.
+// Returns null when the config cannot be read, so callers neither hide nor
+// delete anything on a transient read failure.
+function configuredDongleNames() {
+    try {
+        const { dongles } = parseDongleConfGain();
+        const names = Object.keys(dongles || {})
+            .filter(name => /^dongle/i.test(name))
+            .map(name => name.trim().toLowerCase())
+            .filter(Boolean);
+        return names.length > 0 ? new Set(names) : null;
+    } catch (_) {
+        return null;
+    }
+}
+
+async function purgeNonConfiguredDongleStateLogs(conn) {
+    const configured = configuredDongleNames();
+    if (!configured) return 0;
+    try {
+        const [rows] = await conn.query('SELECT DISTINCT dongle_name FROM `asterisk`.`dongle_state_logs`');
+        const stale = rows
+            .map(row => String(row.dongle_name || '').trim().toLowerCase())
+            .filter(name => name && !configured.has(name));
+        if (stale.length === 0) return 0;
+        const [result] = await conn.query(
+            'DELETE FROM `asterisk`.`dongle_state_logs` WHERE LOWER(dongle_name) IN (?)',
+            [stale]
+        );
+        console.log(`DONGLE-STATE-LOG: purged ${result.affectedRows} row(s) for non-configured slot(s): ${stale.join(', ')}`);
+        return result.affectedRows;
+    } catch (err) {
+        console.error('DONGLE-STATE-LOG: purge of non-configured slots failed:', err.message);
+        return 0;
+    }
+}
+
 function updateDongleGainsInConf(gainMap, isResetAll = false) {
     const confPath = '/etc/asterisk/dongle.conf';
     if (!fs.existsSync(confPath)) {
@@ -10457,212 +10770,25 @@ function updateDongleGainsInConf(gainMap, isResetAll = false) {
     fs.writeFileSync(confPath, lines.join('\n'), 'utf8');
 }
 
-function addDongleSlotToConf(dongleData) {
-    const confPath = '/etc/asterisk/dongle.conf';
-    if (!fs.existsSync(confPath)) {
-        throw new Error('/etc/asterisk/dongle.conf file not found');
-    }
-
-    const { dongles } = parseDongleConfGain();
-    const dName = String(dongleData.dongleName || '').trim().toLowerCase();
-    if (!dName || !/^[a-zA-Z0-9_-]+$/.test(dName)) {
-        throw new Error('Invalid dongle slot name.');
-    }
-    if (dongles[dName]) {
-        throw new Error(`Dongle slot '${dName}' already exists in dongle.conf.`);
-    }
-
-    let content = fs.readFileSync(confPath, 'utf8');
-
-    const audioPort = String(dongleData.audio || '/dev/ttyUSB1').trim();
-    const dataPort = String(dongleData.data || '/dev/ttyUSB2').trim();
-    const imei = String(dongleData.imei || '').trim();
-    const imsi = String(dongleData.imsi || '').trim();
-    // Default gain is 3 dB for new slots unless explicitly provided
-    const DEFAULT_DONGLE_GAIN = 3;
-    const rxRaw = parseInt(dongleData.rxgain, 10);
-    const txRaw = parseInt(dongleData.txgain, 10);
-    const rx = Math.max(-10, Math.min(10, Number.isFinite(rxRaw) ? rxRaw : DEFAULT_DONGLE_GAIN));
-    const tx = Math.max(-10, Math.min(10, Number.isFinite(txRaw) ? txRaw : DEFAULT_DONGLE_GAIN));
-
-    const newSection = `\n[${dName}]\ntxgain=${tx}\nrxgain=${rx}\naudio=${audioPort}\ndata=${dataPort}\nimei=${imei}\nimsi=${imsi}\n`;
-    content = content.trimEnd() + '\n' + newSection;
-
-    fs.writeFileSync(confPath, content, 'utf8');
-}
-
-function removeDongleSlotFromConf(dongleName) {
-    const confPath = '/etc/asterisk/dongle.conf';
-    if (!fs.existsSync(confPath)) {
-        throw new Error('/etc/asterisk/dongle.conf file not found');
-    }
-
-    const dName = String(dongleName || '').trim().toLowerCase();
-    if (!dName) throw new Error('Dongle name is required.');
-
-    let content = fs.readFileSync(confPath, 'utf8');
-    let lines = content.split(/\r?\n/);
-    let newLines = [];
-    let skipping = false;
-
-    for (let i = 0; i < lines.length; i++) {
-        let line = lines[i];
-        let secMatch = line.trim().match(/^\[([^\]]+)\]/);
-        if (secMatch) {
-            const secName = secMatch[1].trim().toLowerCase();
-            if (secName === dName) {
-                skipping = true;
-                continue;
-            } else {
-                skipping = false;
-            }
-        }
-        if (!skipping) {
-            newLines.push(line);
-        }
-    }
-
-    fs.writeFileSync(confPath, newLines.join('\n'), 'utf8');
-}
+/**
+ * Identity and port edits share the validated, backed-up provisioning writer.
+ */
 
 function updateDongleImeiImsiInConf(dongleName, imei, imsi) {
-    const confPath = '/etc/asterisk/dongle.conf';
-    if (!fs.existsSync(confPath)) {
-        throw new Error('/etc/asterisk/dongle.conf file not found');
-    }
-
     const dName = String(dongleName || '').trim().toLowerCase();
     if (!dName) throw new Error('Dongle name is required.');
-
     const cleanImei = String(imei || '').trim();
     const cleanImsi = String(imsi || '').trim();
-
-    let content = fs.readFileSync(confPath, 'utf8');
-    let lines = content.split(/\r?\n/);
-    let sectionHeaderLineIdx = {};
-
-    for (let i = 0; i < lines.length; i++) {
-        let line = lines[i].trim();
-        let secMatch = line.match(/^\[([^\]]+)\]/);
-        if (secMatch) {
-            sectionHeaderLineIdx[secMatch[1].trim().toLowerCase()] = i;
-        }
-    }
-
-    if (!sectionHeaderLineIdx.hasOwnProperty(dName)) {
-        throw new Error(`Section [${dName}] not found in /etc/asterisk/dongle.conf`);
-    }
-
-    const headerIdx = sectionHeaderLineIdx[dName];
-    let endIdx = lines.length;
-    for (let j = headerIdx + 1; j < lines.length; j++) {
-        if (lines[j].trim().match(/^\[([^\]]+)\]/)) {
-            endIdx = j;
-            break;
-        }
-    }
-
-    let imeiFound = false;
-    let imsiFound = false;
-
-    for (let j = headerIdx + 1; j < endIdx; j++) {
-        let lineTrim = lines[j].trim();
-        if (lineTrim.startsWith('imei=') || lineTrim.startsWith('imei =')) {
-            lines[j] = `imei=${cleanImei}`;
-            imeiFound = true;
-        } else if (lineTrim.startsWith('imsi=') || lineTrim.startsWith('imsi =')) {
-            lines[j] = `imsi=${cleanImsi}`;
-            imsiFound = true;
-        }
-    }
-
-    if (!imeiFound) {
-        lines.splice(endIdx, 0, `imei=${cleanImei}`);
-        endIdx++;
-    }
-    if (!imsiFound) {
-        lines.splice(endIdx, 0, `imsi=${cleanImsi}`);
-        endIdx++;
-    }
-
-    fs.writeFileSync(confPath, lines.join('\n'), 'utf8');
+    upsertSection(DONGLE_CONF_PATH, dName, { imei: cleanImei, imsi: cleanImsi });
     return { dongleName: dName, imei: cleanImei, imsi: cleanImsi };
 }
 
 function updateDonglePortsInConf(dongleName, audioPort, dataPort) {
-    const confPath = '/etc/asterisk/dongle.conf';
-    if (!fs.existsSync(confPath)) {
-        throw new Error('/etc/asterisk/dongle.conf file not found');
-    }
-
     const dName = String(dongleName || '').trim().toLowerCase();
     if (!dName) throw new Error('Dongle name is required.');
-
-    let cleanAudio = String(audioPort || '').trim();
-    let cleanData = String(dataPort || '').trim();
-
-    if (!cleanAudio.startsWith('/dev/')) cleanAudio = '/dev/' + cleanAudio;
-    if (!cleanData.startsWith('/dev/')) cleanData = '/dev/' + cleanData;
-
-    if (!/^\/dev\/ttyUSB\d+$/i.test(cleanAudio)) {
-        throw new Error(`Invalid audio TTY port: "${cleanAudio}". Must be in format /dev/ttyUSBX.`);
-    }
-    if (!/^\/dev\/ttyUSB\d+$/i.test(cleanData)) {
-        throw new Error(`Invalid data TTY port: "${cleanData}". Must be in format /dev/ttyUSBX.`);
-    }
-    if (cleanAudio.toLowerCase() === cleanData.toLowerCase()) {
-        throw new Error('Audio port and Data port cannot be the same ttyUSB device.');
-    }
-
-    let content = fs.readFileSync(confPath, 'utf8');
-    let lines = content.split(/\r?\n/);
-    let sectionHeaderLineIdx = {};
-
-    for (let i = 0; i < lines.length; i++) {
-        let line = lines[i].trim();
-        let secMatch = line.match(/^\[([^\]]+)\]/);
-        if (secMatch) {
-            sectionHeaderLineIdx[secMatch[1].trim().toLowerCase()] = i;
-        }
-    }
-
-    if (!sectionHeaderLineIdx.hasOwnProperty(dName)) {
-        throw new Error(`Section [${dName}] not found in /etc/asterisk/dongle.conf`);
-    }
-
-    const headerIdx = sectionHeaderLineIdx[dName];
-    let endIdx = lines.length;
-    for (let j = headerIdx + 1; j < lines.length; j++) {
-        if (lines[j].trim().match(/^\[([^\]]+)\]/)) {
-            endIdx = j;
-            break;
-        }
-    }
-
-    let audioFound = false;
-    let dataFound = false;
-
-    for (let j = headerIdx + 1; j < endIdx; j++) {
-        let lineTrim = lines[j].trim();
-        if (lineTrim.startsWith('audio=') || lineTrim.startsWith('audio =')) {
-            lines[j] = `audio=${cleanAudio}`;
-            audioFound = true;
-        } else if (lineTrim.startsWith('data=') || lineTrim.startsWith('data =')) {
-            lines[j] = `data=${cleanData}`;
-            dataFound = true;
-        }
-    }
-
-    if (!audioFound) {
-        lines.splice(endIdx, 0, `audio=${cleanAudio}`);
-        endIdx++;
-    }
-    if (!dataFound) {
-        lines.splice(endIdx, 0, `data=${cleanData}`);
-        endIdx++;
-    }
-
-    fs.writeFileSync(confPath, lines.join('\n'), 'utf8');
+    const cleanAudio = String(audioPort || '').trim();
+    const cleanData = String(dataPort || '').trim();
+    upsertSection(DONGLE_CONF_PATH, dName, { audio: cleanAudio, data: cleanData });
     return { dongleName: dName, audio: cleanAudio, data: cleanData };
 }
 
@@ -11556,7 +11682,7 @@ function isDeviceAllowedForDongles(device, allowedDongleIdentifiers) {
 // Caching layer for 'dongle show devices' to prevent CLI command storms
 let cachedDevicesOutput = null;
 let lastDevicesOutputFetch = 0;
-const DEVICES_CACHE_TTL = 1000;
+const DEVICES_CACHE_TTL = 3000;
 const mappedDongleDeviceKeys = new Set();
 
 function getDevicesOutputCached(callback) {
@@ -12287,7 +12413,7 @@ app.post('/api/gsm-dongles/reset-usb-port', (req, res) => {
 });
 let cachedEnrichedDevices = null;
 let lastEnrichedDevicesTime = 0;
-const ENRICHED_DEVICES_CACHE_TTL = 1500;
+const ENRICHED_DEVICES_CACHE_TTL = 3000;
 
 function readAsteriskFullLogTail(maxBytes = 512 * 1024) {
     const logPath = '/var/log/asterisk/full';
@@ -12309,14 +12435,45 @@ function readAsteriskFullLogTail(maxBytes = 512 * 1024) {
     }
 }
 
+const liveVoiceStateCache = new Map();
+const LIVE_VOICE_CACHE_MS = 15000;
+
+function isLiveDongleVoiceEnabled(dongleId) {
+    const id = String(dongleId || '').trim().toLowerCase();
+    if (!/^dongle[0-9]+$/.test(id)) return false;
+    const now = Date.now();
+    const cached = liveVoiceStateCache.get(id);
+    if (cached && (now - cached.at) < LIVE_VOICE_CACHE_MS) return cached.enabled;
+    let enabled = false;
+    try {
+        const output = execFileSync(ASTERISK_BIN, ['-rx', `dongle show device state ${id}`], {
+            encoding: 'utf8',
+            timeout: 2500,
+            stdio: ['ignore', 'pipe', 'ignore']
+        }) || '';
+        enabled = /^\s*Voice\s*:\s*Yes\s*$/mi.test(output);
+    } catch (_) {}
+    liveVoiceStateCache.set(id, { enabled, at: now });
+    return enabled;
+}
+
 function annotateE173VoiceWarnings(devices) {
     const logTail = readAsteriskFullLogTail();
     const warnings = parseE173VoiceWarningState(logTail);
     const nonFatalWarnings = parseNonFatalWarningState(logTail);
     if (Object.keys(warnings).length === 0 && Object.keys(nonFatalWarnings).length === 0) return devices;
     for (const device of devices) {
+        // A warning describes current voice capability of a bound modem. When the
+        // modem is disconnected/stopped the log tail is stale history, not state.
+        const state = String(device && device.State || '');
+        if (!state || /not\s*connec|not\s*init|stopp|disconnected|unknown|absent/i.test(state)) {
+            continue;
+        }
         const warning = warnings[device && device.ID];
-        if (warning) {
+        // Log entries can lag the live state. A modem already reporting
+        // Voice: Yes has a usable PCM path; do not surface an old failed
+        // AT^CVOICE=0 attempt from the log tail.
+        if (warning && !isLiveDongleVoiceEnabled(device.ID)) {
             device.voiceEnableWarning = {
                 attempts: warning.attempts,
                 messageEn: `Voice activation failed after ${warning.attempts} attempts. Audio may be missing on this dongle; retry AT^CVOICE=0 or restart the modem.`,
@@ -12345,6 +12502,22 @@ function stripDongleWarnings(devices) {
     });
 }
 
+/** Configured but unassigned sections appear as ordinary disconnected dongles,
+ *  and driver rows with no section are dropped so a removed slot cannot linger. */
+function withConfiguredEmptySlots(devices) {
+    try {
+        const sections = parseProvisioningState(DONGLE_CONF_PATH);
+        const configured = new Set([...sections.keys()].filter(name => /^dongle[0-9]+$/.test(name)));
+        const present = devices.filter(device => {
+            const id = String(device && device.ID || '').toLowerCase();
+            return !/^dongle[0-9]+$/.test(id) || configured.has(id);
+        });
+        return mergeEmptySlotDevices(present, sections);
+    } catch (_) {
+        return devices;
+    }
+}
+
 function getEnrichedDevices() {
     const now = Date.now();
     if (cachedEnrichedDevices && (now - lastEnrichedDevicesTime) < ENRICHED_DEVICES_CACHE_TTL) {
@@ -12358,10 +12531,10 @@ function getEnrichedDevices() {
                     devices = parseDevicesOutput(stdout, false, astDbMappings);
                 }
                 enrichDongleRouting(devices).then(enriched => {
-                    cachedEnrichedDevices = annotateE173VoiceWarnings(enriched);
+                    cachedEnrichedDevices = annotateE173VoiceWarnings(withConfiguredEmptySlots(enriched));
                     lastEnrichedDevicesTime = Date.now();
                     resolve(cachedEnrichedDevices);
-                }).catch(() => resolve(annotateE173VoiceWarnings(devices)));
+                }).catch(() => resolve(annotateE173VoiceWarnings(withConfiguredEmptySlots(devices))));
             });
         });
     });
@@ -12528,6 +12701,981 @@ app.get('/api/gsm-dongles', async (req, res) => {
     }
 });
 
+// Root-only dongle recovery guard state and controls.
+function requireDongleRoot(req, res, next) {
+    // Strict session root only: federation-trusted peers are not the local
+    // root operator and must not receive recovery controls.
+    const session = req && req.session;
+    const strictRoot = Boolean(session && (
+        session.isRoot ||
+        session.username === ROOT_USER ||
+        session.username === 'root'
+    ));
+    if (!strictRoot) {
+        return res.status(403).json({ success: false, error: 'Forbidden: dongle recovery controls are root-only.' });
+    }
+    next();
+}
+
+// Slot inventory is separate from modem adoption: empty sections require no
+// serial probing, driver reload or call interruption.
+app.use('/api/gsm-dongles/slots', createDongleSlotsRouter({
+    configPath: DONGLE_CONF_PATH,
+    withProvisionLock,
+    readDevices: async () => {
+        const output = String(await execFileAsync(ASTERISK_BIN, ['-rx', 'dongle show devices'], { timeout: 6000 }));
+        if (!/^ID[ \t]+Group[ \t]+State\b/m.test(output)) {
+            throw new Error('Dongle runtime inventory is unavailable.');
+        }
+        return parseDevicesOutput(output, true);
+    },
+    // Stop only the orphaned pvt. A full module rebuild is deliberately not
+    // used here: unloading the driver has dropped a modem off the USB bus.
+    stopSlot: slot => dongleRuntime.stopSlot(slot),
+    onChanged({ action, changedSlots = [], slot, backup }) {
+        cachedEnrichedDevices = null;
+        for (const changed of changedSlots) {
+            appendDongleRestartAudit({
+                type: 'slot', phase: action, dongleId: changed, backup,
+                source: 'api:/api/gsm-dongles/slots'
+            });
+        }
+        io.emit('dongleSlotsUpdated');
+        io.emit('usbDevicesUpdated');
+    }
+}));
+
+/**
+ * Root-only, read-only diagnostic snapshot for one dongle.
+ *
+ * The point is to answer "why is this modem not working" without shelling into
+ * the box: chan_dongle's own device state, the dongle.conf stanza, the USB
+ * topology and runtime-power state the tty is bound to, recent kernel messages
+ * for that port, and the restart audit trail.
+ * Nothing here mutates device, config or file state.
+ */
+async function buildDongleDiagnostics(dongleId) {
+    const safe = fn => Promise.resolve().then(fn).catch(error => ({ error: error.message }));
+    const run = (file, args) => execFileAsync(file, args, { timeout: 6000 });
+
+    const state = await safe(async () => String(await run(ASTERISK_BIN, ['-rx', `dongle show device state ${dongleId}`])).trim());
+    const stateText = typeof state === 'string' ? state : '';
+    const readField = label => {
+        const match = stateText.match(new RegExp(`^\\s*${label}\\s*:\\s*(.+)$`, 'm'));
+        return match ? match[1].trim() : null;
+    };
+    const ttys = { audio: readField('Audio'), data: readField('Data') };
+
+    const conf = await safe(async () => {
+        const text = await fs.promises.readFile('/etc/asterisk/dongle.conf', 'utf8');
+        const collected = [];
+        let inSection = false;
+        for (const line of text.split('\n')) {
+            const header = line.match(/^\s*\[([^\]]+)\]/);
+            if (header) {
+                inSection = header[1].trim().toLowerCase() === dongleId;
+                continue;
+            }
+            if (!inSection) continue;
+            const trimmed = line.split(';')[0].trim();
+            if (!trimmed) continue;
+            collected.push(/^(pin|password)\s*=/i.test(trimmed)
+                ? `${trimmed.split('=')[0].trim()}=***`
+                : trimmed);
+        }
+        return collected;
+    });
+
+    const usb = {};
+    for (const [kind, tty] of Object.entries(ttys)) {
+        if (!tty || !tty.startsWith('/dev/')) { usb[kind] = { tty: tty || null }; continue; }
+        const usbPath = await safe(async () => {
+            const devPath = String(await run('udevadm', ['info', '-q', 'path', '-n', tty])).trim();
+            const match = devPath.match(/(\d+-\d+(?:\.\d+)*)/);
+            return match ? match[1] : null;
+        });
+        if (!usbPath || typeof usbPath !== 'string') { usb[kind] = { tty, usbPath: null }; continue; }
+        const base = `/sys/bus/usb/devices/${usbPath}`;
+        const attr = async name => {
+            try { return (await fs.promises.readFile(`${base}/${name}`, 'utf8')).trim(); } catch (_) { return null; }
+        };
+        usb[kind] = {
+            tty,
+            usbPath,
+            vendorId: await attr('idVendor'),
+            productId: await attr('idProduct'),
+            manufacturer: await attr('manufacturer'),
+            product: await attr('product'),
+            serial: await attr('serial'),
+            busnum: await attr('busnum'),
+            devnum: await attr('devnum'),
+            speed: await attr('speed'),
+            powerControl: await attr('power/control'),
+            runtimeStatus: await attr('power/runtime_status'),
+            authorized: await attr('authorized')
+        };
+    }
+
+    const kernel = await safe(async () => {
+        const all = String(await run('dmesg', ['-T']));
+        const paths = Object.values(usb).map(entry => entry && entry.usbPath).filter(Boolean);
+        const names = Object.values(ttys).filter(Boolean).map(name => name.split('/').pop());
+        return all.split('\n')
+            .filter(line => paths.some(p => line.includes(` ${p}:`) || line.includes(` ${p} `))
+                || names.some(n => line.includes(n)))
+            .slice(-25);
+    });
+
+    const audit = await safe(async () => {
+        const text = await fs.promises.readFile(DONGLE_RESTART_AUDIT_FILE, 'utf8');
+        const rows = [];
+        for (const line of text.split('\n')) {
+            if (!line.includes(`"dongleId":"${dongleId}"`)) continue;
+            try { rows.push(JSON.parse(line)); } catch (_) { /* skip unparsable tail */ }
+        }
+        return rows.slice(-10);
+    });
+
+    return { dongleId, collectedAt: new Date().toISOString(), ttys, state: stateText, conf, usb, kernel, audit };
+}
+
+app.get('/api/gsm-dongles/diag/:dongleId', requireAuth, requireDongleRoot, async (req, res) => {
+    const dongleId = String(req.params.dongleId || '').toLowerCase();
+    if (!/^dongle[0-9]+$/.test(dongleId)) {
+        return res.status(400).json({ success: false, error: 'Invalid dongle ID format' });
+    }
+    try {
+        res.json({ success: true, ...(await buildDongleDiagnostics(dongleId)) });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Root-only manual lifecycle control: stop takes the dongle out of service,
+// start brings it back. These map onto chan_dongle's own CLI so there is no
+// hidden supervisor state to reconcile.
+app.post('/api/gsm-dongles/:dongleId/stop', requireAuth, requireDongleRoot, async (req, res) => {
+    const dongleId = String(req.params.dongleId || '').toLowerCase();
+    if (!/^dongle[0-9]+$/.test(dongleId)) {
+        return res.status(400).json({ success: false, error: 'Invalid dongle ID format' });
+    }
+    try {
+        await withProvisionLock(async () => {
+            const output = await execFileAsync(ASTERISK_BIN, ['-rx', `dongle stop now ${dongleId}`], { timeout: 8000 });
+            if (!new RegExp(`\\[${dongleId}\\]\\s+Stop scheduled`, 'i').test(String(output))) {
+                throw new Error(`Dongle stop failed: ${String(output || 'No acknowledgement').trim()}`);
+            }
+            // Serialize persisted operator intent with adoption and recovery.
+            let persisted = null;
+            if (parseProvisioningState(DONGLE_CONF_PATH).has(dongleId)) {
+                persisted = upsertSection(DONGLE_CONF_PATH, dongleId, { initstate: 'stop' });
+            }
+            appendDongleRestartAudit({ type: 'lifecycle', phase: 'stop', dongleId, source: 'api:/api/gsm-dongles/stop', persisted: Boolean(persisted), output: String(output || '').trim() });
+            res.json({ success: true, dongleId, action: 'stop', persisted: Boolean(persisted), output: String(output || '').trim() });
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.post('/api/gsm-dongles/:dongleId/start', requireAuth, requireDongleRoot, async (req, res) => {
+    const dongleId = String(req.params.dongleId || '').toLowerCase();
+    if (!/^dongle[0-9]+$/.test(dongleId)) {
+        return res.status(400).json({ success: false, error: 'Invalid dongle ID format' });
+    }
+    try {
+        await withProvisionLock(async () => {
+            const output = await execFileAsync(ASTERISK_BIN, ['-rx', `dongle start ${dongleId}`], { timeout: 8000 });
+            if (!new RegExp(`\\[${dongleId}\\]\\s+Start scheduled`, 'i').test(String(output))) {
+                throw new Error(`Dongle start failed: ${String(output || 'No acknowledgement').trim()}`);
+            }
+            if (parseProvisioningState(DONGLE_CONF_PATH).has(dongleId)) {
+                upsertSection(DONGLE_CONF_PATH, dongleId, { initstate: 'start' });
+            }
+            appendDongleRestartAudit({ type: 'lifecycle', phase: 'start', dongleId, source: 'api:/api/gsm-dongles/start', output: String(output || '').trim() });
+            res.json({ success: true, dongleId, action: 'start', output: String(output || '').trim() });
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Root-only "Add dongle" flow: discover modems on free serial ports and let
+// the operator adopt one explicitly. Nothing here runs on a timer.
+app.get('/api/gsm-dongles/provision/candidates', requireAuth, requireDongleRoot, async (req, res) => {
+    try {
+        const sections = parseProvisioningState(DONGLE_CONF_PATH);
+        const probedRaw = await probeUnconfiguredModems();
+        const probed = annotateCandidates(probedRaw, sections);
+        const rows = await dongleDeviceRows().catch(() => new Map());
+        const vacantSlots = new Set(findVacantSlots(sections, probedRaw, new Map(
+            [...rows.entries()].map(([slot, row]) => [slot, String(row.State || '')])
+        )));
+
+        // The probe only sees ttys that chan_dongle has not locked, so a modem
+        // that is bound (or whose ports are all held) disappears from a pure
+        // probe list. Always report every configured slot, with its live state,
+        // and append probe-only modems that are not in dongle.conf yet.
+        const probeByImei = new Map();
+        for (const entry of probed) {
+            const imei = String(entry.imei || '').trim();
+            if (imei && !probeByImei.has(imei)) probeByImei.set(imei, entry);
+        }
+
+        const candidates = [];
+        const slots = [...sections.keys()].sort((a, b) => {
+            const na = Number(String(a).replace(/\D/g, ''));
+            const nb = Number(String(b).replace(/\D/g, ''));
+            return na - nb;
+        });
+        for (const slot of slots) {
+            if (!/^dongle\d+$/i.test(slot)) continue;
+            const section = sections.get(slot);
+            const imei = String(section.imei || '').trim();
+            const probedEntry = imei ? probeByImei.get(imei) || null : null;
+            if (probedEntry) probeByImei.delete(imei);
+            const row = rows.get(String(slot).toLowerCase()) || null;
+            const state = row ? String(row.State || '') : 'absent';
+            const healthy = isHealthyDongleState(state);
+            candidates.push({
+                slot,
+                imei,
+                imsi: String(section.imsi || ''),
+                audioPort: String(section.audio || ''),
+                dataPort: String(section.data || ''),
+                baud: Number(section.baud || 0) || null,
+                configured: true,
+                vacant: vacantSlots.has(slot),
+                state,
+                healthy,
+                portsHeld: healthy,
+                model: (row && row.Model && row.Model !== 'Unknown' && row.Model !== '-') ? row.Model : (probedEntry ? probedEntry.model : null),
+                // A bound modem answers AT commands on its free sibling tty with a
+                // stale view (SIM reported missing while chan_dongle owns the SIM
+                // session), so a healthy slot's SIM state comes from Asterisk.
+                simReady: healthy ? Boolean(row && row.IMSI && row.IMSI !== '-' && row.IMSI !== 'Unknown') : (probedEntry ? probedEntry.simReady : null)
+            });
+        }
+        for (const entry of probeByImei.values()) {
+            candidates.push({ ...entry, configured: false, state: 'discovered', healthy: false, portsHeld: false });
+        }
+
+        res.json({
+            success: true,
+            candidates,
+            freeSlots: listFreeSlots(sections),
+            suggestedSlot: listFreeSlots(sections, 1)[0] || null,
+            activeChannels: await countActiveChannels()
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+
+/** Apply freshly written dongle sections and settle device state. */
+async function applyProvisionedSlots(slots, source) {
+    if (!slots.length) return { reloaded: false, failed: [], states: new Map() };
+
+    const reload = await dongleRuntime.reloadConfiguration(slots, source);
+    if (!reload.success) {
+        return {
+            reloaded: false, deferred: Boolean(reload.pending), error: reload.error || reload.reason,
+            failed: slots.map(slot => ({ slot, state: 'unknown' })), states: new Map()
+        };
+    }
+
+    let states = new Map();
+    const deadline = Date.now() + 40000;
+    while (Date.now() < deadline) {
+        states = await dongleStates().catch(() => new Map());
+        if (slots.every(slot => isHealthyDongleState(states.get(slot)))) break;
+        await new Promise(resolve => setTimeout(resolve, 1200));
+    }
+
+    const failed = slots
+        .filter(slot => !isHealthyDongleState(states.get(slot)) && !isCallStateValue(states.get(slot)))
+        .map(slot => ({ slot, state: states.get(slot) || 'absent' }));
+
+    cachedDevicesOutput = null;
+    lastDevicesOutputFetch = 0;
+    cachedEnrichedDevices = null;
+    try { io.emit('usbDevicesUpdated'); } catch (_) {}
+    return { reloaded: true, failed, states };
+}
+
+// ── Automatic adoption ───────────────────────────────────────────────────
+// Event-driven hotplug passes defer on unknown or busy radio/AT queue state.
+// Config reloads never unload the driver, and failed slots roll back only their
+// own fields while successful, unrelated assignments are retained.
+const DONGLE_AUTO_ADOPT_FILE = '/etc/sokrat/dongle-auto-adopt.json';
+const AUTO_ADOPT_SETTLE_MS = 45000;
+let autoAdoptTimer = null;
+let adoptInFlight = false;
+
+// dongle.conf has one writer at a time: a manual add must not interleave with
+// an adoption pass (both append sections and then reload).
+let provisionQueue = Promise.resolve();
+function withProvisionLock(task) {
+    const run = provisionQueue.then(task, task);
+    provisionQueue = run.then(() => {}, () => {});
+    return run;
+}
+
+function readAutoAdoptConfig() {
+    try {
+        return { enabled: true, settleSeconds: 45, ...JSON.parse(fs.readFileSync(DONGLE_AUTO_ADOPT_FILE, 'utf8')) };
+    } catch (_) {
+        return { enabled: true, settleSeconds: 45 };
+    }
+}
+
+function writeAutoAdoptConfig(patch) {
+    const next = { ...readAutoAdoptConfig(), ...patch };
+    fs.mkdirSync(path.dirname(DONGLE_AUTO_ADOPT_FILE), { recursive: true });
+    fs.writeFileSync(DONGLE_AUTO_ADOPT_FILE, `${JSON.stringify(next, null, 2)}\n`, { mode: 0o644 });
+    return next;
+}
+
+async function udevProperty(port, key) {
+    try {
+        const out = String(await execFileAsync('udevadm', ['info', '-q', 'property', '-n', port], { timeout: 4000 }));
+        const match = out.match(new RegExp(`^${key}=(.+)$`, 'm'));
+        return match ? match[1].trim() : null;
+    } catch (_) {
+        return null;
+    }
+}
+
+/** Stable /dev/serial/by-path link for a tty: follows the physical port, so a
+ *  re-enumeration or a socket swap cannot mis-bind the slot. */
+function byPathLinkFor(port) {
+    const base = '/dev/serial/by-path';
+    try {
+        for (const name of fs.readdirSync(base)) {
+            const link = path.join(base, name);
+            try { if (fs.realpathSync(link) === port) return link; } catch (_) { /* ignore */ }
+        }
+    } catch (_) { /* ignore */ }
+    return null;
+}
+
+/** Resolve one port to its stable by-path link; an input that already is a
+ *  by-path link is accepted once it resolves to a tty. */
+function stablePortLink(port) {
+    const value = String(port || '').trim();
+    if (!value) return null;
+    if (value.startsWith('/dev/serial/by-path/')) {
+        try { return fs.realpathSync(value).startsWith('/dev/tty') ? value : null; } catch (_) { return null; }
+    }
+    return byPathLinkFor(value);
+}
+
+// ── Port roles per modem product ─────────────────────────────────────────
+// Interface numbers that carry voice and data differ per product/firmware:
+// 12d1:1001 puts voice on interface 1 and data on interface 2, some E17xx
+// firmwares do not even expose interface 1. The map is data, not code, so a
+// new model on any server is configured by adding one line.
+const DONGLE_PORT_ROLES_FILE = '/etc/sokrat/dongle-port-roles.json';
+const { resolveInterfaceRoles } = require('./lib/dongle-port-roles');
+// Each entry is matched against the complete USB interface topology. Never
+// add a bare {audio, data} product rule: a product ID can span firmwares with
+// different layouts. Existing working pins always take priority.
+const DEFAULT_PORT_ROLES = {
+    '12d1:1001': { variants: [{ interfaces: [0, 1, 2], audio: 1, data: 2 }] },
+    '12d1:140c': { variants: [{ interfaces: [0, 2, 3], audio: 2, data: 3 }] },
+    '12d1:14ac': { variants: [{ interfaces: [0, 3, 4], audio: 3, data: 4 }] },
+    '12d1:1436': { variants: [{ interfaces: [0, 3, 4], audio: 3, data: 4 }] },
+    '12d1:1506': { variants: [
+        { interfaces: [0, 1, 2], audio: 1, data: 2 },
+        { interfaces: [0, 2, 3], audio: 2, data: 3 }
+    ] },
+    '2c7c:0125': { variants: [] }
+};
+let portRoleCache = { mtimeMs: -1, roles: null };
+
+function portRoles() {
+    try {
+        const stat = fs.statSync(DONGLE_PORT_ROLES_FILE);
+        if (stat.mtimeMs !== portRoleCache.mtimeMs) {
+            const parsed = JSON.parse(fs.readFileSync(DONGLE_PORT_ROLES_FILE, 'utf8'));
+            portRoleCache = { mtimeMs: stat.mtimeMs, roles: parsed && typeof parsed === 'object' ? parsed : {} };
+        }
+        return { ...DEFAULT_PORT_ROLES, ...portRoleCache.roles };
+    } catch (_) {
+        return DEFAULT_PORT_ROLES;
+    }
+}
+
+/** Links of one USB device, keyed by USB interface number. */
+function usbInterfaceLinks(link) {
+    // by-path name: <topology>:<config>.<interface>-port0, e.g.
+    // pci-0000:02:00.0-usb-0:2:1.0-port0  →  device key pci-0000:02:00.0-usb-0:2
+    const dir = '/dev/serial/by-path';
+    const match = path.basename(String(link || '').trim()).match(/^(.*):[0-9]+\.([0-9]+)-port0$/);
+    if (!match) return { prefix: null, byInterface: new Map() };
+    let names = [];
+    try { names = fs.readdirSync(dir); } catch (_) { names = []; }
+    const byInterface = new Map();
+    for (const name of names) {
+        const parsed = name.match(/^(.*):[0-9]+\.([0-9]+)-port0$/);
+        if (parsed && parsed[1] === match[1]) {
+            byInterface.set(Number(parsed[2]), path.join(dir, name));
+        }
+    }
+    return { prefix: match[1], byInterface };
+}
+
+/** Product ID (`vendor:product`) of the device that owns a tty. */
+async function usbProductOf(port) {
+    const real = (() => { try { return fs.realpathSync(port); } catch (_) { return port; } })();
+    const vendor = await udevProperty(real, 'ID_VENDOR_ID');
+    const product = await udevProperty(real, 'ID_MODEL_ID');
+    return vendor && product ? `${vendor.toLowerCase()}:${product.toLowerCase()}` : null;
+}
+
+/**
+ * Resolve audio/data for one modem. A known-working pair is preserved. A new
+ * or unhealthy modem is resolved only by an exact interface-topology variant
+ * (or the conservative 0/1/2 default), never by product ID alone.
+ */
+async function resolvePortRoles(link, observed, { preserveObserved = false } = {}) {
+    const { byInterface } = usbInterfaceLinks(link);
+    const product = await usbProductOf(link);
+    const roles = product ? portRoles()[product] : null;
+    const resolved = resolveInterfaceRoles({ byInterface, roleEntry: roles, observed, preserveObserved });
+    const source = resolved.source === 'topology' && product
+        ? `topology:${product}:${resolved.topology.join('/')}`
+        : resolved.source;
+    return { audioPort: resolved.audioPort, dataPort: resolved.dataPort, source };
+}
+
+async function pinningFieldsFor(candidate, { preserveObserved = false } = {}) {
+    const audio = stablePortLink(candidate && candidate.audioPort);
+    const data = stablePortLink(candidate && candidate.dataPort);
+    if (!audio || !data || audio === data) return {};
+    const resolved = await resolvePortRoles(audio, { audioPort: audio, dataPort: data }, { preserveObserved });
+    if (!resolved.audioPort || !resolved.dataPort) return {};
+    return { audioPort: resolved.audioPort, dataPort: resolved.dataPort, source: resolved.source };
+}
+
+/** Ports to pin for a configured-but-unbound slot, probe pair when it is
+ *  authoritative (two distinct interfaces), otherwise the slot's own ports. */
+async function repairPinningFields(candidate, section) {
+    const probe = {
+        audioPort: String(candidate && candidate.audioPort || '').trim(),
+        dataPort: String(candidate && candidate.dataPort || '').trim()
+    };
+    if (probe.audioPort && probe.dataPort && probe.audioPort !== probe.dataPort) {
+        const pinned = await pinningFieldsFor(probe);
+        if (pinned.audioPort && pinned.dataPort) return pinned;
+    }
+    const own = {
+        audioPort: String(section.audio || '').trim(),
+        dataPort: String(section.data || '').trim()
+    };
+    if (!own.audioPort || !own.dataPort) return {};
+    if (!fs.existsSync(own.audioPort) || !fs.existsSync(own.dataPort)) return {};
+    return pinningFieldsFor(own);
+}
+
+/** Ports chan_dongle is actually using for a slot, straight from its state. */
+async function liveSlotPorts(slot) {
+    try {
+        const out = String(await execFileAsync(ASTERISK_BIN, ['-rx', `dongle show device state ${slot}`], { timeout: 6000 }) || '');
+        const audio = (out.match(/^\s*Audio\s*:\s*(\S+)/m) || [])[1] || null;
+        const data = (out.match(/^\s*Data\s*:\s*(\S+)/m) || [])[1] || null;
+        return { audio, data };
+    } catch (_) {
+        return { audio: null, data: null };
+    }
+}
+
+/** IMEI/IMSI chan_dongle is currently using for a slot. */
+async function liveSlotIdentity(slot) {
+    try {
+        const out = String(await execFileAsync(ASTERISK_BIN, ['-rx', `dongle show device state ${slot}`], { timeout: 6000 }) || '');
+        const imei = (out.match(/^\s*IMEI\s*:\s*(\d{15})\s*$/m) || [])[1] || null;
+        const imsi = (out.match(/^\s*IMSI\s*:\s*(\d{5,})\s*$/m) || [])[1] || null;
+        return { imei, imsi };
+    } catch (_) {
+        return { imei: null, imsi: null };
+    }
+}
+
+/**
+ * Give every live slot the same config shape: audio/data pinned to the
+ * /dev/serial/by-path links of the ports it is really using. Slots that are
+ * already pinned are left untouched, so repeated passes are no-ops.
+ */
+async function normalizeConfiguredSlots(sections, states) {
+    const normalized = [];
+    for (const [slot, section] of sections) {
+        if (!/^dongle\d+$/i.test(slot)) continue;
+        if (!recoveryEligible(section)) continue;
+        if (!isHealthyDongleState(states.get(slot))) continue;
+
+        const livePorts = await liveSlotPorts(slot);
+        const liveId = await liveSlotIdentity(slot);
+        const next = {};
+        const previous = {};
+
+        const source = (livePorts.audio && livePorts.data)
+            ? { audioPort: livePorts.audio, dataPort: livePorts.data }
+            : { audioPort: section.audio, dataPort: section.data };
+        // A live healthy slot has already proved this audio/data pair works.
+        // Preserve it even if another firmware sharing the product ID differs.
+        // The topology map wins over the pair a slot happens to be using: a
+        // port pair can look healthy while carrying no voice (verified: an E173
+        // pinned audio=if0 connected, rang, and delivered pure silence).
+        const pinned = await pinningFieldsFor(source, { preserveObserved: false });
+        if (pinned.audioPort && pinned.dataPort
+            && (section.audio !== pinned.audioPort || section.data !== pinned.dataPort)) {
+            next.audio = pinned.audioPort;
+            next.data = pinned.dataPort;
+            previous.audio = section.audio || null;
+            previous.data = section.data || null;
+        }
+
+        // The section IMEI is identity: it is only ever changed by a reclaim of
+        // a vacant slot or by an explicit edit. Rewriting it from live state is
+        // what cross-wired two sections onto one modem after a socket shuffle.
+        // IMSI is safe to sync only when the same modem answers on the ports.
+        const sameModem = !liveId.imei || !section.imei || liveId.imei === section.imei;
+        if (sameModem && liveId.imsi && liveId.imsi !== section.imsi) {
+            next.imsi = liveId.imsi;
+            previous.imsi = section.imsi || null;
+        }
+
+        if (!Object.keys(next).length) continue;
+        if (!(await dongleRuntime.safety([slot])).safe) break;
+        if (!recoveryEligible(readDongleSections(DONGLE_CONF_PATH).get(slot))) continue;
+        upsertSection(DONGLE_CONF_PATH, slot, next);
+        appendDongleRestartAudit({
+            type: 'provision', phase: 'slot_synced', dongleId: slot,
+            changes: Object.keys(next), imei: next.imei || section.imei || '',
+            audioPort: next.audio || null, dataPort: next.data || null,
+            roleSource: pinned.source || null
+        });
+        normalized.push({ slot, changes: Object.keys(next), previous, roleSource: pinned.source || null, ...next });
+    }
+    return normalized;
+}
+
+async function dongleStates() {
+    const output = String(await execFileAsync(ASTERISK_BIN, ['-rx', 'dongle show devices'], { timeout: 6000 }) || '');
+    if (!/^ID[ \t]+Group[ \t]+State\b/m.test(output)) {
+        throw new Error('Dongle runtime inventory is unavailable.');
+    }
+    const states = new Map();
+    for (const device of parseDevicesOutput(output, true)) {
+        states.set(String(device.ID || '').toLowerCase(), String(device.State || ''));
+    }
+    return states;
+}
+
+/** Full `dongle show devices` rows keyed by slot: state, model, IMEI, IMSI. */
+/**
+ * Sections whose hardware is not on the bus, so a new modem can take the slot
+ * instead of growing the numbering: no live IMEI match, no call, no healthy
+ * state, and none of its configured ports present (a by-path link only exists
+ * while a device sits in that socket).
+ */
+function findVacantSlots(sections, probed, states) {
+    const presentImeis = new Set(
+        (Array.isArray(probed) ? probed : [])
+            .map(item => String(item && item.imei || '').trim())
+            .filter(Boolean)
+    );
+    const liveByImei = new Map();
+    for (const item of (Array.isArray(probed) ? probed : [])) {
+        const imei = String(item && item.imei || '').trim();
+        if (imei) liveByImei.set(imei, item);
+    }
+    const vacant = [];
+    for (const [slot, section] of sections) {
+        if (!/^dongle\d+$/i.test(slot)) continue;
+        if (slotIntentionallyDisabled(section)) continue;
+        const imei = String(section.imei || '').trim();
+        if (imei && presentImeis.has(imei)) {
+            // Same IMEI may be claimed by two sections after a shuffle; only the
+            // one whose ports carry that modem keeps it, the other is reclaimable.
+            const live = liveByImei.get(imei);
+            const sectionAudio = String(section.audio || '').trim();
+            const liveAudio = String(live && live.audioPort || '').trim();
+            const ownsIt = Boolean(sectionAudio && liveAudio && (
+                sectionAudio === liveAudio || stablePortLink(sectionAudio) === stablePortLink(liveAudio)
+            ));
+            if (ownsIt) continue;
+            const duplicate = [...sections.values()].some(other => (
+                other !== section && String(other.imei || '').trim() === imei
+                && String(other.audio || '').trim() === liveAudio
+            ));
+            if (!duplicate) continue;
+            vacant.push(slot);
+            continue;
+        }
+        if (isHealthyDongleState(states.get(slot))) continue;
+        if (isCallStateValue(states.get(slot))) continue;
+        const audio = String(section.audio || '').trim();
+        const data = String(section.data || '').trim();
+        const portPresent = (audio && fs.existsSync(audio)) || (data && fs.existsSync(data));
+        if (portPresent) continue;
+        vacant.push(slot);
+    }
+    return vacant.sort((a, b) => (
+        Number(String(a).replace(/\D/g, '')) - Number(String(b).replace(/\D/g, ''))
+    ));
+}
+
+async function dongleDeviceRows() {
+    const output = String(await execFileAsync(ASTERISK_BIN, ['-rx', 'dongle show devices'], { timeout: 6000 }) || '');
+    const rows = new Map();
+    for (const row of parseDevicesOutput(output, true)) {
+        if (row.ID) rows.set(String(row.ID).toLowerCase(), row);
+    }
+    return rows;
+}
+
+const HEALTHY_DONGLE_STATES = new Set(['free', 'ready', 'registered', 'idle']);
+
+function isHealthyDongleState(state) {
+    const value = String(state || '').trim().toLowerCase();
+    if (!value) return false;
+    if (HEALTHY_DONGLE_STATES.has(value)) return true;
+    // `dongle show devices` truncates the State column, so match the prefixes
+    // of the states that mean the device is up.
+    return /^(free|ready|registered|idle)\b/.test(value);
+}
+
+function isCallStateValue(state) {
+    return /(outgoing|incoming|active|dialing|alerting|ring|waiting|held|hold|busy|hook)/i.test(String(state || ''));
+}
+
+/** Channels currently up on any dongle. chan_dongle restarts a reconfigured
+ *  pvt immediately (restart_time never leaves RESTATE_TIME_NOW), so a config
+ *  write while a call is up would drop it. */
+async function countDongleChannels() {
+    try {
+        const out = String(await execFileAsync(ASTERISK_BIN, ['-rx', 'core show channels'], { timeout: 5000 }) || '');
+        return out.split('\n').filter(line => /Dongle\//i.test(line)).length;
+    } catch (_) {
+        return 0;
+    }
+}
+
+async function runAdoptionPass(trigger) {
+    const adopted = [];
+    const refreshed = [];
+    let normalized = [];
+    const repaired = [];
+    const pinTargets = [];
+    const rolledBack = [];
+    const pendingRollback = [];
+    const rollbackFailures = [];
+    const applicationFailures = [];
+    const skipped = [];
+    const source = `auto:${trigger}`;
+    const usable = state => isHealthyDongleState(state) || isCallStateValue(state);
+    async function rollback(item, previous, details = {}) {
+        if (previous) {
+            previous = { ...previous, ...adopted.find(entry => entry.slot === item.slot)?.previous, ...refreshed.find(entry => entry.slot === item.slot)?.previous };
+        }
+        const result = await dongleRuntime.rollbackSlot({ slot: item.slot, previous, source: `${source}:rollback` });
+        if (result.pending) pendingRollback.push(result);
+        else if (!result.success) rollbackFailures.push(result);
+        else if (result.skipped) skipped.push({ slot: item.slot, reason: result.reason });
+        else rolledBack.push({ slot: item.slot, ...details });
+    }
+    const pending = slot => pendingRollback.some(item => item.slot === slot);
+    async function apply(slots, suffix = '') {
+        const result = await applyProvisionedSlots(slots, `${source}${suffix}`);
+        if (result.error) applicationFailures.push(result.error);
+        return result;
+    }
+    try {
+        const retried = await dongleRuntime.retryPendingRollbacks();
+        pendingRollback.push(...retried.filter(item => item.pending));
+        rollbackFailures.push(...retried.filter(item => !item.success && !item.pending));
+        if (pendingRollback.length) {
+            return { success: false, deferred: true, adopted, refreshed, normalized, repaired, skipped, rolledBack, pendingRollback, rollbackFailures };
+        }
+        await dongleRuntime.requireIdle();
+        let sections = readDongleSections(DONGLE_CONF_PATH);
+        const probed = await probeUnconfiguredModems();
+        const candidates = annotateCandidates(probed, sections);
+        const seenSlots = new Set(candidates.filter(item => item.slot).map(item => item.slot));
+        for (const [slot, section] of sections) {
+            if (!/^dongle\d+$/i.test(slot) || seenSlots.has(slot)) continue;
+            candidates.push({
+                imei: String(section.imei || '').trim(), imsi: String(section.imsi || '').trim(),
+                model: null, audioPort: '', dataPort: '', baud: Number(section.baud) || 0,
+                simReady: false, configured: true, slot, fromSection: true
+            });
+        }
+        const planStates = await dongleStates();
+        const vacantSlots = findVacantSlots(sections, probed, planStates);
+        const ops = planAdoption(candidates, sections, { vacantSlots });
+        for (const op of ops) {
+            sections = readDongleSections(DONGLE_CONF_PATH);
+            if (slotIntentionallyDisabled(sections.get(op.slot))) {
+                skipped.push({ imei: op.imei, reason: 'slot intentionally disabled' });
+                continue;
+            }
+            const candidate = candidates.find(item => item.imei === op.imei) || {};
+            if (op.kind === 'refresh') {
+                const validation = validateRefreshRequest({ slot: op.slot, imei: op.imei, imsi: op.imsi }, sections);
+                if (!validation.ok) { skipped.push({ imei: op.imei, reason: validation.error }); continue; }
+                if (!Object.keys(validation.fields).length) { skipped.push({ imei: op.imei, reason: 'already current' }); continue; }
+                await dongleRuntime.requireIdle([op.slot]);
+                const result = upsertSection(DONGLE_CONF_PATH, validation.slot, validation.fields);
+                appendDongleRestartAudit({
+                    type: 'provision', phase: 'auto_refreshed', dongleId: validation.slot,
+                    imei: op.imei, fields: Object.keys(validation.fields), backup: result.backup, source
+                });
+                refreshed.push({
+                    slot: validation.slot, imei: op.imei, fields: Object.keys(validation.fields), backup: result.backup,
+                    previous: Object.fromEntries(Object.keys(validation.fields).map(key => [
+                        key, String(sections.get(validation.slot)[key] || '').trim() || null
+                    ]))
+                });
+                continue;
+            }
+            if (op.kind === 'reclaim') {
+                const pinned = await pinningFieldsFor(candidate);
+                await dongleRuntime.requireIdle([op.slot]);
+                const current = readDongleSections(DONGLE_CONF_PATH).get(op.slot);
+                if (!current || slotIntentionallyDisabled(current)) {
+                    skipped.push({ imei: op.imei, reason: 'slot removed or intentionally disabled' });
+                    continue;
+                }
+                const previous = Object.fromEntries(['imei', 'imsi', 'audio', 'data'].map(key => [key, String(current[key] || '').trim() || null]));
+                const result = upsertSection(DONGLE_CONF_PATH, op.slot, {
+                    imei: op.imei, imsi: op.imsi || null, audio: pinned.audioPort || null, data: pinned.dataPort || null
+                });
+                appendDongleRestartAudit({
+                    type: 'provision', phase: 'auto_reclaimed', dongleId: op.slot, imei: op.imei,
+                    previousImei: previous.imei || '', pinnedPorts: Boolean(pinned.audioPort), backup: result.backup, source
+                });
+                adopted.push({ slot: op.slot, imei: op.imei, reclaimed: true, previousImei: previous.imei, previous, backup: result.backup, candidate });
+                continue;
+            }
+            if (op.kind === 'blocked') skipped.push({ imei: op.imei, reason: 'no empty slot (add one manually)' });
+        }
+        let states = await dongleStates();
+        normalized = await normalizeConfiguredSlots(readDongleSections(DONGLE_CONF_PATH), states);
+        const touched = [...new Set([...adopted, ...refreshed, ...normalized].map(item => item.slot))];
+        let applied = null;
+        if (touched.length) {
+            applied = await apply(touched);
+            states = applied.states;
+        }
+        for (const item of normalized) {
+            if (!usable(states.get(item.slot))) await rollback(item, item.previous, { restored: Object.keys(item.previous) });
+        }
+        // Resolve ports first, then repeat live safety immediately before writing.
+        for (const candidate of candidates) {
+            if (!candidate.configured || !candidate.slot || pending(candidate.slot) || usable(states.get(candidate.slot))) continue;
+            sections = readDongleSections(DONGLE_CONF_PATH);
+            const section = sections.get(candidate.slot);
+            if (!recoveryEligible(section)) {
+                skipped.push({ imei: candidate.imei, reason: 'slot empty, removed or intentionally disabled' });
+                continue;
+            }
+            const pinned = await repairPinningFields(candidate, section);
+            if (!pinned.audioPort || !pinned.dataPort) { skipped.push({ imei: candidate.imei, reason: 'ports unresolved' }); continue; }
+            if (section.audio === pinned.audioPort && section.data === pinned.dataPort) continue;
+            await dongleRuntime.requireIdle([candidate.slot]);
+            if (!recoveryEligible(readDongleSections(DONGLE_CONF_PATH).get(candidate.slot))) continue;
+            upsertSection(DONGLE_CONF_PATH, candidate.slot, { audio: pinned.audioPort, data: pinned.dataPort });
+            appendDongleRestartAudit({
+                type: 'provision', phase: 'auto_repaired', dongleId: candidate.slot, imei: candidate.imei,
+                audioPort: pinned.audioPort, dataPort: pinned.dataPort, source
+            });
+            pinTargets.push({ slot: candidate.slot, previous: { audio: section.audio || null, data: section.data || null } });
+            repaired.push({ slot: candidate.slot, audioPort: pinned.audioPort, dataPort: pinned.dataPort });
+        }
+        if (pinTargets.length) {
+            const repairApplied = await apply(pinTargets.map(item => item.slot), ':repair');
+            states = repairApplied.states;
+            for (const item of pinTargets) {
+                if (!usable(states.get(item.slot))) await rollback(item, item.previous, { restoredPorts: true });
+            }
+        }
+        for (const item of adopted) {
+            if (pending(item.slot) || usable(states.get(item.slot))) continue;
+            const pinned = await pinningFieldsFor(item.candidate);
+            if (pinned.audioPort && pinned.dataPort) {
+                await dongleRuntime.requireIdle([item.slot]);
+                if (!recoveryEligible(readDongleSections(DONGLE_CONF_PATH).get(item.slot))) continue;
+                upsertSection(DONGLE_CONF_PATH, item.slot, { audio: pinned.audioPort, data: pinned.dataPort });
+                repaired.push({ slot: item.slot, audioPort: pinned.audioPort, dataPort: pinned.dataPort });
+                const singleApplied = await apply([item.slot], ':repair');
+                states = singleApplied.states;
+                if (usable(states.get(item.slot))) continue;
+            }
+            await rollback(item, item.reclaimed ? item.previous : null, { restoredImei: item.previous?.imei });
+        }
+        for (const item of refreshed) {
+            if (pending(item.slot) || usable(states.get(item.slot)) || !item.previous || !Object.keys(item.previous).length) continue;
+            await rollback(item, item.previous, { restored: Object.keys(item.previous) });
+        }
+        return {
+            success: !pendingRollback.length && !rollbackFailures.length && !applicationFailures.length,
+            adopted, refreshed, normalized, repaired, skipped, applied, rolledBack, pendingRollback, rollbackFailures,
+            ...(applicationFailures.length ? { error: applicationFailures.join('; ') } : {})
+        };
+    } catch (error) {
+        // A later operation can become busy after earlier sections were written.
+        // Retain the earliest field values, without restoring a whole-file backup
+        // or undoing slots that are already healthy/in a call.
+        const originals = new Map();
+        for (const item of [...refreshed, ...adopted, ...normalized, ...pinTargets]) {
+            if (item.previous) originals.set(item.slot, { ...item.previous, ...originals.get(item.slot) });
+        }
+        const live = await dongleStates().catch(() => new Map());
+        for (const [slot, previous] of originals) {
+            if (!pending(slot) && !usable(live.get(slot))) await rollback({ slot }, previous, { restored: Object.keys(previous) });
+        }
+        const retry = error.deferred ? scheduleAutoAdopt('deferred') : null;
+        return {
+            success: false, deferred: Boolean(error.deferred), retryInMs: retry ? retry.scheduledInMs : null,
+            adopted, refreshed, normalized, repaired, skipped, rolledBack, pendingRollback, rollbackFailures, error: error.message
+        };
+    }
+}
+
+/**
+ * Public entry point: one pass at a time, and never interleaved with a manual
+ * add — both append sections to dongle.conf and then reload the module.
+ */
+async function adoptDiscoveredDongles(trigger = 'manual') {
+    if (adoptInFlight) return { success: false, reason: 'adoption already running', adopted: [], skipped: [] };
+    adoptInFlight = true;
+    try {
+        return await withProvisionLock(() => runAdoptionPass(trigger));
+    } finally {
+        adoptInFlight = false;
+    }
+}
+
+let autoAdoptFireAt = 0;
+let autoAdoptDeadline = 0;
+const AUTO_ADOPT_CAP_MS = 15000;
+const AUTO_ADOPT_QUIET_MS = 1200;
+
+/**
+ * Schedule one adoption pass.
+ *
+ * The run is keyed to the event stream, not to a fixed sleep: every new event
+ * postpones it by `settleMs` (hotplug passes a short quiet window) until the
+ * bus stops changing, capped so a flapping device still gets a pass. At fire
+ * time the USB device is checked for completeness; while interfaces are still
+ * enumerating the run is deferred instead of wasted.
+ */
+function scheduleAutoAdopt(trigger, options = {}) {
+    const config = readAutoAdoptConfig();
+    if (!config.enabled) return null;
+    const settleMs = Math.max(0, Number(options.settleMs) || Math.max(5000, Number(config.settleSeconds || 10) * 1000));
+    const now = Date.now();
+    const { fireAt, deadlineAt } = nextFireAt({
+        now,
+        settleMs,
+        deadlineAt: autoAdoptTimer ? autoAdoptDeadline : 0,
+        capMs: Number(options.capMs) || AUTO_ADOPT_CAP_MS
+    });
+    if (autoAdoptTimer) clearTimeout(autoAdoptTimer);
+    autoAdoptFireAt = fireAt;
+    autoAdoptDeadline = deadlineAt;
+    const wait = Math.max(0, fireAt - now);
+    autoAdoptTimer = setTimeout(() => {
+        autoAdoptTimer = null;
+        autoAdoptFireAt = 0;
+        if (!readAutoAdoptConfig().enabled) {
+            console.log('DONGLE-AUTO-ADOPT: disabled while waiting; run cancelled');
+            return;
+        }
+        if (options.waitForComplete !== false && usbEnumerationPending(listSerialByPathLinks())) {
+            if (Date.now() < autoAdoptDeadline - AUTO_ADOPT_QUIET_MS) {
+                console.log('DONGLE-AUTO-ADOPT: USB enumeration still incomplete; deferring');
+                scheduleAutoAdopt(trigger, {
+                    settleMs: AUTO_ADOPT_QUIET_MS,
+                    capMs: Math.max(AUTO_ADOPT_QUIET_MS, autoAdoptDeadline - Date.now()),
+                    waitForComplete: true
+                });
+                return;
+            }
+            console.log('DONGLE-AUTO-ADOPT: enumeration cap reached; running against what is present');
+        }
+        adoptDiscoveredDongles(trigger).catch(error => {
+            console.error('DONGLE-AUTO-ADOPT failed:', error.message);
+        });
+    }, wait);
+    if (typeof autoAdoptTimer.unref === 'function') autoAdoptTimer.unref();
+    return { scheduledInMs: wait };
+}
+
+app.get('/api/gsm-dongles/provision/auto', requireAuth, requireDongleRoot, (req, res) => {
+    const config = readAutoAdoptConfig();
+    res.json({ success: true, ...config, inFlight: adoptInFlight, pending: Boolean(autoAdoptTimer) });
+});
+
+app.post('/api/gsm-dongles/provision/auto', requireAuth, requireDongleRoot, (req, res) => {
+    const enabled = Boolean(req.body && req.body.enabled);
+    const settleSeconds = Number(req.body && req.body.settleSeconds);
+    const patch = { enabled };
+    if (Number.isFinite(settleSeconds) && settleSeconds >= 5 && settleSeconds <= 600) patch.settleSeconds = Math.round(settleSeconds);
+    res.json({ success: true, ...writeAutoAdoptConfig(patch) });
+});
+
+app.post('/api/gsm-dongles/provision/adopt', requireAuth, requireDongleRoot, async (req, res) => {
+    try {
+        res.json(await adoptDiscoveredDongles('manual'));
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.post('/api/gsm-dongles/provision/add', requireAuth, requireDongleRoot, async (req, res) => {
+    const body = req.body || {};
+    const source = 'api:/api/gsm-dongles/provision/add';
+    try {
+        const applied = await withProvisionLock(async () => {
+            const validation = validateAddRequest(body, readDongleSections(DONGLE_CONF_PATH));
+            if (!validation.ok) {
+                const error = new Error(validation.error);
+                error.status = 400;
+                throw error;
+            }
+            await dongleRuntime.requireIdle([validation.slot]);
+            const backup = appendSection(DONGLE_CONF_PATH, validation.section);
+            appendDongleRestartAudit({
+                type: 'provision', phase: 'conf_written', dongleId: validation.slot,
+                imei: String(body.imei || '').trim(), audioPort: String(body.audioPort || '').trim(),
+                dataPort: String(body.dataPort || '').trim(), backup, source
+            });
+            try {
+                const result = await applyProvisionedSlots([validation.slot], source);
+                const failure = result.failed.find(entry => entry.slot === validation.slot);
+                const rollback = failure ? await dongleRuntime.rollbackSlot({ slot: validation.slot, source: `${source}:rollback` }) : null;
+                return { ...result, slot: validation.slot, failure, rollback, backup };
+            } catch (error) {
+                const rollback = await dongleRuntime.rollbackSlot({ slot: validation.slot, source: `${source}:rollback` });
+                return { slot: validation.slot, failure: { state: 'unknown' }, error: error.message, rollback, backup };
+            }
+        });
+        const { failure, rollback } = applied;
+        res.json({
+            success: !failure, slot: applied.slot, backup: applied.backup, state: failure?.state,
+            pendingRollback: rollback?.pending ? [rollback] : [],
+            rollback,
+            error: failure ? (applied.error || `Device did not come up (state: ${failure.state}).`) : undefined
+        });
+    } catch (error) {
+        res.status(error.status || (error.deferred ? 409 : 500)).json({ success: false, error: error.message });
+    }
+});
+
 // API Endpoint to reload specific dongle
 app.post('/api/gsm-dongles/reload/:dongleId', requireAuth, requireActionPermission('gsm-control'), async (req, res) => {
     const { dongleId } = req.params;
@@ -12561,44 +13709,45 @@ app.post('/api/gsm-dongles/reload/:dongleId', requireAuth, requireActionPermissi
     });
 });
 
-function getUsbBusIdForDongle(dongleId) {
+/**
+ * sysfs USB device of a slot: resolve its configured audio/data link to a real
+ * tty, then to the USB device directory (the one carrying idVendor).
+ */
+function usbSysfsDeviceForDongle(dongleId) {
     try {
-        const fs = require('fs');
-        const { execSync } = require('child_process');
-        const conf = fs.readFileSync('/etc/asterisk/dongle.conf', 'utf8');
-        const lines = conf.split('\n');
-        let currentSec = null;
-        let audioPort = null;
-
-        for (const line of lines) {
-            const trimmed = line.trim();
-            const matchSec = trimmed.match(/^\[([a-zA-Z0-9_]+)\]$/);
-            if (matchSec) {
-                currentSec = matchSec[1];
-                continue;
-            }
-            if (currentSec === dongleId && trimmed.startsWith('audio=')) {
-                audioPort = trimmed.split('=')[1].trim();
-                break;
-            }
+        const section = parseProvisioningState(DONGLE_CONF_PATH).get(String(dongleId || '').toLowerCase());
+        if (!section) return null;
+        for (const candidate of [section.audio, section.data]) {
+            const value = String(candidate || '').trim();
+            if (!value) continue;
+            let real;
+            try { real = fs.realpathSync(value); } catch (_) { continue; }
+            if (!/^\/dev\/tty/.test(real)) continue;
+            const tty = path.basename(real);
+            let dev;
+            try { dev = fs.realpathSync(`/sys/class/tty/${tty}/device`); } catch (_) { continue; }
+            const device = path.dirname(path.dirname(dev));
+            if (fs.existsSync(path.join(device, 'idVendor'))) return { device, tty };
         }
-
-        if (!audioPort) return null;
-        const ttyName = audioPort.replace('/dev/', '');
-        const sysPath = `/sys/class/tty/${ttyName}/device`;
-
-        if (!fs.existsSync(sysPath)) return null;
-        const realPath = execSync(`readlink -f "${sysPath}"`, { encoding: 'utf8' }).trim();
-        const parts = realPath.split('/');
-        let specificBusId = null;
-        for (const part of parts) {
-            if (/^\d+-\d+(\.\d+)*$/.test(part) && !part.includes(':')) {
-                specificBusId = part;
-            }
-        }
-        return specificBusId;
-    } catch (_) {}
+    } catch (_) { /* ignore */ }
     return null;
+}
+
+/** Power-cycle the USB device. `authorized` removes power; unbind/bind is the
+ *  fallback when the kernel does not expose it. */
+async function usbPowerCycleDevice(deviceDir) {
+    const authorized = path.join(deviceDir, 'authorized');
+    if (fs.existsSync(authorized)) {
+        fs.writeFileSync(authorized, '0');
+        await new Promise(resolve => setTimeout(resolve, 4000));
+        fs.writeFileSync(authorized, '1');
+        return 'authorized-cycle';
+    }
+    const name = path.basename(deviceDir);
+    fs.writeFileSync('/sys/bus/usb/drivers/usb/unbind', name);
+    await new Promise(resolve => setTimeout(resolve, 2500));
+    fs.writeFileSync('/sys/bus/usb/drivers/usb/bind', name);
+    return 'bind-cycle';
 }
 
 // API Endpoint to reboot modem firmware via AT command (AT+CFUN=1,1)
@@ -12653,78 +13802,80 @@ app.post('/api/gsm-dongles/reboot-modem/:dongleId', requireAuth, requireActionPe
     });
 });
 
-// API Endpoint to simulate virtual USB unplug and re-plug (Kernel sysfs unbind/bind)
+// API Endpoint to power-cycle a modem's USB port (kernel sysfs authorized/bind)
 app.post('/api/gsm-dongles/virtual-replug/:dongleId', async (req, res) => {
-    const { dongleId } = req.params;
+    const dongleId = String(req.params.dongleId || '').toLowerCase();
     if (!/^dongle[0-9]+$/.test(dongleId)) {
-        return res.status(400).json({ success: false, error: "Invalid dongle ID format" });
+        return res.status(400).json({ success: false, error: 'Invalid dongle ID format' });
     }
     const allowedDongles = await getUserAllowedDongles(req);
-    if (allowedDongles !== null) {
-        const reqDongle = String(dongleId).toLowerCase().trim();
-        const isAllowed = allowedDongles.includes(reqDongle);
-        if (!isAllowed) {
-            return res.status(403).json({ success: false, error: "Forbidden: Access denied to this dongle." });
-        }
+    if (allowedDongles !== null && !allowedDongles.includes(dongleId)) {
+        return res.status(403).json({ success: false, error: 'Forbidden: Access denied to this dongle.' });
     }
-    const busId = getUsbBusIdForDongle(dongleId);
-    if (!busId) {
+
+    const target = usbSysfsDeviceForDongle(dongleId);
+    if (!target) {
         appendDongleRestartAudit({
-            type: 'virtual_replug',
-            phase: 'bus_not_found',
-            dongleId,
+            type: 'virtual_replug', phase: 'device_not_found', dongleId,
+            source: 'api:/api/gsm-dongles/virtual-replug'
+        });
+        return res.status(409).json({
+            success: false,
+            error: `No USB device behind ${dongleId}'s configured ports: the modem is unplugged or its pins do not resolve. Replug it physically.`
+        });
+    }
+
+    if (await countDongleChannels() > 0) {
+        return res.status(409).json({
+            success: false,
+            error: 'A dongle call is in progress; a USB power cycle would drop every line. Retry when idle.'
+        });
+    }
+    appendDongleRestartAudit({
+        type: 'virtual_replug', phase: 'requested', dongleId,
+        device: path.basename(target.device), tty: target.tty,
+        source: 'api:/api/gsm-dongles/virtual-replug'
+    });
+    try {
+        const method = await usbPowerCycleDevice(target.device);
+        await new Promise(resolve => setTimeout(resolve, 6000));
+        await execFileAsync(ASTERISK_BIN, ['-rx', 'module reload chan_dongle.so'], { timeout: 30000 }).catch(() => {});
+        let state = null;
+        for (let i = 0; i < 10; i += 1) {
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            const states = await dongleStates().catch(() => new Map());
+            state = states.get(dongleId) || null;
+            if (isHealthyDongleState(state)) break;
+        }
+        const healthy = isHealthyDongleState(state);
+        appendDongleRestartAudit({
+            type: 'virtual_replug', phase: healthy ? 'recovered' : 'still_down', dongleId,
+            device: path.basename(target.device), method, state,
             source: 'api:/api/gsm-dongles/virtual-replug'
         });
         io.emit('usbDevicesUpdated');
-        return res.json({ success: false, error: `USB bus ID not found for ${dongleId}` });
-    }
-
-    appendDongleRestartAudit({
-        type: 'virtual_replug',
-        phase: 'requested',
-        dongleId,
-        busId,
-        source: 'api:/api/gsm-dongles/virtual-replug'
-    });
-    const { exec } = require('child_process');
-    const cmd = `echo "${busId}" > /sys/bus/usb/drivers/usb/unbind && sleep 2 && echo "${busId}" > /sys/bus/usb/drivers/usb/bind`;
-    exec(cmd, (error, stdout, stderr) => {
-        setTimeout(() => io.emit('usbDevicesUpdated'), 4000);
-        if (error) {
-            appendDongleRestartAudit({
-                type: 'virtual_replug',
-                phase: 'command_failed',
-                dongleId,
-                busId,
-                source: 'api:/api/gsm-dongles/virtual-replug',
-                error: (stderr || error.message || '').trim()
+        if (!healthy) {
+            return res.status(502).json({
+                success: false,
+                method,
+                state,
+                error: `USB power cycle (${method}) did not revive ${dongleId}. The modem firmware is hung; replug it physically.`
             });
-            io.emit('dongleRestartFailed', buildRestartFailedEvent({
-                dongleId,
-                state: 'Unknown',
-                reason: 'virtual_replug_failed',
-                retryAfterSec: 60
-            }));
-            return res.status(500).json({ success: false, error: `Virtual re-plug failed for ${busId}: ${stderr || error.message}` });
         }
-        appendDongleRestartAudit({
-            type: 'virtual_replug',
-            phase: 'command_ok',
-            dongleId,
-            busId,
-            source: 'api:/api/gsm-dongles/virtual-replug'
-        });
         scheduleDongleHealthCheck(dongleId, {
             source: 'api:/api/gsm-dongles/virtual-replug',
             reason: 'virtual_replug',
             delayMs: 20000
         });
-        res.json({
-            success: true,
-            message: `Virtual USB re-plug executed for ${dongleId} (${busId}); post-replug health check scheduled`,
-            healthCheck: 'scheduled'
+        return res.json({ success: true, method, state, message: `${dongleId} recovered after a USB power cycle (${method}).` });
+    } catch (error) {
+        appendDongleRestartAudit({
+            type: 'virtual_replug', phase: 'command_failed', dongleId,
+            device: path.basename(target.device), error: error.message,
+            source: 'api:/api/gsm-dongles/virtual-replug'
         });
-    });
+        return res.status(500).json({ success: false, error: error.message });
+    }
 });
 
 // POST /api/gsm-dongles/at-diagnostic/:dongleId - Root-only AT diagnostic execution & smart explanation
@@ -13677,6 +14828,22 @@ app.get('/api/gsm-dongles/ttyusb-devices', requireAuth, async (req, res) => {
         });
     } catch (e) {
         res.json({ success: true, summary: { totalUsbDevices: 0, totalModems: 0, totalTtyPorts: 0, totalConfiguredSlots: 0 }, physicalModems: [], allUsbDevices: [], devices: [], ttyDevices: [] });
+    }
+});
+
+// API Endpoint: most recent chan_dongle lines from the Asterisk full log
+app.get('/api/gsm-dongles/logs/recent', requireAuth, (req, res) => {
+    try {
+        const requested = parseInt(req.query.lines, 10);
+        const limit = Math.min(200, Math.max(1, Number.isFinite(requested) ? requested : 50));
+        const dongleLogPattern = /chan_dongle|at_response|app_ussd|dongle[0-9]+/i;
+        const lines = readAsteriskFullLogTail(8 * 1024 * 1024)
+            .split('\n')
+            .map(line => line.trim())
+            .filter(line => line && dongleLogPattern.test(line));
+        res.json({ success: true, lines: lines.slice(-limit) });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
     }
 });
 // --- 5. STORAGE & BACKUPS MANAGEMENT APIs ---
@@ -15826,16 +16993,20 @@ app.post('/api/blacklist/sync', async (req, res) => {
 // Server-rendered client bundle for the PBX configuration page. Rendering it
 // once per language keeps 700 KB of JavaScript out of the HTML and lets the
 // browser cache it across navigations.
+const configPageBundleCache = new Map();
 app.get('/js/config-page.js', requireAuth, (req, res) => {
     const lang = String(req.query.lang || '').toLowerCase() === 'ar' ? 'ar' : 'en';
     res.type('application/javascript; charset=utf-8');
     res.setHeader('Cache-Control', 'private, max-age=86400, must-revalidate');
     res.setHeader('Vary', 'Accept-Encoding');
+    const cached = configPageBundleCache.get(lang);
+    if (cached) return res.send(cached);
     res.render('scripts/config-page', { isRtl: lang === 'ar', defaultOutboundPatterns: DEFAULT_OUTBOUND_DIAL_PATTERNS }, (err, js) => {
         if (err) {
             console.error('config-page bundle render error:', err.message);
             return res.status(500).send('// bundle error');
         }
+        configPageBundleCache.set(lang, js);
         res.send(js);
     });
 });
@@ -15867,7 +17038,8 @@ app.get('/config', requireAuth, (req, res) => {
         currentLang,
         isRtl: currentLang === 'ar',
         isSuperAdmin: isSuperAdmin(req),
-        isRoot
+        isRoot,
+        embed: req.query.embed === '1'
     });
 });
 
@@ -16023,7 +17195,8 @@ function updateVoicemailConf(extNum, displayName, vmVal, reload = true) {
         lines = lines.filter(line => !line.trim().startsWith(`${extNum} =>`));
 
         if (vmVal === 'default' || vmVal === 'enabled') {
-            const entry = `${extNum} => ,${displayName || extNum},,,attach=no|saycid=no|envelope=no|delete=no`;
+            const safeName = String(displayName || extNum).replace(/[\u0000-\u001F\u007F]/g, ' ').trim() || extNum;
+            const entry = `${extNum} => ,${safeName},,,attach=no|saycid=no|envelope=no|delete=no`;
             lines.push(entry);
         }
 
@@ -16661,7 +17834,10 @@ async function provisionExtension(payload = {}, options = {}) {
     }
 
     const extNum = String(extension).trim();
-    const displayName = String(name).trim();
+    const displayName = String(name).replace(/[\u0000-\u001F\u007F]/g, ' ').trim();
+    if (!displayName) {
+        throw validationError('Display Name is required.');
+    }
     const extSecret = String(secret).trim();
     const vmVal = (voicemail === 'default' || voicemail === 'enabled' || voicemail === true) ? 'default' : 'novm';
     const extContext = 'from-internal';
@@ -16685,6 +17861,7 @@ async function provisionExtension(payload = {}, options = {}) {
         throw validationError(collisionError);
     }
 
+    try {
     await pool.query(`
         INSERT INTO \`asterisk\`.\`users\` (extension, password, name, voicemail, ringtimer, noanswer, recording, outboundcid, sipname, mohclass)
         VALUES (?, '', ?, ?, 0, '', 'out=always|in=always', '', '', 'default')
@@ -16792,6 +17969,20 @@ async function provisionExtension(payload = {}, options = {}) {
     }
 
     return { extension: extNum, name: displayName, secret: extSecret, tech: devTech, isWebRTC, jitter_buffer: effectiveJitterBufferFields(jitterBuffer) };
+    } catch (error) {
+        try {
+            await pool.query(`DELETE FROM \`asterisk\`.\`extension_policies\` WHERE extension = ?`, [extNum]);
+            await pool.query(`DELETE FROM ${tables.employeeExtras} WHERE extension = ?`, [extNum]);
+            await pool.query(`DELETE FROM \`asterisk\`.\`sip\` WHERE id = ?`, [extNum]);
+            await pool.query(`DELETE FROM \`asterisk\`.\`devices\` WHERE id = ?`, [extNum]);
+            await pool.query(`DELETE FROM \`asterisk\`.\`users\` WHERE extension = ?`, [extNum]);
+            updatePjsipCustomConfig(extNum, '', '', 'delete', false);
+            updateVoicemailConf(extNum, '', 'novm', false);
+            await execFileAsync(ASTERISK_BIN, ['-rx', `database deltree AMPUSER ${extNum}`]).catch(() => {});
+            await execFileAsync(ASTERISK_BIN, ['-rx', `database deltree DEVICE ${extNum}`]).catch(() => {});
+        } catch (_) {}
+        throw error;
+    }
 }
 
 app.post('/api/config/extensions', async (req, res) => {
@@ -16901,9 +18092,21 @@ app.post('/api/config/extensions/bulk', requireAuth, async (req, res) => {
 app.put('/api/config/extensions/:extension', async (req, res) => {
     try {
         const extNum = String(req.params.extension).trim();
+        if (!/^\d+$/.test(extNum)) {
+            return res.status(400).json({ success: false, error: 'Valid numeric Extension number is required.' });
+        }
         const { name, secret, voicemail, tech, denoise, vad_gate, vadGate, vad_db, vadDb, agc } = req.body;
-        const displayName = String(name || '').trim();
+        const displayName = String(name || '').replace(/[\u0000-\u001F\u007F]/g, ' ').trim();
         const extSecret = String(secret || '').trim();
+        const vadDbVal = (vad_db !== undefined ? vad_db : vadDb);
+        const vadDbAllowed = new Set(['off', '-55', '-50', '-45', '-42', '-38', '-35', '-30']);
+        if (vadDbVal !== undefined && !vadDbAllowed.has(String(vadDbVal).trim())) {
+            return res.status(400).json({ success: false, error: 'Invalid VAD dB value.' });
+        }
+        const agcAllowed = new Set(['off', '8000', '6000', '10000', '12000']);
+        if (agc !== undefined && !agcAllowed.has(String(agc).trim() || 'off')) {
+            return res.status(400).json({ success: false, error: 'Invalid AGC value.' });
+        }
         const vmVal = (voicemail === 'default' || voicemail === 'enabled' || voicemail === true) ? 'default' : 'novm';
 
         const [devRows] = await pool.query('SELECT tech FROM `asterisk`.`devices` WHERE id = ?', [extNum]);
@@ -16917,6 +18120,22 @@ app.put('/api/config/extensions/:extension', async (req, res) => {
             return res.status(404).json({ success: false, error: `Extension ${extNum} not found.` });
         }
         const currentUser = userRows[0];
+
+        const [currExtRows] = await pool.query(
+            `SELECT is_group_admin FROM ${tables.employeeExtras} WHERE extension = ?`,
+            [extNum]
+        );
+        const currentIsAdmin = currExtRows[0]?.is_group_admin ? 1 : 0;
+        let isGroupAdmin = currentIsAdmin;
+        if (req.body.is_group_admin !== undefined || req.body.isGroupAdmin !== undefined) {
+            const requestedAdmin = (req.body.is_group_admin === true || req.body.is_group_admin === 'true' || req.body.is_group_admin === 1 || req.body.is_group_admin === '1' || req.body.isGroupAdmin === true || req.body.isGroupAdmin === 'true' || req.body.isGroupAdmin === 1 || req.body.isGroupAdmin === '1') ? 1 : 0;
+            if (requestedAdmin !== currentIsAdmin && !isSuperAdmin(req)) {
+                return res.status(403).json({ success: false, error: 'Forbidden: Only Super Admins can modify Group Admin status' });
+            }
+            if (isSuperAdmin(req)) {
+                isGroupAdmin = requestedAdmin;
+            }
+        }
 
         // Validate and resolve the jitter-buffer update before changing any
         // extension or PBX state. Omitted jb_* fields preserve the current
@@ -16995,21 +18214,19 @@ app.put('/api/config/extensions/:extension', async (req, res) => {
         reloadPjsip();
         if (denoise !== undefined) {
             const denoiseVal = ['both', 'rx', 'tx', 'off'].includes(denoise) ? denoise : 'off';
-            await execPromise(`${ASTERISK_BIN} -rx "database put AMPUSER ${extNum}/ai_denoise ${denoiseVal}"`);
+            await execFileAsync(ASTERISK_BIN, ['-rx', `database put AMPUSER ${extNum}/ai_denoise ${denoiseVal}`]);
         }
         const vadGateVal = (vad_gate !== undefined ? vad_gate : vadGate);
         if (vadGateVal !== undefined) {
             const validVad = (vadGateVal === '0' || vadGateVal === 0 || vadGateVal === false) ? '0' : '1';
-            await execPromise(`${ASTERISK_BIN} -rx "database put AMPUSER ${extNum}/vad_gate ${validVad}"`);
+            await execFileAsync(ASTERISK_BIN, ['-rx', `database put AMPUSER ${extNum}/vad_gate ${validVad}`]);
         }
-        const vadDbVal = (vad_db !== undefined ? vad_db : vadDb);
         if (vadDbVal !== undefined) {
-            const validVadDb = String(vadDbVal).trim();
-            await execPromise(`${ASTERISK_BIN} -rx "database put AMPUSER ${extNum}/vad_db ${validVadDb}"`);
+            await execFileAsync(ASTERISK_BIN, ['-rx', `database put AMPUSER ${extNum}/vad_db ${String(vadDbVal).trim()}`]);
         }
         if (agc !== undefined) {
             const validAgc = String(agc).trim() || 'off';
-            await execPromise(`${ASTERISK_BIN} -rx "database put AMPUSER ${extNum}/agc ${validAgc}"`);
+            await execFileAsync(ASTERISK_BIN, ['-rx', `database put AMPUSER ${extNum}/agc ${validAgc}`]);
         }
         if (requestedJitterBuffer) {
             await applyExtensionJitterBuffer(extNum, requestedJitterBuffer);
@@ -17018,22 +18235,6 @@ app.put('/api/config/extensions/:extension', async (req, res) => {
         sipPresence[extNum] = false;
         pjsipPresence[extNum] = false;
         delete pendingOffline[extNum];
-
-        const [currExtRows] = await pool.query(
-            `SELECT is_group_admin FROM ${tables.employeeExtras} WHERE extension = ?`,
-            [extNum]
-        );
-        const currentIsAdmin = currExtRows[0]?.is_group_admin ? 1 : 0;
-        let isGroupAdmin = currentIsAdmin;
-        if (req.body.is_group_admin !== undefined || req.body.isGroupAdmin !== undefined) {
-            const requestedAdmin = (req.body.is_group_admin === true || req.body.is_group_admin === 'true' || req.body.is_group_admin === 1 || req.body.is_group_admin === '1' || req.body.isGroupAdmin === true || req.body.isGroupAdmin === 'true' || req.body.isGroupAdmin === 1 || req.body.isGroupAdmin === '1') ? 1 : 0;
-            if (requestedAdmin !== currentIsAdmin && !isSuperAdmin(req)) {
-                return res.status(403).json({ success: false, error: 'Forbidden: Only Super Admins can modify Group Admin status' });
-            }
-            if (isSuperAdmin(req)) {
-                isGroupAdmin = requestedAdmin;
-            }
-        }
 
         if (req.body.is_group_admin !== undefined || req.body.isGroupAdmin !== undefined || req.body.emp_group !== undefined || req.body.title !== undefined || req.body.photo !== undefined) {
             const empGroup = req.body.emp_group !== undefined ? (String(req.body.emp_group || '').trim() || null) : null;
@@ -17794,7 +18995,7 @@ app.delete('/api/config/ringgroups/:grpnum', async (req, res) => {
 function cleanQueueAgentList(value) {
     const raw = Array.isArray(value)
         ? value
-        : String(value === undefined || value === null ? '' : value).split(/[\r\n,;]+/);
+        : String(value === undefined || value === null ? '' : value).split(/[\r\n,;\-]+/);
 
     const seen = new Set();
     const cleaned = [];
@@ -17836,9 +19037,9 @@ async function readQueueDynamicAgents() {
 async function syncAstDbQueueAgents(num, agents) {
     try {
         const list = cleanQueueAgentList(agents);
-        await execPromise(`${ASTERISK_BIN} -rx "database deltree QPENALTY/${num}"`);
+        await execFileAsync(ASTERISK_BIN, ['-rx', `database deltree QPENALTY/${num}`]);
         for (const ext of list) {
-            await execPromise(`${ASTERISK_BIN} -rx "database put QPENALTY/${num}/agents ${ext} 0"`);
+            await execFileAsync(ASTERISK_BIN, ['-rx', `database put QPENALTY/${num}/agents ${ext} 0`]);
         }
     } catch (e) {
         console.error(`AstDB QPENALTY sync error for queue ${num}:`, e.message);
@@ -18164,11 +19365,6 @@ app.post('/api/config/queues', async (req, res) => {
         const joinEmptyVal = (req.body.joinempty !== undefined && String(req.body.joinempty).trim()) ? String(req.body.joinempty).trim() : 'yes';
         const leaveWhenEmptyVal = (req.body.leavewhenempty !== undefined && String(req.body.leavewhenempty).trim()) ? String(req.body.leavewhenempty).trim() : 'no';
 
-        await pool.query(`
-            INSERT INTO \`asterisk\`.\`queues_config\`
-            (extension, descr, grppre, alertinfo, joinannounce_id, ringing, agentannounce_id, maxwait, password, ivr_id, callback_id, dest, destcontinue, cwignore, qregex, queuewait, use_queue_context, togglehint, qnoanswer, callconfirm, callconfirm_id, monitor_type, monitor_heard, monitor_spoken)
-            VALUES (?, ?, '', '', ?, 0, 0, ?, '', 'none', 'none', ?, ?, ?, '', 0, 0, 0, 0, 0, 0, ?, 0, 0)
-        `, [num, name, annId, maxWaitVal, failDest, continueDest, cwignoreVal, monitorTypeVal]);
         const details = [
             [num, 'strategy', ringStrategy, 0],
             [num, 'autofill', isAutofill, 0],
@@ -18202,6 +19398,11 @@ app.post('/api/config/queues', async (req, res) => {
         const conn = await pool.getConnection();
         try {
             await conn.beginTransaction();
+            await conn.query(`
+                INSERT INTO \`asterisk\`.\`queues_config\`
+                (extension, descr, grppre, alertinfo, joinannounce_id, ringing, agentannounce_id, maxwait, password, ivr_id, callback_id, dest, destcontinue, cwignore, qregex, queuewait, use_queue_context, togglehint, qnoanswer, callconfirm, callconfirm_id, monitor_type, monitor_heard, monitor_spoken)
+                VALUES (?, ?, '', '', ?, 0, 0, ?, '', 'none', 'none', ?, ?, ?, '', 0, 0, 0, 0, 0, 0, ?, 0, 0)
+            `, [num, name, annId, maxWaitVal, failDest, continueDest, cwignoreVal, monitorTypeVal]);
             for (const row of details) {
                 await conn.query('INSERT INTO `asterisk`.`queues_details` (id, keyword, data, flags) VALUES (?, ?, ?, ?)', row);
             }
@@ -18227,6 +19428,9 @@ app.post('/api/config/queues', async (req, res) => {
 app.put('/api/config/queues/:extension', async (req, res) => {
     try {
         const num = String(req.params.extension).trim();
+        if (!/^\d+$/.test(num)) {
+            return res.status(400).json({ success: false, error: 'Valid numeric Queue number is required.' });
+        }
         const {
             descr, static_members, dynmembers, musicclass,
             joinannounce_id, recording, maxwait, timeout, retry, dest, failover, destcontinue,
@@ -18335,6 +19539,9 @@ app.put('/api/config/queues/:extension', async (req, res) => {
 app.delete('/api/config/queues/:extension', async (req, res) => {
     try {
         const num = String(req.params.extension).trim();
+        if (!/^\d+$/.test(num)) {
+            return res.status(400).json({ success: false, error: 'Valid numeric Queue number is required.' });
+        }
         const [existing] = await pool.query('SELECT extension FROM `asterisk`.`queues_config` WHERE extension = ?', [num]);
         if (existing.length === 0) {
             return res.status(404).json({ success: false, error: `Queue ${num} not found.` });
@@ -19719,6 +20926,20 @@ app.delete('/api/config/trunks/:trunkid', async (req, res) => {
             await connection.rollback();
             return res.status(404).json({ success: false, error: 'Trunk not found.' });
         }
+        const [usedRoutes] = await connection.query(`
+            SELECT r.route_id, r.name
+            FROM \`asterisk\`.\`outbound_route_trunks\` rt
+            JOIN \`asterisk\`.\`outbound_routes\` r ON r.route_id = rt.route_id
+            WHERE rt.trunk_id = ?
+        `, [trunkId]);
+        if (usedRoutes.length > 0) {
+            await connection.rollback();
+            const names = usedRoutes.map(route => route.name || `#${route.route_id}`).join(', ');
+            return res.status(409).json({
+                success: false,
+                error: `Trunk is used by outbound route(s): ${names}. Remove it from those routes first.`
+            });
+        }
         await deleteTrunkProtocolRows(connection, trunkId);
         await connection.query('DELETE FROM `asterisk`.`trunk_dialpatterns` WHERE trunkid = ?', [trunkId]);
         await connection.query('DELETE FROM `asterisk`.`outbound_route_trunks` WHERE trunk_id = ?', [trunkId]);
@@ -19924,29 +21145,39 @@ app.post('/api/config/routes/inbound', async (req, res) => {
         }
 
         const existing = otherDid;
-        if (existing.length > 0) {
-            await pool.query(`
-                UPDATE \`asterisk\`.\`incoming\`
-                SET destination = ?, description = ?, alertinfo = ?, ringing = ?, grppre = ?, pricid = ?, delay_answer = ?
-                WHERE extension = ? AND cidnum = ?
-            `, [dest, desc, alertInfoVal, ringingVal, grpPreVal, priCidVal, delayAnswerVal, ext, cid]);
-        } else {
-            await pool.query(`
-                INSERT INTO \`asterisk\`.\`incoming\`
-                (cidnum, extension, destination, privacyman, pmmaxretries, pmminlength, alertinfo, ringing, mohclass, description, grppre, delay_answer, pricid)
-                VALUES (?, ?, ?, 0, '3', '10', ?, ?, 'default', ?, ?, ?, ?)
-            `, [cid, ext, dest, alertInfoVal, ringingVal, desc, grpPreVal, delayAnswerVal, priCidVal]);
-        }
+        const conn = await pool.getConnection();
+        try {
+            await conn.beginTransaction();
+            if (existing.length > 0) {
+                await conn.query(`
+                    UPDATE \`asterisk\`.\`incoming\`
+                    SET destination = ?, description = ?, alertinfo = ?, ringing = ?, grppre = ?, pricid = ?, delay_answer = ?
+                    WHERE extension = ? AND cidnum = ?
+                `, [dest, desc, alertInfoVal, ringingVal, grpPreVal, priCidVal, delayAnswerVal, ext, cid]);
+            } else {
+                await conn.query(`
+                    INSERT INTO \`asterisk\`.\`incoming\`
+                    (cidnum, extension, destination, privacyman, pmmaxretries, pmminlength, alertinfo, ringing, mohclass, description, grppre, delay_answer, pricid)
+                    VALUES (?, ?, ?, 0, '3', '10', ?, ?, 'default', ?, ?, ?, ?)
+                `, [cid, ext, dest, alertInfoVal, ringingVal, desc, grpPreVal, delayAnswerVal, priCidVal]);
+            }
 
-        // Universal call recording: this route always records (product policy).
-        await pool.query(`
-            DELETE FROM \`asterisk\`.\`callrecording_module\`
-            WHERE extension = ? AND cidnum = ? AND display = 'did'
-        `, [ext, cid]).catch(() => {});
-        await pool.query(`
-            INSERT INTO \`asterisk\`.\`callrecording_module\` (\`extension\`, \`cidnum\`, \`callrecording\`, \`display\`)
-            VALUES (?, ?, 'force', 'did')
-        `, [ext, cid]).catch(() => {});
+            // Universal call recording: this route always records (product policy).
+            await conn.query(`
+                DELETE FROM \`asterisk\`.\`callrecording_module\`
+                WHERE extension = ? AND cidnum = ? AND display = 'did'
+            `, [ext, cid]);
+            await conn.query(`
+                INSERT INTO \`asterisk\`.\`callrecording_module\` (\`extension\`, \`cidnum\`, \`callrecording\`, \`display\`)
+                VALUES (?, ?, 'force', 'did')
+            `, [ext, cid]);
+            await conn.commit();
+        } catch (routeError) {
+            await conn.rollback().catch(() => {});
+            throw routeError;
+        } finally {
+            conn.release();
+        }
 
         await reloadPbxConfigPromise();
         res.json({
@@ -20151,30 +21382,45 @@ app.post('/api/config/ivrs', async (req, res) => {
         const invalidRetry = invalid_loops ? String(invalid_loops) : '3';
         const invalidRec = invalid_retry_recording || 'default';
         const invalidDest = invalid_destination || 'app-blackhole,hangup,1';
+        const ivrSelections = (Array.isArray(entries) ? entries : [])
+            .map(entry => String(entry.selection || '').trim())
+            .filter(Boolean);
+        if (new Set(ivrSelections).size !== ivrSelections.length) {
+            return res.status(400).json({ success: false, error: 'IVR menu digits must be unique.' });
+        }
 
-        const [insertRes] = await pool.query(`
-            INSERT INTO \`asterisk\`.\`ivr_details\`
-            (name, description, announcement, directdial, timeout_time, timeout_loops, timeout_retry_recording, timeout_destination, invalid_loops, invalid_retry_recording, invalid_destination, timeout_enabled)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '1')
-        `, [
-            ivrName, ivrDesc, announceId, dirDial,
-            timeoutSec, timeoutRetry, timeoutRec, timeoutDest,
-            invalidRetry, invalidRec, invalidDest
-        ]);
+        let newIvrId;
+        const conn = await pool.getConnection();
+        try {
+            await conn.beginTransaction();
+            const [insertRes] = await conn.query(`
+                INSERT INTO \`asterisk\`.\`ivr_details\`
+                (name, description, announcement, directdial, timeout_time, timeout_loops, timeout_retry_recording, timeout_destination, invalid_loops, invalid_retry_recording, invalid_destination, timeout_enabled)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '1')
+            `, [
+                ivrName, ivrDesc, announceId, dirDial,
+                timeoutSec, timeoutRetry, timeoutRec, timeoutDest,
+                invalidRetry, invalidRec, invalidDest
+            ]);
+            newIvrId = insertRes.insertId;
 
-        const newIvrId = insertRes.insertId;
-
-        // Insert IVR entries (digit options)
-        if (Array.isArray(entries) && entries.length) {
-            for (const entry of entries) {
-                const targetDest = String(entry.dest || entry.destination || '').trim();
-                if (entry.selection && targetDest) {
-                    await pool.query(`
-                        INSERT INTO \`asterisk\`.\`ivr_entries\` (ivr_id, selection, dest, ivr_ret)
-                        VALUES (?, ?, ?, 0)
-                    `, [newIvrId, String(entry.selection).trim(), targetDest]);
+            if (Array.isArray(entries) && entries.length) {
+                for (const entry of entries) {
+                    const targetDest = String(entry.dest || entry.destination || '').trim();
+                    if (entry.selection && targetDest) {
+                        await conn.query(`
+                            INSERT INTO \`asterisk\`.\`ivr_entries\` (ivr_id, selection, dest, ivr_ret)
+                            VALUES (?, ?, ?, 0)
+                        `, [newIvrId, String(entry.selection).trim(), targetDest]);
+                    }
                 }
             }
+            await conn.commit();
+        } catch (ivrError) {
+            await conn.rollback().catch(() => {});
+            throw ivrError;
+        } finally {
+            conn.release();
         }
 
         await reloadPbxConfigPromise();
@@ -20215,6 +21461,12 @@ app.put('/api/config/ivrs/:id', async (req, res) => {
         const invalidRetry = invalid_loops ? String(invalid_loops) : '3';
         const invalidRec = invalid_retry_recording !== undefined ? invalid_retry_recording : (existingIvr.invalid_retry_recording || 'default');
         const invalidDest = invalid_destination || 'app-blackhole,hangup,1';
+        const ivrSelections = (Array.isArray(entries) ? entries : [])
+            .map(entry => String(entry.selection || '').trim())
+            .filter(Boolean);
+        if (new Set(ivrSelections).size !== ivrSelections.length) {
+            return res.status(400).json({ success: false, error: 'IVR menu digits must be unique.' });
+        }
 
         const conn = await pool.getConnection();
         try {
@@ -20413,38 +21665,67 @@ app.post('/api/config/routes/outbound', async (req, res) => {
         const routeCid = String(outcid || '').trim();
         const routeCidMode = routeCid ? String(outcid_mode || '').trim() : '';
 
-        // 1. Insert into outbound_routes
-        const [rResult] = await pool.query(`
-            INSERT INTO \`asterisk\`.\`outbound_routes\` (name, outcid, outcid_mode, password, emergency_route, intracompany_route, mohclass)
-            VALUES (?, ?, ?, '', '', '', 'default')
-        `, [routeName, routeCid, routeCidMode]);
-        const routeId = rResult.insertId;
-
-        // 2. Insert patterns
-        for (const p of routePatterns) {
-            await pool.query(`
-                INSERT INTO \`asterisk\`.\`outbound_route_patterns\` (route_id, match_pattern_prefix, match_pattern_pass, match_cid, prepend_digits)
-                VALUES (?, ?, ?, ?, ?)
-            `, [routeId, String(p.prefix || '').trim(), String(p.pattern || '').trim(), String(p.cid || '').trim(), String(p.prepend || '').trim()]);
+        const trunkIds = trunks.map(id => Number.parseInt(id, 10));
+        if (trunkIds.some(id => !Number.isInteger(id) || id <= 0)) {
+            return res.status(400).json({ success: false, error: 'All trunk IDs must be valid integers.' });
+        }
+        const uniqueTrunkIds = [...new Set(trunkIds)];
+        const cleanedPatterns = routePatterns.map(p => ({
+            prefix: String(p.prefix || '').trim(),
+            pattern: String(p.pattern || '').trim(),
+            cid: String(p.cid || '').trim(),
+            prepend: String(p.prepend || '').trim()
+        }));
+        if (cleanedPatterns.some(p => !p.pattern)) {
+            return res.status(400).json({ success: false, error: 'Every dial pattern needs a match pattern.' });
         }
 
-        // 3. Insert trunks in order (seq)
-        for (let i = 0; i < trunks.length; i++) {
-            await pool.query(`
-                INSERT INTO \`asterisk\`.\`outbound_route_trunks\` (route_id, trunk_id, seq)
-                VALUES (?, ?, ?)
-            `, [routeId, parseInt(trunks[i], 10), i]);
+        let routeId;
+        const conn = await pool.getConnection();
+        try {
+            await conn.beginTransaction();
+            const [existingTrunks] = await conn.query(
+                'SELECT trunkid FROM `asterisk`.`trunks` WHERE trunkid IN (?) FOR UPDATE',
+                [uniqueTrunkIds]
+            );
+            if (existingTrunks.length !== uniqueTrunkIds.length) {
+                throw Object.assign(new Error('One or more selected trunks no longer exist.'), { statusCode: 400 });
+            }
+
+            const [rResult] = await conn.query(`
+                INSERT INTO \`asterisk\`.\`outbound_routes\` (name, outcid, outcid_mode, password, emergency_route, intracompany_route, mohclass)
+                VALUES (?, ?, ?, '', '', '', 'default')
+            `, [routeName, routeCid, routeCidMode]);
+            routeId = rResult.insertId;
+
+            for (const p of cleanedPatterns) {
+                await conn.query(`
+                    INSERT INTO \`asterisk\`.\`outbound_route_patterns\` (route_id, match_pattern_prefix, match_pattern_pass, match_cid, prepend_digits)
+                    VALUES (?, ?, ?, ?, ?)
+                `, [routeId, p.prefix, p.pattern, p.cid, p.prepend]);
+            }
+
+            for (let i = 0; i < trunkIds.length; i++) {
+                await conn.query(`
+                    INSERT INTO \`asterisk\`.\`outbound_route_trunks\` (route_id, trunk_id, seq)
+                    VALUES (?, ?, ?)
+                `, [routeId, trunkIds[i], i]);
+            }
+
+            const [seqRow] = await conn.query('SELECT COALESCE(MAX(seq), -1) + 1 AS nextSeq FROM `asterisk`.`outbound_route_sequence`');
+            const nextSeq = seqRow[0]?.nextSeq || 0;
+            await conn.query('DELETE FROM `asterisk`.`outbound_route_sequence` WHERE route_id = ?', [routeId]);
+            await conn.query(`
+                INSERT INTO \`asterisk\`.\`outbound_route_sequence\` (route_id, seq)
+                VALUES (?, ?)
+            `, [routeId, nextSeq]);
+            await conn.commit();
+        } catch (routeError) {
+            await conn.rollback().catch(() => {});
+            throw routeError;
+        } finally {
+            conn.release();
         }
-
-        // 4. Insert sequence position (next available seq)
-        const [seqRow] = await pool.query('SELECT COALESCE(MAX(seq), -1) + 1 AS nextSeq FROM `asterisk`.`outbound_route_sequence`');
-        const nextSeq = seqRow[0]?.nextSeq || 0;
-
-        await pool.query('DELETE FROM `asterisk`.`outbound_route_sequence` WHERE route_id = ?', [routeId]);
-        await pool.query(`
-            INSERT INTO \`asterisk\`.\`outbound_route_sequence\` (route_id, seq)
-            VALUES (?, ?)
-        `, [routeId, nextSeq]);
 
         const reloadRes = await reloadPbxConfigPromise();
         res.json({
@@ -20455,7 +21736,7 @@ app.post('/api/config/routes/outbound', async (req, res) => {
             ...(reloadRes.error ? { reloadError: reloadRes.error } : {})
         });
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        res.status(error.statusCode || 500).json({ success: false, error: error.message });
     }
 });
 
@@ -20478,6 +21759,20 @@ app.put('/api/config/routes/outbound/:route_id', async (req, res) => {
 
         const routeCid = String(outcid || '').trim();
         const routeCidMode = routeCid ? String(outcid_mode || '').trim() : '';
+        const trunkIds = trunks.map(id => Number.parseInt(id, 10));
+        if (trunkIds.some(id => !Number.isInteger(id) || id <= 0)) {
+            return res.status(400).json({ success: false, error: 'All trunk IDs must be valid integers.' });
+        }
+        const uniqueTrunkIds = [...new Set(trunkIds)];
+        const cleanedPatterns = patterns.map(p => ({
+            prefix: String(p.prefix || '').trim(),
+            pattern: String(p.pattern || '').trim(),
+            cid: String(p.cid || '').trim(),
+            prepend: String(p.prepend || '').trim()
+        }));
+        if (cleanedPatterns.some(p => !p.pattern)) {
+            return res.status(400).json({ success: false, error: 'Every dial pattern needs a match pattern.' });
+        }
 
         // Patterns and trunks are replaced atomically: a failure mid-write used to
         // leave the route with no patterns or no trunks, silently killing outbound
@@ -20485,6 +21780,17 @@ app.put('/api/config/routes/outbound/:route_id', async (req, res) => {
         const conn = await pool.getConnection();
         try {
             await conn.beginTransaction();
+            const [routeRows] = await conn.query('SELECT route_id FROM `asterisk`.`outbound_routes` WHERE route_id = ? FOR UPDATE', [routeId]);
+            if (routeRows.length === 0) {
+                throw Object.assign(new Error('Outbound route not found.'), { statusCode: 404 });
+            }
+            const [existingTrunks] = await conn.query(
+                'SELECT trunkid FROM `asterisk`.`trunks` WHERE trunkid IN (?) FOR UPDATE',
+                [uniqueTrunkIds]
+            );
+            if (existingTrunks.length !== uniqueTrunkIds.length) {
+                throw Object.assign(new Error('One or more selected trunks no longer exist.'), { statusCode: 400 });
+            }
             await conn.query(`
                 UPDATE \`asterisk\`.\`outbound_routes\`
                 SET name = ?, outcid = ?, outcid_mode = ?
@@ -20492,21 +21798,19 @@ app.put('/api/config/routes/outbound/:route_id', async (req, res) => {
             `, [routeName, routeCid, routeCidMode, routeId]);
 
             await conn.query('DELETE FROM `asterisk`.`outbound_route_patterns` WHERE route_id = ?', [routeId]);
-            for (const p of patterns) {
+            for (const p of cleanedPatterns) {
                 await conn.query(`
                     INSERT INTO \`asterisk\`.\`outbound_route_patterns\` (route_id, match_pattern_prefix, match_pattern_pass, match_cid, prepend_digits)
                     VALUES (?, ?, ?, ?, ?)
-                `, [routeId, String(p.prefix || '').trim(), String(p.pattern || '').trim(), String(p.cid || '').trim(), String(p.prepend || '').trim()]);
+                `, [routeId, p.prefix, p.pattern, p.cid, p.prepend]);
             }
 
             await conn.query('DELETE FROM `asterisk`.`outbound_route_trunks` WHERE route_id = ?', [routeId]);
-            for (let i = 0; i < trunks.length; i++) {
-                const trunkId = parseInt(trunks[i], 10);
-                if (!Number.isFinite(trunkId)) continue;
+            for (let i = 0; i < trunkIds.length; i++) {
                 await conn.query(`
                     INSERT INTO \`asterisk\`.\`outbound_route_trunks\` (route_id, trunk_id, seq)
                     VALUES (?, ?, ?)
-                `, [routeId, trunkId, i]);
+                `, [routeId, trunkIds[i], i]);
             }
             await conn.commit();
         } catch (routeError) {
@@ -20525,7 +21829,7 @@ app.put('/api/config/routes/outbound/:route_id', async (req, res) => {
             ...(reloadRes.error ? { reloadError: reloadRes.error } : {})
         });
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        res.status(error.statusCode || 500).json({ success: false, error: error.message });
     }
 });
 
@@ -21262,6 +22566,10 @@ app.post('/api/config/timeconditions', async (req, res) => {
         if (!timegroup_id) {
             return res.status(400).json({ success: false, error: 'Time Group is required' });
         }
+        const [tcGroup] = await pool.query('SELECT id FROM `asterisk`.`timegroups_groups` WHERE id = ?', [parseInt(timegroup_id, 10) || 0]);
+        if (!tcGroup.length) {
+            return res.status(400).json({ success: false, error: 'Selected Time Group does not exist.' });
+        }
         if (!truegoto || !falsegoto) {
             return res.status(400).json({ success: false, error: 'True and False destinations are required' });
         }
@@ -21294,6 +22602,10 @@ app.put('/api/config/timeconditions/:id', async (req, res) => {
         }
         if (!timegroup_id) {
             return res.status(400).json({ success: false, error: 'Time Group is required' });
+        }
+        const [tcGroup] = await pool.query('SELECT id FROM `asterisk`.`timegroups_groups` WHERE id = ?', [parseInt(timegroup_id, 10) || 0]);
+        if (!tcGroup.length) {
+            return res.status(400).json({ success: false, error: 'Selected Time Group does not exist.' });
         }
         if (!truegoto || !falsegoto) {
             return res.status(400).json({ success: false, error: 'True and False destinations are required' });
@@ -21432,6 +22744,8 @@ app.get('/api/config/modem/reports', async (req, res) => {
         const endStr = req.query.endDate ? moment(req.query.endDate).format('YYYY-MM-DD HH:mm:ss') : moment().endOf('day').format('YYYY-MM-DD HH:mm:ss');
         const filterDongle = (req.query.dongleId && req.query.dongleId !== 'ALL') ? String(req.query.dongleId).trim().toLowerCase() : null;
         const filterSim = (req.query.simNumber && req.query.simNumber !== 'ALL') ? String(req.query.simNumber).trim() : null;
+        // Orphaned analytics rows from removed slots are not reported at all.
+        const configuredDongles = configuredDongleNames();
 
         const winStartMs = moment(startStr).valueOf();
         const winEndMs = moment(endStr).valueOf();
@@ -21510,6 +22824,7 @@ app.get('/api/config/modem/reports', async (req, res) => {
 
         logs.forEach(log => {
             const dName = (log.dongle_name || 'unknown').toLowerCase();
+            if (configuredDongles && !configuredDongles.has(dName)) return;
             const simNum = log.sim_number || log.imsi || 'Unknown SIM';
             const stateRaw = String(log.state || 'Unknown').trim();
 
@@ -22236,42 +23551,6 @@ app.post('/api/config/modem/gain', async (req, res) => {
     }
 });
 
-// POST /api/config/modem/autoconfig/rollback - Restore the original pre-autoconfig dongle.conf (ROOT USER ONLY)
-app.post('/api/config/modem/autoconfig/rollback', requireAuth, async (req, res) => {
-    try {
-        if (!hasRootAccess(req)) {
-            return res.status(403).json({ success: false, error: 'Access denied. Only the root superuser can roll back dongle autoconfiguration.' });
-        }
-        const script = process.env.SOKRAT_DONGLE_AUTOCONFIG
-            || path.join(__dirname, 'scripts', 'dongle-autoconfig.py');
-        if (!fs.existsSync(script)) {
-            return res.status(500).json({ success: false, error: `Dongle autoconfig tool not found at ${script}` });
-        }
-        let stdout;
-        try {
-            stdout = await execFileAsync('/usr/bin/python3', [script, 'rollback', '--yes', '--json'], { timeout: 60000 });
-        } catch (err) {
-            const detail = String((err && (err.stderr || err.stdout || err.message)) || 'rollback failed').trim();
-            return res.status(409).json({ success: false, error: detail });
-        }
-        let payload = {};
-        try {
-            payload = JSON.parse(String(stdout || '').trim() || '{}');
-        } catch (_) {
-            payload = { raw: String(stdout || '').trim() };
-        }
-        res.json({
-            success: true,
-            ...payload,
-            message: payload.backup
-                ? `Restored ${payload.backup}; automatic dongle reconciliation is disabled.`
-                : 'Dongle autoconfiguration rolled back; automatic reconciliation is disabled.'
-        });
-    } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
-
 // POST /api/config/modem/reset - Reset all dongle gains to 0 in dongle.conf
 app.post('/api/config/modem/reset', async (req, res) => {
     try {
@@ -22287,153 +23566,6 @@ app.post('/api/config/modem/reset', async (req, res) => {
         res.json({ success: true, message: 'All dongle gains reset to txgain=0 and rxgain=0 in dongle.conf and reloaded.' });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
-    }
-});
-// POST /api/config/modem/dongle-slot - Add dongle slot(s) to dongle.conf (ROOT USER ONLY)
-app.post('/api/config/modem/dongle-slot', requireAuth, async (req, res) => {
-    try {
-        if (!hasRootAccess(req)) {
-            return res.status(403).json({ success: false, error: 'Access denied. Only the root superuser can modify dongle slots in dongle.conf.' });
-        }
-
-        const count = Math.max(1, Math.min(32, parseInt(req.body.count, 10) || 1));
-        const { dongleName, audio, data: dataPort, imei, imsi, rxgain, txgain, prefix } = req.body;
-        const { dongles } = parseDongleConfGain();
-
-        const basePrefix = String(prefix || 'dongle').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_') || 'dongle';
-        const addedSlots = [];
-
-        let baseAudioIndex = 1;
-        if (audio && audio.includes('ttyUSB')) {
-            const m = audio.match(/ttyUSB(\d+)/i);
-            if (m) baseAudioIndex = parseInt(m[1], 10);
-        } else {
-            let maxPort = -1;
-            for (const config of Object.values(dongles)) {
-                for (const field of ['audio', 'data']) {
-                    const port = String(config[field] || '');
-                    const match = port.match(/ttyUSB(\d+)/i);
-                    if (match) maxPort = Math.max(maxPort, parseInt(match[1], 10));
-                }
-            }
-            // Huawei voice dongles expose three ttyUSB interfaces; audio/data are the final two.
-            baseAudioIndex = maxPort >= 0 ? maxPort + 2 : 1;
-        }
-
-        let existingSlotNames = new Set(Object.keys(parseDongleConfGain().dongles));
-        let nextIndex = 0;
-
-        for (let i = 0; i < count; i++) {
-            let targetName = '';
-            if (count === 1 && dongleName && String(dongleName).trim()) {
-                targetName = String(dongleName).trim().toLowerCase();
-            } else {
-                while (existingSlotNames.has(`${basePrefix}${nextIndex}`)) {
-                    nextIndex++;
-                }
-                targetName = `${basePrefix}${nextIndex}`;
-            }
-
-            const audioPath = `/dev/ttyUSB${baseAudioIndex + (i * 3)}`;
-            const dataPath = `/dev/ttyUSB${baseAudioIndex + (i * 3) + 1}`;
-
-            addDongleSlotToConf({
-                dongleName: targetName,
-                audio: (count === 1 && audio) ? audio : audioPath,
-                data: (count === 1 && dataPort) ? dataPort : dataPath,
-                imei: (count === 1 && imei) ? imei : '',
-                imsi: (count === 1 && imsi) ? imsi : '',
-                rxgain: Number.isFinite(parseInt(rxgain, 10)) ? parseInt(rxgain, 10) : 3,
-                txgain: Number.isFinite(parseInt(txgain, 10)) ? parseInt(txgain, 10) : 3
-            });
-
-            await pool.query(`
-                INSERT INTO \`asterisk\`.\`gsm_dongles\` (dongle_name, imsi, imei, dynamic_enabled)
-                VALUES (?, ?, ?, 0)
-                ON DUPLICATE KEY UPDATE
-                    imsi = COALESCE(NULLIF(VALUES(imsi), ''), imsi),
-                    imei = COALESCE(NULLIF(VALUES(imei), ''), imei)
-            `, [targetName, imsi || null, imei || null]);
-
-            addedSlots.push(targetName);
-            existingSlotNames.add(targetName);
-        }
-
-        const { execFile: execFileCb } = require('child_process');
-        const execFileAsync = (cmd, args) => new Promise((resolve) => {
-            execFileCb(cmd, args, (err, stdout) => resolve(err ? '' : stdout || ''));
-        });
-
-        try {
-            await execFileAsync(ASTERISK_BIN, ['-rx', 'module reload chan_dongle.so']);
-            for (const sName of addedSlots) {
-                await syncDongleDynamicSetting(sName, false);
-                await deleteAstDbKey('dongle_map', sName);
-                // dongle restart disabled
-            }
-        } catch (_) {}
-
-        const msg = addedSlots.length === 1
-            ? `Dongle slot '${addedSlots[0]}' added to dongle.conf and initialized successfully.`
-            : `Added ${addedSlots.length} dongle slots (${addedSlots.join(', ')}) to dongle.conf and initialized successfully.`;
-
-        res.json({ success: true, addedSlots, message: msg });
-    } catch (err) {
-        res.status(500).json({ success: false, error: err.message });
-    }
-});
-
-// DELETE /api/config/modem/dongle-slot - Remove dongle slot(s) from dongle.conf (ROOT USER ONLY)
-app.delete('/api/config/modem/dongle-slot/:dongleName?', requireAuth, async (req, res) => {
-    try {
-        if (!hasRootAccess(req)) {
-            return res.status(403).json({ success: false, error: 'Access denied. Only the root superuser can modify dongle slots in dongle.conf.' });
-        }
-
-        let slotsToRemove = [];
-        if (req.params.dongleName) {
-            slotsToRemove.push(req.params.dongleName.trim().toLowerCase());
-        } else if (Array.isArray(req.body.dongleNames) && req.body.dongleNames.length > 0) {
-            slotsToRemove = req.body.dongleNames.map(s => String(s).trim().toLowerCase());
-        } else if (req.body.count) {
-            const count = Math.max(1, parseInt(req.body.count, 10) || 1);
-            const { dongles } = parseDongleConfGain();
-            const keys = Object.keys(dongles).filter(k => k.startsWith('dongle')).reverse();
-            slotsToRemove = keys.slice(0, count);
-        }
-
-        if (slotsToRemove.length === 0) {
-            return res.status(400).json({ success: false, error: 'No dongle slots specified to remove.' });
-        }
-
-        const { execFile: execFileCb } = require('child_process');
-        const execFileAsync = (cmd, args) => new Promise((resolve) => {
-            execFileCb(cmd, args, (err, stdout) => resolve(err ? '' : stdout || ''));
-        });
-
-        const removed = [];
-        for (const dName of slotsToRemove) {
-            if (!/^[a-zA-Z0-9_-]+$/.test(dName)) continue;
-            try {
-                removeDongleSlotFromConf(dName);
-                await pool.query('DELETE FROM `asterisk`.`gsm_dongles` WHERE dongle_name = ?', [dName]);
-                await execFileAsync(ASTERISK_BIN, ['-rx', `database del dongle_map ${dName}`]);
-                await execFileAsync(ASTERISK_BIN, ['-rx', `database del DONGLE_SETTINGS ${dName}`]);
-                removed.push(dName);
-            } catch (_) {}
-        }
-
-        try {
-            await execFileAsync(ASTERISK_BIN, ['-rx', 'module reload chan_dongle.so']);
-        } catch (_) {}
-
-        const msg = removed.length === 1
-            ? `Dongle slot '${removed[0]}' removed from dongle.conf and Asterisk successfully.`
-            : `Removed ${removed.length} dongle slots (${removed.join(', ')}) from dongle.conf and Asterisk successfully.`;
-
-        res.json({ success: true, removedSlots: removed, message: msg });
-    } catch (err) {
-        res.status(500).json({ success: false, error: err.message });
     }
 });
 // --- MUSIC ON HOLD (MOH) MODULE ---
@@ -22553,6 +23685,43 @@ function formatSecondsToTime(s) {
     const sec = Math.floor(s % 60);
     return m + ':' + String(sec).padStart(2, '0');
 }
+
+
+// --- DONGLE GROUPS JSON CONFIG ---
+app.get('/api/config/dongle-groups', requireConfigPermission('dongles'), async (req, res) => {
+    try {
+        res.set('Cache-Control', 'no-store');
+        const fileExists = fs.existsSync(dongleGroupsConfig.DEFAULT_FILE);
+        let employeeGroups = [];
+        if (!fileExists) {
+            const [rows] = await pool.query(`SELECT name FROM ${tables.employeeGroups} ORDER BY name ASC`);
+            employeeGroups = (rows || []).map(row => row.name).filter(Boolean);
+        }
+        const config = fileExists
+            ? dongleGroupsConfig.readConfig()
+            : dongleGroupsConfig.readConfig(dongleGroupsConfig.DEFAULT_FILE, { includeEmployeeGroups: true, employeeGroups });
+        res.json({ success: true, config, initializedFromEmployeeGroups: !fileExists });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.put('/api/config/dongle-groups', requireConfigPermission('dongles'), (req, res) => {
+    try {
+        const raw = req.body && req.body.config ? req.body.config : req.body;
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+            return res.status(400).json({ success: false, error: 'A dongle groups JSON object is required.' });
+        }
+        if (Array.isArray(raw.groups) && raw.groups.length > 200) {
+            return res.status(400).json({ success: false, error: 'Too many dongle groups.' });
+        }
+        const config = dongleGroupsConfig.writeConfig(raw);
+        res.set('Cache-Control', 'no-store');
+        res.json({ success: true, config });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
 
 
 // GET /api/config/moh - List all MoH Categories and Audio Files
@@ -22694,7 +23863,11 @@ app.post('/api/config/moh/upload', requireAuth, (req, res) => {
         const catParam = req.query.category || req.body.category || 'default';
         const catName = String(catParam).trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_');
         const categories = parseMohConf();
-        const cat = categories.find(c => c.name === catName) || categories[0];
+        const cat = categories.find(c => c.name === catName);
+        if (!cat) {
+            try { fs.unlinkSync(rawPath); } catch (_) {}
+            return res.status(404).json({ success: false, error: 'MoH category not found.' });
+        }
         let catDir = cat.directory ? path.resolve(cat.directory) : (catName === 'default' ? MOH_ROOT : path.join(MOH_ROOT, catName));
 
         if (!fs.existsSync(catDir)) fs.mkdirSync(catDir, { recursive: true });
@@ -22748,7 +23921,10 @@ app.delete('/api/config/moh/file', requireAuth, async (req, res) => {
         const catName = category.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_');
         const cleanFile = path.basename(filename);
         const categories = parseMohConf();
-        const cat = categories.find(c => c.name === catName) || categories[0];
+        const cat = categories.find(c => c.name === catName);
+        if (!cat) {
+            return res.status(404).json({ success: false, error: 'MoH category not found.' });
+        }
         let catDir = cat.directory ? path.resolve(cat.directory) : (catName === 'default' ? MOH_ROOT : path.join(MOH_ROOT, catName));
 
         const targetFile = path.join(catDir, cleanFile);
@@ -22845,7 +24021,10 @@ app.get('/api/config/moh/stream/:category/:file', requireAuth, (req, res) => {
         const catName = req.params.category.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_');
         const fileName = path.basename(req.params.file);
         const categories = parseMohConf();
-        const cat = categories.find(c => c.name === catName) || categories[0];
+        const cat = categories.find(c => c.name === catName);
+        if (!cat) {
+            return res.status(404).send('MoH category not found.');
+        }
         let catDir = cat.directory ? path.resolve(cat.directory) : (catName === 'default' ? MOH_ROOT : path.join(MOH_ROOT, catName));
 
         const filePath = path.join(catDir, fileName);
@@ -23976,7 +25155,7 @@ async function buildFederationDongles() {
     } catch (_) {
         devices = [];
     }
-    return (devices || []).map(d => {
+    return (devices || []).filter(d => !d.slotOnly).map(d => {
         const name = String(d.ID || d.dongle_name || '').trim();
         if (!name) return null;
         const number = String(d.Number || '').trim();
