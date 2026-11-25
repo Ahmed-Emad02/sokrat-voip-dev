@@ -22,7 +22,48 @@ function isTabAllowed(tabName) {
             } else {
                 document.documentElement.classList.remove('light-theme');
             }
+            if (new URLSearchParams(location.search).get('embed') === '1') {
+                document.documentElement.classList.add('config-embed');
+            }
         })();
+    </script>
+    <style id="config-embed-style">
+        html.config-embed,
+        html.config-embed body {
+            background: transparent !important;
+            overflow: hidden !important;
+        }
+        html.config-embed body > #appSidebar,
+        html.config-embed body > #configSubSidebar,
+        html.config-embed body > #configMainShell {
+            display: none !important;
+        }
+        html.config-embed body > .fixed.inset-0 {
+            background: transparent !important;
+            backdrop-filter: none !important;
+            padding: 0 !important;
+        }
+        html.config-embed body > .fixed.inset-0.hidden {
+            display: none !important;
+        }
+        html.config-embed * {
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+        }
+        html.config-embed *::-webkit-scrollbar { width: 8px; height: 8px; }
+        html.config-embed *::-webkit-scrollbar-track { background: transparent; }
+        html.config-embed *::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.22);
+            border-radius: 9999px;
+        }
+        html.light-theme.config-embed * {
+            scrollbar-color: rgba(15, 23, 42, 0.25) transparent;
+        }
+        html.light-theme.config-embed *::-webkit-scrollbar-thumb {
+            background: rgba(15, 23, 42, 0.25);
+        }
+    </style>
+    <script>
         function openModal(id) {
             try {
                 if (typeof closeAllModals === 'function') closeAllModals();
@@ -62,14 +103,14 @@ function isTabAllowed(tabName) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sokrat VOIP - <%= isRtl ? 'إعدادات المقسم' : 'PBX Configuration' %></title>
     <link rel="icon" type="image/png" href="/favicon.png">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/fonts.css?v=<%= typeof assetVersion !== 'undefined' ? assetVersion : '1' %>">
     <script src="/js/tailwindcss-browser.js"></script>
+    <% if (!(typeof embed !== 'undefined' && embed)) { %>
     <script src="/socket.io/socket.io.js"></script>
     <link rel="stylesheet" href="/css/xterm.css" />
     <script src="/js/xterm.js"></script>
     <script src="/js/xterm-addon-fit.js"></script>
+    <% } %>
     <style>
         :root {
             --bg-primary: #000000;
@@ -258,6 +299,12 @@ function isTabAllowed(tabName) {
         }
         .config-btn-secondary:hover {
             color: #ffffff !important;
+        }
+        .ext-action-btn,
+        .config-btn-primary.ext-action-btn,
+        .config-btn-secondary.ext-action-btn {
+            height: 36px !important;
+            font-weight: 700 !important;
         }
         /* Unified action hierarchy for configuration feature cards. */
         .config-action-btn {
@@ -1082,7 +1129,7 @@ function isTabAllowed(tabName) {
     <div id="toast-container" class="fixed bottom-5 z-[999999] flex flex-col gap-2 pointer-events-none <%= isRtl ? 'left-5' : 'right-5' %>"></div>
 
     <!-- Main Content Panel -->
-    <div class="flex-1 min-w-0 p-3.5 sm:p-6 md:p-8 w-full">
+    <div id="configMainShell" class="flex-1 min-w-0 p-3.5 sm:p-6 md:p-8 w-full">
         <%- include('partials/node-scope-selector') %>
         <!-- PBX Top Bar Horizontal Navigation (Option 2: Scrollable Pill Bar with Wheel Scrolling) -->
         <div id="configTopPillBar" class="w-full mb-6 shrink-0 <%= isRtl ? 'rtl' : 'ltr' %>">
@@ -1277,16 +1324,16 @@ function isTabAllowed(tabName) {
                         </div>
                         <div class="flex items-center gap-2 flex-wrap">
                             <% if (typeof isSuperAdmin !== 'undefined' && isSuperAdmin) { %>
-                            <button type="button" onclick="openPolicyManagerModal()" class="config-btn-secondary px-3.5 py-2 flex items-center gap-2 text-xs font-bold cursor-pointer border border-emerald-500/30 text-emerald-400 hover:text-emerald-300 hover:border-emerald-500/50">
+                            <button type="button" onclick="openPolicyManagerModal()" class="ext-action-btn config-btn-primary px-4 py-2 flex items-center gap-2 text-xs font-bold cursor-pointer whitespace-nowrap">
                                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
                                 <span><%= isRtl ? 'سياسات وقفل WebRTC' : 'WebRTC Policies' %></span>
                             </button>
                             <% } %>
-                            <button type="button" onclick="openBulkExtensionModal()" class="config-btn-secondary px-4 py-2 flex items-center gap-2 text-xs cursor-pointer">
+                            <button type="button" onclick="openBulkExtensionModal()" class="ext-action-btn config-btn-primary px-4 py-2 flex items-center gap-2 text-xs font-bold cursor-pointer whitespace-nowrap">
                                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M4 12h16M4 17h10" /></svg>
                                 <span><%= isRtl ? 'إضافة تحويلات متعددة' : 'Add Multiple Extensions' %></span>
                             </button>
-                            <button type="button" onclick="openExtensionModal()" class="config-btn-primary px-4 py-2 flex items-center gap-2 text-xs cursor-pointer">
+                            <button type="button" onclick="openExtensionModal()" class="ext-action-btn config-btn-primary px-4 py-2 flex items-center gap-2 text-xs font-bold cursor-pointer whitespace-nowrap">
                                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
                                 <span><%= isRtl ? 'إضافة تحويلة جديدة' : 'Add New Extension' %></span>
                             </button>
@@ -5741,11 +5788,46 @@ function isTabAllowed(tabName) {
                     <div class="w-8 h-8 rounded-full border-2 border-cyan-500/20 border-t-cyan-500 animate-spin"></div>
                     <span class="text-xs font-mono text-[var(--text-muted)]"><%= isRtl ? 'جاري الاتصال بالجهاز عبر البروكسي المحلي...' : 'Connecting to local device via secure proxy...' %></span>
                 </div>
-                <iframe id="deviceWebConsoleIframe" class="w-full flex-1 border-0" onload="onDeviceWebConsoleIframeLoaded()"></iframe>
+                <iframe id="deviceWebConsoleIframe" class="w-full flex-1 border-0" onload="if (typeof onDeviceWebConsoleIframeLoaded === 'function') onDeviceWebConsoleIframeLoaded()"></iframe>
             </div>
         </div>
     </div>
     <!-- CLIENT SCRIPT -->
+    <script>
+        (function() {
+            if (!document.documentElement.classList.contains('config-embed')) return;
+            let sawOpen = false;
+            const notify = action => {
+                try { window.parent.postMessage({ source: 'sokrat-config-embed', action }, location.origin); } catch (_) {}
+            };
+            const anyOpen = () => Array.from(document.querySelectorAll('.fixed.inset-0'))
+                .some(el => !el.classList.contains('hidden') && getComputedStyle(el).display !== 'none');
+            const check = () => {
+                if (anyOpen()) {
+                    sawOpen = true;
+                } else if (sawOpen) {
+                    sawOpen = false;
+                    notify('close');
+                }
+            };
+            window.addEventListener('load', () => {
+                const modals = document.querySelectorAll('.fixed.inset-0');
+                if (modals.length) {
+                    const observer = new MutationObserver(check);
+                    modals.forEach(el => observer.observe(el, { attributes: true, attributeFilter: ['class', 'style'] }));
+                }
+                const originalClose = window.closeModal;
+                if (typeof originalClose === 'function') {
+                    window.closeModal = function() {
+                        const result = originalClose.apply(this, arguments);
+                        setTimeout(() => notify('close'), 80);
+                        return result;
+                    };
+                }
+                check();
+            });
+        })();
+    </script>
     <script src="/js/config-page.js?v=<%= typeof assetVersion !== 'undefined' ? assetVersion : 'dev' %>&lang=<%= isRtl ? 'ar' : 'en' %>"></script>
 </body>
 </html>

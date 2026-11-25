@@ -9,9 +9,7 @@ var pageRtl = (typeof isRtl !== 'undefined') ? isRtl : (activeLang === 'ar');
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sokrat VOIP - PBX Canvas</title>
     <link rel="icon" type="image/png" href="/favicon.png">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/fonts.css?v=<%= typeof assetVersion !== 'undefined' ? assetVersion : '1' %>">
     <script src="/js/tailwindcss-browser.js"></script>
     <script>
         (function () {
@@ -20,31 +18,21 @@ var pageRtl = (typeof isRtl !== 'undefined') ? isRtl : (activeLang === 'ar');
             if (theme === 'light') document.documentElement.classList.add('light-theme');
         })();
     </script>
-    <link rel="stylesheet" href="/css/pbx-canvas.css?v=48">
+    <link rel="stylesheet" href="/css/pbx-canvas.css?v=84">
 </head>
 <body class="canvas-body">
 <%- include('sidebar') %>
 <div class="canvas-shell" id="pbx-canvas" data-rtl="<%= pageRtl ? 'true' : 'false' %>">
     <header class="canvas-topbar">
-        <div class="canvas-brand">
-            <div class="canvas-brand-mark">
-                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1">
-                    <rect x="3" y="3" width="7" height="6" rx="1.5"/>
-                    <rect x="14" y="15" width="7" height="6" rx="1.5"/>
-                    <path d="M10 6h4a3 3 0 0 1 3 3v6"/>
-                </svg>
-            </div>
-            <div>
-                <h1><%= pageRtl ? 'لوحة إعداد المقسم' : 'PBX Canvas' %></h1>
-                <p><%= pageRtl ? 'تكوين مرئي متصل' : 'Visual PBX configuration' %></p>
-            </div>
-        </div>
-
         <button type="button" class="canvas-btn ghost canvas-mobile-menu-btn" id="canvas-mobile-menu-btn" aria-label="<%= pageRtl ? 'إجراءات إضافية' : 'More actions' %>" aria-expanded="false" aria-controls="canvas-top-actions" title="<%= pageRtl ? 'إجراءات إضافية' : 'More actions' %>">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>
         </button>
 
         <div class="canvas-top-actions" id="canvas-top-actions">
+            <button type="button" class="canvas-btn primary" id="canvas-add-btn" aria-haspopup="true" aria-expanded="false" aria-controls="canvas-add-menu" title="<%= pageRtl ? 'إضافة عنصر' : 'Add element' %>">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></svg>
+                <span><%= pageRtl ? 'إضافة' : 'Add' %></span>
+            </button>
             <input type="search" id="canvas-search" class="canvas-search" placeholder="<%= pageRtl ? 'ابحث عن بطاقة…' : 'Search cards…' %>" autocomplete="off">
             <button type="button" class="canvas-btn" id="canvas-refresh-btn" aria-label="<%= pageRtl ? 'تحديث من المقسم' : 'Refresh from PBX' %>" title="<%= pageRtl ? 'تحديث من المقسم' : 'Refresh from PBX' %>">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 11a8 8 0 1 0-2.34 5.66"/><path d="M20 4v7h-7"/></svg>
@@ -73,14 +61,13 @@ var pageRtl = (typeof isRtl !== 'undefined') ? isRtl : (activeLang === 'ar');
             </button>
             <a class="canvas-btn ghost" href="/config" aria-label="<%= pageRtl ? 'الإعداد الكلاسيكي' : 'Classic config' %>"><%= pageRtl ? 'الإعداد الكلاسيكي' : 'Classic config' %></a>
         </div>
+        <div class="canvas-add-menu" id="canvas-add-menu" role="menu" aria-label="<%= pageRtl ? 'إضافة بطاقة' : 'Add card' %>" hidden>
+            <div class="canvas-side-head"><%= pageRtl ? 'إضافة بطاقة' : 'Add card' %></div>
+            <div class="canvas-palette-grid" id="canvas-palette-grid"></div>
+        </div>
     </header>
 
     <div class="canvas-main">
-        <aside class="canvas-palette">
-            <div class="canvas-side-head"><%= pageRtl ? 'إضافة بطاقة' : 'Add card' %></div>
-            <div class="canvas-palette-grid" id="canvas-palette-grid"></div>
-        </aside>
-
         <main class="canvas-viewport" id="canvas-viewport">
             <div class="canvas-world" id="canvas-world">
                 <div class="canvas-nodes" id="canvas-nodes"></div>
@@ -147,9 +134,12 @@ var pageRtl = (typeof isRtl !== 'undefined') ? isRtl : (activeLang === 'ar');
 <div class="canvas-editor-overlay" id="canvas-editor-overlay" aria-hidden="true">
     <div class="canvas-editor-panel" role="dialog" aria-modal="true" aria-labelledby="canvas-editor-title">
         <div class="canvas-editor-head">
-            <div>
-                <h2 id="canvas-editor-title"><%= pageRtl ? 'محرر الإعداد' : 'Configuration editor' %></h2>
-                <p><%= pageRtl ? 'كل خيارات الإعداد الكلاسيكي داخل اللوحة' : 'Full classic options, inside the canvas' %></p>
+            <div class="canvas-editor-heading">
+                <div class="canvas-editor-icon" id="canvas-editor-icon" aria-hidden="true"></div>
+                <div>
+                    <h2 id="canvas-editor-title"><%= pageRtl ? 'محرر الإعداد' : 'Configuration editor' %></h2>
+                    <p><%= pageRtl ? 'كل خيارات الإعداد الكلاسيكي داخل اللوحة' : 'Full classic options, inside the canvas' %></p>
+                </div>
             </div>
             <div class="canvas-editor-actions">
                 <button type="button" class="canvas-btn danger" id="canvas-editor-delete" hidden><%= pageRtl ? 'حذف البطاقة' : 'Delete card' %></button>
@@ -170,6 +160,9 @@ var pageRtl = (typeof isRtl !== 'undefined') ? isRtl : (activeLang === 'ar');
             <div class="canvas-editor-loading" id="canvas-editor-loading"><%= pageRtl ? 'جاري تحميل النموذج…' : 'Loading form…' %></div>
         </div>
     </div>
+    <iframe class="canvas-classic-frame" id="canvas-classic-frame" title="<%= pageRtl ? 'نموذج الإعداد الكلاسيكي' : 'Classic configuration form' %>" hidden></iframe>
+    <div class="canvas-classic-loading" id="canvas-classic-loading"><%= pageRtl ? 'جاري فتح نموذج الإعداد…' : 'Opening configuration form…' %></div>
+    <button type="button" class="canvas-classic-escape canvas-btn ghost" id="canvas-classic-escape" aria-label="<%= pageRtl ? 'إغلاق' : 'Close' %>">✕</button>
 </div>
 
 <div class="canvas-modal" id="canvas-review-modal" aria-hidden="true">
@@ -188,8 +181,8 @@ var pageRtl = (typeof isRtl !== 'undefined') ? isRtl : (activeLang === 'ar');
 </div>
 
 <div class="canvas-toast" id="canvas-toast"></div>
-<script src="/js/pbx-canvas-model.js?v=43"></script>
+<script src="/js/pbx-canvas-model.js?v=52"></script>
 <script src="/js/pbx-canvas-forms.js?v=43"></script>
-<script src="/js/pbx-canvas.js?v=45"></script>
+<script src="/js/pbx-canvas.js?v=56"></script>
 </body>
 </html>

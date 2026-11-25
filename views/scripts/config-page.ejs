@@ -1963,12 +1963,12 @@
             document.getElementById('extJbTarget').value = '40';
             updateJitterBufferUi();
             resetEmployeeProfileFields();
-            openModal('extensionModal');
             try {
                 await loadEmployeeGroups();
             } catch (error) {
                 showToast(error.message, 'error');
             }
+            openModal('extensionModal');
         }
 
         async function editExtension(extNum, name, secret, voicemail, tech, denoise, vadGate, vadDb, agc, jbMode, jbMax, jbResync, jbTarget, autoAnswer, dnd, disableCancel) {
@@ -2002,7 +2002,6 @@
             document.getElementById('extVadDb').dispatchEvent(new Event('change', { bubbles: true }));
             document.getElementById('extAgc').dispatchEvent(new Event('change', { bubbles: true }));
             resetEmployeeProfileFields();
-            openModal('extensionModal');
 
             try {
                 const [groupsResponse, extrasResponse] = await Promise.all([
@@ -2029,6 +2028,7 @@
                 setEmployeeGroupOptions([], '');
                 showToast(error.message, 'error');
             }
+            openModal('extensionModal');
         }
 
         async function saveExtension(event) {
@@ -5597,6 +5597,21 @@
 
         let draggedOutboundRouteIndex = null;
 
+        function preloadOutboundTrunks() {
+            return fetch('/api/config/trunks')
+                .then(res => {
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    return res.json();
+                })
+                .then(data => {
+                    if (data && data.success && Array.isArray(data.trunks)) {
+                        loadedTrunksList = data.trunks;
+                        renderOutboundTrunkSelect();
+                    }
+                })
+                .catch(() => {});
+        }
+
         function fetchOutboundRoutes() {
             return fetch('/api/config/routes/outbound')
                 .then(res => {
@@ -5824,6 +5839,20 @@
             }
         }
 
+        function renderOutboundTrunkSelect() {
+            const sel = document.getElementById('sequenceTrunkSelect');
+            if (!sel) return;
+            const previous = sel.value;
+            sel.innerHTML = '<option value="">-- Choose Trunk --</option>';
+            (loadedTrunksList || []).forEach(t => {
+                const opt = document.createElement('option');
+                opt.value = t.trunkid;
+                opt.textContent = `${t.name} (${t.tech})`;
+                sel.appendChild(opt);
+            });
+            if (previous) sel.value = previous;
+        }
+
         function openOutboundModal() {
             openModal('outboundModal');
             document.getElementById('outboundModalTitle').textContent = isRtl ? 'إضافة مسار صادر' : 'Add Outbound Route';
@@ -5840,16 +5869,7 @@
             const btn = document.getElementById('addPatternBtn');
             if (btn) btn.textContent = isRtl ? '+ إضافة نمط' : '+ Add Pattern';
 
-            const sel = document.getElementById('sequenceTrunkSelect');
-            if (sel) {
-                sel.innerHTML = '<option value="">-- Choose Trunk --</option>';
-                (loadedTrunksList || []).forEach(t => {
-                    const opt = document.createElement('option');
-                    opt.value = t.trunkid;
-                    opt.textContent = `${t.name} (${t.tech})`;
-                    sel.appendChild(opt);
-                });
-            }
+            renderOutboundTrunkSelect();
 
             renderModalPatterns();
             renderModalTrunksSequence();
@@ -5883,16 +5903,7 @@
                     modalTrunksSequence = trs.map(t => String(t.trunk_id));
                 } catch(e) { modalTrunksSequence = []; }
             }
-            const sel = document.getElementById('sequenceTrunkSelect');
-            if (sel) {
-                sel.innerHTML = '<option value="">-- Choose Trunk --</option>';
-                (loadedTrunksList || []).forEach(t => {
-                    const opt = document.createElement('option');
-                    opt.value = t.trunkid;
-                    opt.textContent = `${t.name} (${t.tech})`;
-                    sel.appendChild(opt);
-                });
-            }
+            renderOutboundTrunkSelect();
 
             renderModalPatterns();
             renderModalTrunksSequence();
@@ -6133,6 +6144,7 @@
 
         // Initialize on load
         function initConfigPage() {
+            const embedMode = document.documentElement.classList.contains('config-embed');
             initTopPillBarWheelScroll();
             window.setPbxNavLayout(localStorage.getItem('pbx_nav_layout') || 'topbar');
             const tabButtons = ['extensions', 'ringgroups', 'inbound', 'trunks', 'outbound', 'queues', 'timegroups', 'timeconditions', 'voicemail', 'ivr', 'recordings', 'stt', 'diagram', 'announcements', 'modem', 'callcodes', 'dongles', 'terminal'];
@@ -6150,7 +6162,7 @@
             } else if (tabParam && document.getElementById('tab-btn-' + tabParam)) {
                 defaultTab = tabParam;
             }
-            if (defaultTab) {
+            if (defaultTab && !embedMode) {
                 switchTab(defaultTab, { updateUrl: false });
             }
             const dialInput = document.getElementById('trunkDialString');
@@ -6303,9 +6315,31 @@
                 announcement: () => openAnnouncementModal(),
                 voicemail: null
             };
+            const targetLoaders = {
+                extension: () => fetchExtensions(),
+                inbound: () => Promise.all([fetchInboundRoutes(), ensureAllConfigListsLoaded()]),
+                outbound: () => preloadOutboundTrunks(),
+                trunk: () => Promise.all([fetchTrunks(), ensureAllConfigListsLoaded()]),
+                ringgroup: () => Promise.all([fetchRingGroups(), ensureAllConfigListsLoaded()]),
+                queue: () => Promise.all([fetchQueues(), ensureAllConfigListsLoaded()]),
+                ivr: () => Promise.all([fetchIvrs(), ensureAllConfigListsLoaded()]),
+                timecondition: () => Promise.all([fetchTimeConditions(), fetchTimeGroups(), ensureAllConfigListsLoaded()]),
+                timegroup: () => fetchTimeGroups(),
+                announcement: () => Promise.all([fetchAnnouncements(), ensureAllConfigListsLoaded()])
+            };
+            const targetType = addType || editType;
+            let targetDataReady = !targetLoaders[targetType];
+            if (targetLoaders[targetType]) {
+                Promise.resolve()
+                    .then(() => targetLoaders[targetType]())
+                    .catch(() => {})
+                    .then(() => { targetDataReady = true; });
+            }
+            if (editType === 'outbound') fetchOutboundRoutes();
             let attempts = 0;
             const openTarget = () => {
                 if (addType) {
+                    if (!targetDataReady) return false;
                     const action = addActions[addType];
                     if (addType === 'voicemail' || typeof action === 'function') {
                         cleanParams();
@@ -6313,6 +6347,7 @@
                         return true;
                     }
                 }
+                if (editType && targetLoaders[editType] && !targetDataReady) return false;
                 if (editType === 'extension') {
                     const ext = (loadedExtensionsList || []).find(item => String(item.extension) === String(editId));
                     if (ext) {
@@ -6400,6 +6435,11 @@
                         if (typeof showToast === 'function') {
                             showToast(isRtl ? 'تعذر فتح نموذج الإعداد الكلاسيكي.' : 'Could not open the classic editor form.', 'error');
                         }
+                    } else if (typeof enhanceSelectElements === 'function') {
+                        setTimeout(() => {
+                            const modal = document.querySelector('.fixed.inset-0:not(.hidden)');
+                            enhanceSelectElements(modal || document);
+                        }, 80);
                     }
                     return;
                 }

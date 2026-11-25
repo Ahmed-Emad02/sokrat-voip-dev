@@ -372,6 +372,27 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
         #switchboardGrid .panel-surface.state-idle .border-t {
             border-color: rgba(255, 255, 255, 0.25) !important;
         }
+        /* The card sits on a deep crimson fill, so its dropdown trigger label,
+           timer and icons must not fall back to the light-mode dark text. */
+        #switchboardGrid .panel-surface.state-idle .config-dropdown-label,
+        #switchboardGrid .panel-surface.state-idle .config-dropdown-label *,
+        #switchboardGrid .panel-surface.state-idle .config-dropdown-label svg,
+        #switchboardGrid .panel-surface.state-idle .config-dropdown-label svg *,
+        #switchboardGrid .panel-surface.state-idle .config-dropdown-trigger,
+        #switchboardGrid .panel-surface.state-idle .config-dropdown-trigger svg,
+        #switchboardGrid .panel-surface.state-idle .config-dropdown-trigger svg *,
+        #switchboardGrid .panel-surface.state-idle .text-\[var\(--accent-color\)\],
+        .light-theme #switchboardGrid .panel-surface.state-idle .config-dropdown-label,
+        .light-theme #switchboardGrid .panel-surface.state-idle .config-dropdown-label *,
+        .light-theme #switchboardGrid .panel-surface.state-idle .config-dropdown-label svg,
+        .light-theme #switchboardGrid .panel-surface.state-idle .config-dropdown-label svg *,
+        .light-theme #switchboardGrid .panel-surface.state-idle .config-dropdown-trigger,
+        .light-theme #switchboardGrid .panel-surface.state-idle .config-dropdown-trigger svg,
+        .light-theme #switchboardGrid .panel-surface.state-idle .config-dropdown-trigger svg *,
+        .light-theme #switchboardGrid .panel-surface.state-idle .text-\[var\(--accent-color\)\] {
+            color: #ffffff !important;
+            stroke: #ffffff !important;
+        }
         #switchboardGrid .panel-surface.state-idle .action-select,
         .light-theme #switchboardGrid .panel-surface.state-idle .action-select {
             background-color: rgba(0, 0, 0, 0.28) !important;

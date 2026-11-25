@@ -10,10 +10,10 @@
     'use strict';
 
     const TYPE_META = {
-        extension: { label: 'Extension', color: '#38bdf8', icon: 'phone', input: true, output: false },
-        inbound: { label: 'Inbound Route', color: '#f59e0b', icon: 'inbound', input: false, output: true },
-        outbound: { label: 'Outbound Route', color: '#a78bfa', icon: 'outbound', input: false, output: true },
-        trunk: { label: 'Trunk', color: '#34d399', icon: 'trunk', input: true, output: false },
+        extension: { label: 'Extension', color: '#991b1b', icon: 'phone', input: true, output: false },
+        inbound: { label: 'Inbound Route', color: '#059669', icon: 'inbound', input: false, output: true },
+        outbound: { label: 'Outbound Route', color: '#7c3aed', icon: 'outbound', input: false, output: true },
+        trunk: { label: 'Trunk', color: '#3b82f6', icon: 'trunk', input: true, output: false },
         ringgroup: { label: 'Ring Group', color: '#fb7185', icon: 'group', input: true, output: true },
         queue: { label: 'Queue', color: '#22d3ee', icon: 'queue', input: true, output: true },
         ivr: { label: 'IVR', color: '#c084fc', icon: 'ivr', input: true, output: true },
@@ -110,7 +110,7 @@
                     node.y = yOffset;
                     yOffset += estimatedHeight(node) + 32;
                 });
-                xOffset += 310;
+                xOffset += 370;
             }
         });
         return nodes;
@@ -229,10 +229,27 @@
             const node = addNode(makeNode('outbound', route.route_id, route, route.name || `Outbound ${route.route_id}`, `${(route.patterns || []).length} patterns`, [
                 { label: 'Patterns', value: String((route.patterns || []).length) },
                 { label: 'Trunks', value: String((route.trunks || []).length) }
-            ], [makePort('trunks', 'Trunks', 'trunks', 0, true)], { input: false, output: true }));
+            ], [makePort('trunks', 'Trunks', 'trunks', 0, true)], { input: true, output: true }));
             (route.trunks || []).forEach((trunk, trunkIndex) => {
                 const target = nodeMap.get(nodeKey('trunk', trunk.trunk_id));
                 if (target) addEdge(node, makePort('trunks', 'Trunks', 'trunks', trunkIndex), target, String(trunk.trunk_id), `Trunk ${trunk.seq || trunkIndex + 1}`);
+            });
+            // A dial pattern's caller ID can pin the route to a specific extension.
+            // Show that restriction as an extension -> outbound-route connection.
+            const callerIds = new Set();
+            (route.patterns || []).forEach(pattern => {
+                const rawCid = text(pattern.cid || pattern.match_cid);
+                rawCid.split(/[^0-9]+/).filter(Boolean).forEach(id => {
+                    callerIds.add(id);
+                    callerIds.add(id.replace(/^0+/, ''));
+                });
+            });
+            callerIds.forEach(id => {
+                if (!id) return;
+                const extension = nodeMap.get(nodeKey('extension', id));
+                if (!extension) return;
+                const port = (extension.ports || []).find(item => item.id === 'membership') || (extension.ports || [])[0];
+                if (port) addEdge(extension, port, node, id, 'Caller ID');
             });
             outboundKeys.add(String(route.route_id));
         });
@@ -407,7 +424,7 @@
     }
 
     function nodeCanHaveIncoming(edges, nodeKey) {
-        return (edges || []).some(edge => edge.target === nodeKey);
+        return (edges || []).some(edge => edge.target === nodeKey && edge.label !== 'Caller ID');
     }
 
     function memberIds(node) {
@@ -732,7 +749,7 @@
                 const originalMembers = String(node.data.grplist || '');
                 const changes = [];
                 if (text(next) !== text(node.data.postdest)) changes.push({ field: 'After timeout', from: text(node.data.postdest) || '(empty)', to: next || '(empty)' });
-                if (normalizedMemberList(nextMembers.split('-')) !== normalizedMemberList(originalMembers.split('-'))) {
+                if (normalizedMemberList(splitMembers(nextMembers)) !== normalizedMemberList(splitMembers(originalMembers))) {
                     changes.push({ field: 'Members', from: originalMembers || '(none)', to: nextMembers || '(none)' });
                 }
                 if (changes.length) {
@@ -761,12 +778,12 @@
                 const nextDest = timeoutTarget ? encodeDestination(timeoutTarget) : node.data.dest;
                 const nextContinue = continueTarget ? encodeDestination(continueTarget) : node.data.destcontinue;
                 const memberEdges = graph.edges.filter(edge => edge.kind === 'membership' && edge.target === node.key);
-                const nextMembers = memberEdges.map(edge => byKey.get(edge.source)).filter(Boolean).map(member => member.refId).join('-');
+                const nextMembers = memberEdges.map(edge => byKey.get(edge.source)).filter(Boolean).map(member => member.refId).join(',');
                 const originalMembers = splitMembers(node.data.static_members).join('-');
                 const changes = [];
                 if (text(nextDest) !== text(node.data.dest)) changes.push({ field: 'After timeout', from: text(node.data.dest) || '(empty)', to: nextDest || '(empty)' });
                 if (text(nextContinue) !== text(node.data.destcontinue)) changes.push({ field: 'Continue', from: text(node.data.destcontinue) || '(empty)', to: nextContinue || '(empty)' });
-                if (normalizedMemberList(nextMembers.split('-')) !== normalizedMemberList(originalMembers.split('-'))) {
+                if (normalizedMemberList(splitMembers(nextMembers)) !== normalizedMemberList(splitMembers(originalMembers))) {
                     changes.push({ field: 'Static members', from: originalMembers || '(none)', to: nextMembers || '(none)' });
                 }
                 if (changes.length) {
