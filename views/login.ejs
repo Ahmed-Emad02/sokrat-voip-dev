@@ -472,7 +472,7 @@
             
             <!-- Error Notification Banner -->
             <% if (typeof error !== 'undefined' && error) { %>
-                <div class="w-full mb-4 text-center text-xs font-bold text-red-600 dark:text-red-300 bg-red-50 dark:bg-red-950/70 border border-red-200 dark:border-red-800 rounded-xl px-4 py-3 shadow-md">
+                <div id="loginErrorBanner" data-login-error class="w-full mb-4 text-center text-xs font-bold text-red-600 dark:text-red-300 bg-red-50 dark:bg-red-950/70 border border-red-200 dark:border-red-800 rounded-xl px-4 py-3 shadow-md">
                     <% if (isRtl && error === 'Invalid credentials') { %>
                         بيانات الاعتماد غير صالحة. يرجى التحقق من اسم المستخدم وكلمة المرور.
                     <% } else if (isRtl && error === 'Username and password are required') { %>
@@ -525,7 +525,13 @@
                                     <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
                                 </svg>
                             </div>
-                            <input type="password" id="password" name="password" placeholder="••••••••••••" required autocomplete="current-password" class="login-field-input w-full h-11 px-3 bg-transparent border-0 focus:outline-none focus:ring-0 text-[14px]">
+                            <input type="password" id="password" name="password" placeholder="••••••••••••" required autocomplete="current-password" class="login-field-input w-full h-11 px-3 pe-1 bg-transparent border-0 focus:outline-none focus:ring-0 text-[14px]">
+                            <button type="button" id="passwordToggle" aria-controls="password" aria-pressed="false" aria-label="<%= isRtl ? 'إظهار كلمة المرور' : 'Show password' %>" title="<%= isRtl ? 'إظهار كلمة المرور' : 'Show password' %>" class="h-11 w-11 shrink-0 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors cursor-pointer">
+                                <svg id="passwordToggleIcon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"></path>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                </svg>
+                            </button>
                         </div>
                     </div>
 
@@ -680,14 +686,86 @@
             }
         }
 
-        // Form submission sync
+        // Password visibility toggle.
+        (function initPasswordToggle() {
+            var field = document.getElementById('password');
+            var button = document.getElementById('passwordToggle');
+            var icon = document.getElementById('passwordToggleIcon');
+            if (!field || !button || !icon) return;
+            var labels = {
+                show: <%- JSON.stringify(isRtl ? 'إظهار كلمة المرور' : 'Show password') %>,
+                hide: <%- JSON.stringify(isRtl ? 'إخفاء كلمة المرور' : 'Hide password') %>
+            };
+            var eye = '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"></path><circle cx="12" cy="12" r="3"></circle>';
+            var eyeOff = '<path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-6.5 0-10-7-10-7a19.8 19.8 0 0 1 5.06-5.94"></path><path d="M9.9 4.24A10.94 10.94 0 0 1 12 4c6.5 0 10 7 10 7a19.8 19.8 0 0 1-3.22 4.31"></path><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"></path><line x1="2" y1="2" x2="22" y2="22"></line>';
+            button.addEventListener('click', function() {
+                var visible = field.type === 'password';
+                field.type = visible ? 'text' : 'password';
+                icon.innerHTML = visible ? eyeOff : eye;
+                button.setAttribute('aria-pressed', visible ? 'true' : 'false');
+                button.setAttribute('aria-label', visible ? labels.hide : labels.show);
+                button.setAttribute('title', visible ? labels.hide : labels.show);
+                field.focus({ preventScroll: true });
+            });
+        })();
+
+        // Authenticate without navigating away, so a rejected login keeps both
+        // fields exactly as the user typed them.
         var loginForm = document.getElementById('loginForm');
         if (loginForm) {
-            loginForm.addEventListener('submit', function() {
+            var loginSubmitting = false;
+            var loginLabels = {
+                genericError: <%- JSON.stringify(isRtl ? 'تعذر تسجيل الدخول. حاول مرة أخرى.' : 'Could not sign in. Please try again.') %>
+            };
+            function showLoginError(message) {
+                var banner = document.getElementById('loginErrorBanner');
+                if (!banner) {
+                    banner = document.createElement('div');
+                    banner.id = 'loginErrorBanner';
+                    banner.setAttribute('data-login-error', '');
+                    banner.className = 'w-full mb-4 text-center text-xs font-bold text-red-600 dark:text-red-300 bg-red-50 dark:bg-red-950/70 border border-red-200 dark:border-red-800 rounded-xl px-4 py-3 shadow-md';
+                    var card = loginForm.closest('.login-main-card');
+                    if (card && card.parentNode) card.parentNode.insertBefore(banner, card);
+                }
+                banner.textContent = message || loginLabels.genericError;
+                banner.classList.remove('hidden');
+            }
+            loginForm.addEventListener('submit', async function(event) {
+                if (loginSubmitting) return;
+                event.preventDefault();
                 var isLight = document.documentElement.classList.contains('light-theme');
                 var themeInput = document.getElementById('loginFormTheme');
-                if (themeInput) {
-                    themeInput.value = isLight ? 'light' : 'dark';
+                if (themeInput) themeInput.value = isLight ? 'light' : 'dark';
+                var submitButton = loginForm.querySelector('button[type="submit"]');
+                loginSubmitting = true;
+                if (submitButton) {
+                    submitButton.disabled = true;
+                    submitButton.classList.add('opacity-70', 'cursor-wait');
+                }
+                try {
+                    var response = await fetch(loginForm.action, {
+                        method: 'POST',
+                        body: new URLSearchParams(new FormData(loginForm)),
+                        credentials: 'same-origin',
+                        redirect: 'follow'
+                    });
+                    var finalUrl = new URL(response.url, window.location.href);
+                    if (finalUrl.pathname !== '/login') {
+                        window.location.assign(finalUrl.href);
+                        return;
+                    }
+                    var html = await response.text();
+                    var parsed = new DOMParser().parseFromString(html, 'text/html');
+                    var parsedError = parsed.getElementById('loginErrorBanner');
+                    showLoginError(parsedError ? parsedError.textContent.trim().replace(/\s+/g, ' ') : '');
+                } catch (_) {
+                    showLoginError('');
+                } finally {
+                    loginSubmitting = false;
+                    if (submitButton) {
+                        submitButton.disabled = false;
+                        submitButton.classList.remove('opacity-70', 'cursor-wait');
+                    }
                 }
             });
         }
