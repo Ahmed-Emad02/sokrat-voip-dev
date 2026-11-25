@@ -61,8 +61,9 @@ Guidance and operational gotchas for AI agents working in `/opt/sokrat-voip`.
   * The unresponsive-dongle incident is explained by this teardown path: an `ATD` timeout entered `disconnect_dongle()`, which wrote `AT+CHLD=1x` before `^ORIG`/`^CONF` and triggered Huawei HW BUG 1. Do not reintroduce targeted `CHLD` in immediate teardown. Continuing `^BOOT` URCs alone do not prove a responsive AT interface; require an `AT`/`OK` exchange before declaring the modem healthy.
 * **AT timeout and queue discipline:**
   * Session teardown must never send `AT+CHLD=1x` while an outgoing `ATD` is
-    unacknowledged. `at_hangup_immediality()` uses `AT+CHUP`; `CHLD` before
-    `^ORIG`/`^CONF` is Huawei HW BUG 1 and wedges the modem. Regression:
+    unacknowledged, and must write `AT+CHUP` once per port, not once per call.
+    `at_hangup_immediality()` uses `AT+CHUP`; `CHLD` before `^ORIG`/`^CONF` is
+    Huawei HW BUG 1 and wedges the modem. Regression:
     `test/dongle-driver-behavior.test.js` (`immediate_hangup`).
   * A timeout alone does not prove firmware failure; parser/framing bugs can lose valid replies.
   * Compact `+CLCC`/`+CMGR` framing must preserve final payload fields and terminal replies.

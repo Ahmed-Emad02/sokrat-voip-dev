@@ -92,6 +92,7 @@ static int discovery_restart(public_state_t *p) { assert(p==gpublic); assert(wak
 static int chan_dongle_err;
 #define E_QUEUE 1
 static const char cmd_clcc[]="AT+CLCC\r";
+static const char cmd_chld1x[]="AT+CHLD=1%d\r";
 const char *at_res2str(at_res_t r) { (void)r; return "response"; }
 static void ast_channel_set_fd(struct ast_channel *c, int n, int fd) { (void)c; (void)n; (void)fd; }
 static int ast_timer_fd(struct ast_timer *t) { (void)t; return -1; }
