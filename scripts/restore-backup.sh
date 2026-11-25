@@ -178,7 +178,7 @@ fi
 # 4. Activate restored binaries in a new daemon generation, not a config reload.
 echo "[4/5] Activating restored Asterisk configuration and drivers..."
 bash "$(dirname "$DONGLE_HELPER")/enable-dongle-logging.sh" --no-reload
-dongle_module_restart_verified 20 asterisk "$RESTORE_MODULES_DIR" || exit 1
+dongle_module_restart_verified 60 asterisk "$RESTORE_MODULES_DIR" || exit 1
 
 # 5. Restart Sokrat Daemons
 echo "[5/5] Restarting Sokrat VoIP services..."
