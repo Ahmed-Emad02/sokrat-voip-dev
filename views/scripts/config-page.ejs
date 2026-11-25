@@ -11693,6 +11693,14 @@
         let loadedFederationSettings = null;
         let loadedFederationPeersList = [];
         let loadedRemoteExtensionsList = [];
+        // Peer whose row is mid-action; blocks double-clicks that used to fire
+        // two deletes and surface a spurious failure toast.
+        let federationBusyPeerId = null;
+
+        function setFederationBusy(peerId) {
+            federationBusyPeerId = peerId === null || peerId === undefined ? null : Number(peerId);
+            renderFederationPeersTable(loadedFederationPeersList || []);
+        }
 
         function fetchFederationSettings() {
             return fetch('/api/config/federation/settings')
@@ -11726,11 +11734,14 @@
                         loadedFederationPeersList = data.peers;
                         loadedRemoteExtensionsList = data.remoteExtensions || [];
                         renderFederationPeersTable(data.peers);
-                        fetchRemoteExtensionsDirectory();
+                        // Render the directory from the payload we already have.
+                        // A second /peers request used to race this one, so a
+                        // peer added or removed in between left stale cards.
+                        renderRemoteExtensionsGrid(data.peers);
                         if (typeof renderQuickPickPills === 'function') renderQuickPickPills();
                         if (typeof renderQueueAgentChecklist === 'function') renderQueueAgentChecklist();
                     } else {
-                        if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-xs text-red-400">${data.error || 'Failed to load peers.'}</td></tr>`;
+                        if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-xs text-red-400">${escapeHtml(data.error || 'Failed to load peers.')}</td></tr>`;
                     }
                 })
                 .catch(err => {
@@ -11758,6 +11769,12 @@
             }
 
             tbody.innerHTML = peers.map(peer => {
+                const peerId = Number(peer.id);
+                const peerName = escapeHtml(peer.node_name || ('Site ' + peer.site_code));
+                const peerSite = escapeHtml(peer.site_code || '');
+                const peerHost = escapeHtml(peer.host || '');
+                const peerIax = escapeHtml(peer.iax_peer_outbound || 'fed_out');
+                const busy = federationBusyPeerId === peerId;
                 const isOnline = peer.qualifyStatus === 'online' || peer.status === 'online';
                 const latency = peer.latencyMs ? `${peer.latencyMs}ms` : '';
                 const statusBadge = isOnline
@@ -11775,21 +11792,21 @@
                         <td class="py-3 px-4">
                             <div class="flex items-center gap-2.5">
                                 <div class="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 font-bold text-xs">
-                                    ${peer.site_code}
+                                    ${peerSite}
                                 </div>
                                 <div>
-                                    <span class="font-extrabold text-[var(--text-primary)] block">${peer.node_name || 'Site ' + peer.site_code}</span>
-                                    <span class="text-[10px] font-mono text-[var(--text-muted)]">IAX2: ${peer.iax_peer_outbound || 'fed_out'}</span>
+                                    <span class="font-extrabold text-[var(--text-primary)] block">${peerName}</span>
+                                    <span class="text-[10px] font-mono text-[var(--text-muted)]">IAX2: ${peerIax}</span>
                                 </div>
                             </div>
                         </td>
                         <td class="py-3 px-4">
                             <span class="px-2 py-0.5 rounded font-mono font-black text-xs bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                                ${peer.site_code}
+                                ${peerSite}
                             </span>
                         </td>
                         <td class="py-3 px-4 font-mono text-xs text-[var(--text-secondary)]">
-                            ${peer.host}:${peer.iax_port || 4569}
+                            ${peerHost}:${escapeHtml(peer.iax_port || 4569)}
                         </td>
                         <td class="py-3 px-4">
                             ${statusBadge}
@@ -11808,22 +11825,22 @@
                         </td>
                         <td class="py-3 px-4">
                             <div class="flex items-center justify-center gap-1.5">
-                                <button type="button" onclick="syncFederationPeer(${peer.id})" title="${isRtl ? 'إعادة مزامنة التحويلات والخطوط' : 'Re-sync Extensions & Dongles'}" class="p-1.5 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[var(--text-secondary)] hover:text-cyan-400 hover:border-cyan-500/40 transition cursor-pointer">
+                                <button type="button" onclick="syncFederationPeer(${peerId})" title="${isRtl ? 'إعادة مزامنة التحويلات والخطوط' : 'Re-sync Extensions & Dongles'}" ${busy ? 'disabled' : ''} class="p-1.5 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[var(--text-secondary)] hover:text-cyan-400 hover:border-cyan-500/40 transition cursor-pointer ${busy ? 'opacity-40 cursor-wait' : ''}">
                                     <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                                     </svg>
                                 </button>
-                                <button type="button" onclick="qualifyFederationPeer(${peer.id})" title="${isRtl ? 'اختبار الاستجابة (Qualify Ping)' : 'Qualify Ping Test'}" class="p-1.5 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[var(--text-secondary)] hover:text-emerald-400 hover:border-emerald-500/40 transition cursor-pointer">
+                                <button type="button" onclick="qualifyFederationPeer(${peerId})" title="${isRtl ? 'اختبار الاستجابة (Qualify Ping)' : 'Qualify Ping Test'}" ${busy ? 'disabled' : ''} class="p-1.5 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[var(--text-secondary)] hover:text-emerald-400 hover:border-emerald-500/40 transition cursor-pointer ${busy ? 'opacity-40 cursor-wait' : ''}">
                                     <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
                                     </svg>
                                 </button>
-                                <button type="button" onclick="openEditPeerModal(${peer.id})" title="${isRtl ? 'تعديل الصلاحيات' : 'Edit Permissions'}" class="p-1.5 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[var(--text-secondary)] hover:text-amber-400 hover:border-amber-500/40 transition cursor-pointer">
+                                <button type="button" onclick="openEditPeerModal(${peerId})" title="${isRtl ? 'تعديل الصلاحيات' : 'Edit Permissions'}" ${busy ? 'disabled' : ''} class="p-1.5 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[var(--text-secondary)] hover:text-amber-400 hover:border-amber-500/40 transition cursor-pointer ${busy ? 'opacity-40 cursor-wait' : ''}">
                                     <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                     </svg>
                                 </button>
-                                <button type="button" onclick="deleteFederationPeer(${peer.id})" title="${isRtl ? 'حذف الربط' : 'Delete Connection'}" class="p-1.5 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[var(--text-secondary)] hover:text-red-400 hover:border-red-500/40 transition cursor-pointer">
+                                <button type="button" onclick="deleteFederationPeer(${peerId})" title="${isRtl ? 'حذف الربط' : 'Delete Connection'}" ${busy ? 'disabled' : ''} class="p-1.5 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[var(--text-secondary)] hover:text-red-400 hover:border-red-500/40 transition cursor-pointer ${busy ? 'opacity-40 cursor-wait' : ''}">
                                     <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                     </svg>
@@ -11835,34 +11852,29 @@
             }).join('');
         }
 
-        function fetchRemoteExtensionsDirectory() {
-            fetch('/api/config/federation/peers')
-                .then(() => {
-                    renderRemoteExtensionsGrid(loadedFederationPeersList);
-                })
-                .catch(err => console.error('fetchRemoteExtensionsDirectory error:', err));
-        }
-
         function renderRemoteExtensionsGrid(peers) {
             const grid = document.getElementById('fedRemoteExtensionsGrid');
             if (!grid) return;
 
             let allCards = [];
             for (const peer of (peers || [])) {
+                const peerName = escapeHtml(peer.node_name || ('Site ' + peer.site_code));
+                const peerHost = escapeHtml(peer.host || '');
+                const peerSite = escapeHtml(peer.site_code || '');
                 allCards.push(`
                     <div class="panel-surface p-3.5 rounded-xl border border-[var(--border-primary)] hover:border-amber-500/30 transition flex flex-col justify-between gap-3">
                         <div class="flex items-start justify-between gap-2">
                             <div>
-                                <span class="text-xs font-bold text-[var(--text-primary)] block">${peer.node_name || 'Site ' + peer.site_code}</span>
-                                <span class="text-[10px] text-[var(--text-muted)] font-mono">${peer.host}</span>
+                                <span class="text-xs font-bold text-[var(--text-primary)] block">${peerName}</span>
+                                <span class="text-[10px] text-[var(--text-muted)] font-mono">${peerHost}</span>
                             </div>
                             <span class="px-2 py-0.5 rounded text-[10px] font-black bg-amber-500/20 text-amber-400 font-mono">
-                                Site ${peer.site_code}
+                                Site ${peerSite}
                             </span>
                         </div>
                         <div class="p-2 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[11px] font-mono text-[var(--text-secondary)]">
                             <span class="text-[10px] text-[var(--text-muted)] block uppercase mb-0.5">${isRtl ? 'نمط الاتصال الداخلي' : 'Dial Format'}:</span>
-                            <span class="text-amber-400 font-bold">${peer.site_code}XXX</span> ${isRtl ? '(مثال 20101)' : '(e.g. ' + peer.site_code + '101)'}
+                            <span class="text-amber-400 font-bold">${peerSite}XXX</span> ${isRtl ? '(مثال ' + peerSite + '101)' : '(e.g. ' + peerSite + '101)'}
                         </div>
                     </div>
                 `);
@@ -11934,6 +11946,11 @@
                 if (data.success) {
                     showToast(isRtl ? `تم ربط السيرفر بنجاح! الاستجابة: ${data.latencyMs || 1}ms (${data.extensionsSynced || 0} تحويلة)` : `PBX connected successfully! Latency: ${data.latencyMs || 1}ms (${data.extensionsSynced || 0} exts)`, 'success');
                     closeModal('connectPbxModal');
+                    // Clear the previous server's values so a second connect
+                    // does not silently reuse them.
+                    const connectForm = document.getElementById('connectPbxForm');
+                    if (connectForm) connectForm.reset();
+                    if (statusArea) statusArea.classList.add('hidden');
                     fetchFederationSettings();
                     fetchFederationPeers();
                 } else {
@@ -12049,6 +12066,8 @@
         }
 
         function syncFederationPeer(peerId) {
+            if (federationBusyPeerId === Number(peerId)) return;
+            setFederationBusy(peerId);
             showToast(isRtl ? 'جاري مزامنة التحويلات والخطوط من السيرفر...' : 'Syncing extensions & dongles from remote peer...', 'info');
             fetch(`/api/config/federation/peers/${peerId}/sync`, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
                 .then(res => res.json())
@@ -12060,10 +12079,13 @@
                         showToast(data.error || 'Sync failed', 'error');
                     }
                 })
-                .catch(err => showToast(err.message, 'error'));
+                .catch(err => showToast(err.message, 'error'))
+                .finally(() => setFederationBusy(null));
         }
 
         function qualifyFederationPeer(peerId) {
+            if (federationBusyPeerId === Number(peerId)) return;
+            setFederationBusy(peerId);
             showToast(isRtl ? 'جاري فحص استجابة السيرفر (Qualify)...' : 'Checking peer latency (Qualify)...', 'info');
             fetch(`/api/config/federation/peers/${peerId}/qualify`, { method: 'POST' })
                 .then(res => res.json())
@@ -12076,24 +12098,31 @@
                         showToast(data.error || 'Qualify failed', 'error');
                     }
                 })
-                .catch(err => showToast(err.message, 'error'));
+                .catch(err => showToast(err.message, 'error'))
+                .finally(() => setFederationBusy(null));
         }
 
         function deleteFederationPeer(peerId) {
+            if (federationBusyPeerId === Number(peerId)) return;
             if (!confirm(isRtl ? 'هل أنت متأكد من حذف هذا السيرفر وإلغاء الربط بينهما؟' : 'Are you sure you want to disconnect and remove this PBX node?')) {
                 return;
             }
+            setFederationBusy(peerId);
             fetch(`/api/config/federation/peers/${peerId}`, { method: 'DELETE' })
                 .then(res => res.json())
                 .then(data => {
                     if (data.success) {
                         showToast(isRtl ? 'تم حذف السيرفر وتحديث إعدادات أستيركس بنجاح' : 'Peer removed and Asterisk reloaded successfully', 'success');
+                        // The local identity may fall back to "local" when the
+                        // last peer goes away, so refresh the badges too.
+                        fetchFederationSettings();
                         fetchFederationPeers();
                     } else {
                         showToast(data.error || 'Delete failed', 'error');
                     }
                 })
-                .catch(err => showToast(err.message, 'error'));
+                .catch(err => showToast(err.message, 'error'))
+                .finally(() => setFederationBusy(null));
         }
 
         window.fetchFederationSettings = fetchFederationSettings;

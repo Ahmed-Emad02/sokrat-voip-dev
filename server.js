@@ -138,6 +138,7 @@ const {
     bootstrapPeer,
     qualifyIaxPeer,
     syncRemotePeerEntities,
+    syncPeerInventoryFromApi,
     removeRemoteFederationSetup
 } = require('./lib/federation-bootstrap');
 const FederationHub = require('./lib/federation-hub');
@@ -24857,15 +24858,22 @@ app.post('/api/config/federation/peers/:id/sync', requireAuth, async (req, res) 
             return res.status(404).json({ success: false, error: 'Peer not found.' });
         }
         const peer = peerRows[0];
-        const { sshUser = 'root', sshPassword = req.body.sshPassword || 'Admin@123', sshPort = 22 } = req.body;
+        const { sshUser = 'root', sshPort = 22 } = req.body || {};
+        const sshPassword = req.body && typeof req.body.sshPassword === 'string' ? req.body.sshPassword : '';
 
-        const syncRes = await syncRemotePeerEntities(pool, peerId, peer.site_code, peer.host, sshPort, sshUser, sshPassword);
+        const [sRows] = await pool.query('SELECT local_site_code FROM `asterisk`.`sokrat_federation_settings` WHERE id = 1');
+        const localSiteCode = String(sRows[0]?.local_site_code || '10').trim();
 
-        // Bilateral push of local extensions to remote node
-        try {
+        // No SSH password? Pull the inventory over the signed federation API.
+        const syncRes = sshPassword
+            ? await syncRemotePeerEntities(pool, peerId, peer.site_code, peer.host, sshPort, sshUser, sshPassword)
+            : await syncPeerInventoryFromApi(pool, peerId, peer, { decryptFn: decrypt, localSiteCode });
+
+        // Bilateral push of local extensions to remote node (only possible with
+        // an explicit SSH password; never a baked-in default credential).
+        if (sshPassword) {
+          try {
             const { execRemoteSsh } = require('./lib/federation-bootstrap');
-            const [sRows] = await pool.query('SELECT local_site_code FROM `asterisk`.`sokrat_federation_settings` WHERE id = 1');
-            const localSiteCode = sRows[0]?.local_site_code || '10';
             const [localExtRows] = await pool.query('SELECT extension, name FROM `asterisk`.`users`');
             const [localDongleRows] = await pool.query('SELECT dongle_name, phone_number FROM `asterisk`.`gsm_dongles`');
 
@@ -24910,10 +24918,12 @@ app.post('/api/config/federation/peers/:id/sync', requireAuth, async (req, res) 
             }
 
             await execRemoteSsh(peer.host, sshPort, sshUser, sshPassword, `MYSQL_PWD='${rDbPass}' mysql -u ${rDbUser} asterisk -e "UPDATE sokrat_federation_peers SET status='online', last_sync_at=NOW() WHERE id=${remotePeerId};"`);
-        } catch (pushErr) {
+          } catch (pushErr) {
             console.error('Bilateral push on sync endpoint error:', pushErr.message);
+          }
         }
 
+        invalidateFederationShellCache();
         if (federationHub) await federationHub.reloadSettingsAndPeers();
         res.json({ success: true, ...syncRes });
     } catch (err) {
@@ -24938,6 +24948,7 @@ app.post('/api/config/federation/peers/:id/qualify', requireAuth, async (req, re
         } else {
             await pool.query('UPDATE `asterisk`.`sokrat_federation_peers` SET status = ?, last_sync_at = NOW() WHERE id = ?', [qualifyRes.status, peerId]);
         }
+        invalidateFederationShellCache();
 
         res.json({ success: true, ...qualifyRes });
     } catch (err) {
@@ -24990,6 +25001,7 @@ app.post('/api/config/federation/bootstrap', requireAuth, async (req, res) => {
         if (federationHub) {
             await federationHub.reloadSettingsAndPeers();
         }
+        invalidateFederationShellCache();
 
         res.json(result);
     } catch (err) {
@@ -25005,7 +25017,9 @@ app.post('/api/config/federation/remote-cleanup', requireAuth, async (req, res) 
         if (!host || !sshPassword) {
             return res.status(400).json({ success: false, error: 'Host and SSH password required.' });
         }
-        const result = await removeRemoteFederationSetup(host, sshPort, sshUser, sshPassword);
+        const [settingsRows] = await pool.query('SELECT local_site_code FROM `asterisk`.`sokrat_federation_settings` WHERE id = 1');
+        const localSiteCode = String(settingsRows[0]?.local_site_code || '10').trim();
+        const result = await removeRemoteFederationSetup(host, sshPort, sshUser, sshPassword, localSiteCode);
         res.json(result);
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
@@ -25080,6 +25094,49 @@ app.get('/api/federation/v1/health', async (req, res) => {
             local_site_code: settings.local_site_code,
             local_node_name: settings.local_node_name
         });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// 13b. POST /api/federation/v1/depart - A peer unlinks itself from this node
+// Called by the hub that is being removed so the remaining node can drop the
+// stale peer row, its mirrors, and the generated IAX/dialplan entries for it.
+app.post('/api/federation/v1/depart', async (req, res) => {
+    try {
+        const siteCode = String(req.federationSiteCode || '').trim();
+        if (!siteCode) {
+            return res.status(400).json({ success: false, error: 'Unknown federation site.' });
+        }
+        const [peerRows] = await pool.query(
+            'SELECT id, site_code FROM `asterisk`.`sokrat_federation_peers` WHERE site_code = ? LIMIT 1',
+            [siteCode]
+        );
+        const peer = peerRows && peerRows[0];
+        if (!peer) {
+            return res.json({ success: true, message: 'No peer record to remove.' });
+        }
+
+        await pool.query('DELETE FROM `asterisk`.`sokrat_federation_remote_extensions` WHERE peer_id = ?', [peer.id]);
+        await pool.query('DELETE FROM `asterisk`.`sokrat_federation_remote_dongles` WHERE peer_id = ?', [peer.id]);
+        await pool.query('DELETE FROM `asterisk`.`sokrat_federation_node_status` WHERE peer_id = ?', [peer.id]);
+        await pool.query('DELETE FROM `asterisk`.`sokrat_federation_sync_state` WHERE peer_id = ?', [peer.id]);
+        await pool.query('DELETE FROM `asterisk`.`sokrat_federation_remote_contacts` WHERE peer_id = ?', [peer.id]);
+        try {
+            await pool.query('DELETE FROM `asteriskcdrdb`.`sokrat_federation_remote_cdr` WHERE peer_id = ?', [peer.id]);
+        } catch (_) {}
+        await pool.query('DELETE FROM `asterisk`.`sokrat_federation_peers` WHERE id = ?', [peer.id]);
+
+        const [remaining] = await pool.query('SELECT COUNT(*) as c FROM `asterisk`.`sokrat_federation_peers`');
+        if (!remaining[0] || remaining[0].c === 0) {
+            await pool.query("UPDATE `asterisk`.`sokrat_federation_settings` SET panel_role = 'local' WHERE id = 1");
+        }
+
+        invalidateFederationShellCache();
+        await syncFederationAsteriskConfig(pool, decrypt);
+        if (federationHub) await federationHub.reloadSettingsAndPeers();
+
+        res.json({ success: true, removedSite: peer.site_code });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }

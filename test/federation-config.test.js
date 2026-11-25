@@ -293,3 +293,50 @@ test('Federation Bootstrap: peer API URLs never use the softphone :8443 vhost', 
     assert.doesNotMatch(bootstrapSrc, /https:\/\/\$\{resolvedLocalIp\}:8443/, 'bootstrap must not advertise :8443 to peers');
     assert.match(bootstrapSrc, /normalizeFederationBaseUrl/, 'bootstrap must normalize peer API URLs');
 });
+
+test('Dialplan Engine: a peer reusing the local site code is never routed', () => {
+    const peers = [
+        { id: 1, node_name: 'Self', host: '10.0.0.10', site_code: '10', iax_peer_outbound: 'fed_out_site10', allow_internal_dialing: 1, allow_outbound_egress: 1 },
+        { id: 2, node_name: 'Branch', host: '10.0.0.20', site_code: '20', iax_peer_outbound: 'fed_out_site20', allow_internal_dialing: 1, allow_outbound_egress: 1 }
+    ];
+    const dialplan = generateDialplanConfig(peers, { local_site_code: '10' }, []);
+    const iax = generateIaxConfig(peers, { local_site_code: '10' });
+
+    assert.doesNotMatch(dialplan, /_10X/, 'local site prefix must not be routed to a peer');
+    assert.doesNotMatch(dialplan, /\[peer_10\]/, 'no outbound context may be generated for the local site code');
+    assert.doesNotMatch(iax, /\[fed_in_site10\]/, 'local site code must not create a peer identity');
+    assert.match(dialplan, /_20XX\./, 'other peers keep their prefix route');
+});
+
+test('Dialplan Engine: local extensions colliding with a site prefix stay local', () => {
+    const peers = [
+        { id: 1, node_name: 'Branch', host: '10.0.0.20', site_code: '20', iax_peer_outbound: 'fed_out_site20', allow_internal_dialing: 1, allow_outbound_egress: 1 }
+    ];
+    const dialplan = generateDialplanConfig(peers, { local_site_code: '10' }, [], ['101', '2001', '2002', '92001234']);
+
+    // Exact extensions beat patterns in Asterisk, so pinning them keeps the
+    // original server's own internal dialing working.
+    assert.match(dialplan, /exten => 2001,1,Goto\(from-internal-additional,2001,1\)/, 'colliding extension 2001 must stay local');
+    assert.match(dialplan, /exten => 2002,1,Goto\(from-internal-additional,2002,1\)/, 'colliding extension 2002 must stay local');
+    assert.doesNotMatch(dialplan, /exten => 101,1,Goto/, 'non-colliding extension must not be pinned');
+    // 92001234 is a local number that looks like remote egress for site 20.
+    assert.match(dialplan, /exten => 92001234,1,Goto\(from-internal-additional,92001234,1\)/, 'egress-shaped local extension must stay local');
+    assert.match(dialplan, /_20XX\./, 'the site prefix route still exists');
+});
+
+test('Federation API: peer mutations invalidate the server-rendered shell cache', () => {
+    const src = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+    assert.match(src, /function invalidateFederationShellCache\(\)/, 'server must expose a cache invalidation helper');
+    const calls = src.match(/invalidateFederationShellCache\(\);/g) || [];
+    assert.ok(calls.length >= 6, `expected every federation mutation route to invalidate the shell cache (found ${calls.length})`);
+    assert.doesNotMatch(src, /req\.body\.sshPassword \|\| 'Admin@123'/, 'federation routes must never fall back to a hard-coded SSH password');
+    assert.match(src, /app\.post\('\/api\/federation\/v1\/depart'/, 'peers need a signed unlink endpoint');
+    assert.match(src, /syncPeerInventoryFromApi/, 're-sync must work over the signed federation API');
+});
+
+test('Federation Bootstrap: remote cleanup is scoped to one site, never destructive', () => {
+    const src = fs.readFileSync(path.join(__dirname, '..', 'lib', 'federation-bootstrap.js'), 'utf8');
+    assert.doesNotMatch(src, /TRUNCATE TABLE sokrat_federation_peers/, 'cleanup must not truncate the remote peer table');
+    assert.match(src, /WHERE site_code='\$\{safeSite\}'/, 'cleanup must target only the departing site');
+    assert.match(src, /syncPeerInventoryFromApi/, 'signed-API inventory sync must be exported');
+});
