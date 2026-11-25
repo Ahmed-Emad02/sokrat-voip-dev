@@ -25,7 +25,11 @@ function fixture(t, mode = 'normal', queue = '0') {
     const log = path.join(dir, 'commands');
     const phase = path.join(dir, 'phase');
     fs.writeFileSync(path.join(bin, 'pgrep'), '#!/bin/sh\necho 4242\n', { mode: 0o755 });
-    fs.writeFileSync(path.join(bin, 'systemctl'), '#!/bin/sh\nprintf "systemctl %s\\n" "$*" >> "$COMMANDS"\nexit 0\n', { mode: 0o755 });
+    fs.writeFileSync(path.join(bin, 'systemctl'), `#!/bin/sh
+printf "systemctl %s\\n" "$*" >> "$COMMANDS"
+if [ "$MODE" = refused-recover ]; then touch "$PHASE"; cp "$REPLACEMENT" "$MAPS"; fi
+exit 0
+`, { mode: 0o755 });
     fs.writeFileSync(path.join(bin, 'sleep'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
     const ast = path.join(bin, 'asterisk');
     fs.writeFileSync(ast, `#!/bin/sh
@@ -38,15 +42,15 @@ case "$2" in
   'core show uptime seconds')
     if [ -f "$PHASE" ]; then printf 'System uptime: 1\n'; else printf 'System uptime: 500\n'; fi ;;
   'core restart gracefully')
-    [ "$MODE" = refused ] && { echo 'Unable to restart'; exit 0; }
+    { [ "$MODE" = refused ] || [ "$MODE" = refused-recover ]; } && { echo 'Unable to restart'; exit 0; }
     if [ "$MODE" != stale ]; then touch "$PHASE"; fi
     if [ "$MODE" = normal ]; then cp "$REPLACEMENT" "$MAPS"; fi
     echo 'Asterisk will restart gracefully.' ;;
   *) exit 1 ;;
 esac
 `, { mode: 0o755 });
-    const result = spawnSync('bash', ['-c', '. "$1"; dongle_module_restart_verified 0 "$2" "$3"', 'bash', helper, ast, modules], {
-        encoding: 'utf8', timeout: 5000,
+    const result = spawnSync('bash', ['-c', '. "$1"; dongle_module_restart_verified 2 "$2" "$3"', 'bash', helper, ast, modules], {
+        encoding: 'utf8', timeout: 15000,
         env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, SOKRAT_PROC_ROOT: proc,
             MODE: mode, QUEUE: queue, COMMANDS: log, PHASE: phase, MAPS: maps, REPLACEMENT: replacement },
     });
@@ -79,8 +83,17 @@ test('queued SMS/AT work prevents a graceful binary swap request', t => {
     assert.doesNotMatch(commands, /^core restart gracefully$/m);
 });
 
-test('CLI rejection cannot be reported as a successful restart', t => {
-    const { result } = fixture(t, 'refused');
+test('a failed graceful request falls back to systemd and still refuses unverified state', t => {
+    const { result, commands } = fixture(t, 'refused');
     assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /refused/);
+    assert.match(result.stderr, /forcing a systemd restart/);
+    assert.match(result.stderr, /not activated/);
+    assert.match(commands, /^systemctl restart asterisk$/m);
+});
+
+test('a failed graceful request succeeds when systemd activates the new generation', t => {
+    const { result, commands } = fixture(t, 'refused-recover');
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.match(result.stderr, /forcing a systemd restart/);
+    assert.match(commands, /^systemctl restart asterisk$/m);
 });

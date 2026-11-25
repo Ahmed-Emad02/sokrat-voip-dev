@@ -1922,7 +1922,7 @@ echo "  WARNING: the host firewall is off - every port is exposed to the network
 # 6. Drain/restart Asterisk & Refresh Sokrat Daemons
 echo "[6/7] Activating Asterisk binaries and refreshing Sokrat services..."
 bash "$(dirname "$DONGLE_HELPER")/enable-dongle-logging.sh" --no-reload
-dongle_module_restart_verified 20 asterisk "$MODULES_DIR" || exit 1
+dongle_module_restart_verified 60 asterisk "$MODULES_DIR" || exit 1
 systemctl daemon-reload
 systemctl start sokrat-asterisk-logrotate.timer
 

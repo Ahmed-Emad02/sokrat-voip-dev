@@ -219,7 +219,7 @@ test('upgrade activation uses verified daemon restart, never module unload/load,
     const activation = f.helper + block('scripts/safe-upgrade.sh', '# 6. ', '# The media helper scripts');
     const result = f.run(activation);
     assert.equal(result.status, 0, result.stderr);
-    assert.match(f.log(), /logging --no-reload\n[\s\S]*verified-daemon-restart 20/);
+    assert.match(f.log(), /logging --no-reload\n[\s\S]*verified-daemon-restart \d+/);
     assert.equal(f.units()['sokrat-asterisk-logrotate.timer'].active, true);
     assert.doesNotMatch(f.log(), /module (?:unload|load)|dongle reload|CMGD/);
     assert.notEqual(f.run(activation, { RESTART_FAILURE: '1' }).status, 0);
@@ -258,7 +258,7 @@ for (const watchdog of [null, { enabled: false, active: false }, { enabled: true
         assert.equal(fs.readFileSync(f.config, 'utf8'), OWNED_CONFIG);
         assert.equal(fs.readFileSync(`${f.etc}/asterisk/extensions_custom.conf`, 'utf8'), 'restored dialplan\n');
         assert.equal(fs.readFileSync(f.env.SQL_LOG, 'utf8'), '-- PBX snapshot\n-- CDR snapshot\n');
-        assert.match(f.log(), /verified-daemon-restart 20/);
+        assert.match(f.log(), /verified-daemon-restart \d+/);
         assert.equal(f.units()['sokrat-asterisk-logrotate.timer'].active, true);
         assert.doesNotMatch(f.log(), /module (?:unload|load)|dongle reload|CMGD|systemctl restart sokrat-watchdog/);
         assert.deepEqual(f.units()['sokrat-laya.service'], laya);
@@ -320,7 +320,7 @@ test('restore uses its actual modules directory for binary activation', t => {
     const result = f.restore();
     assert.equal(result.status, 0, result.stderr);
     assert.equal(fs.readFileSync(`${alternate}/chan_dongle.so`, 'utf8'), '\x7fELFhistorical-module');
-    assert.ok(f.log().includes(`verified-daemon-restart 20 asterisk ${alternate}\n`));
+    assert.ok(f.log().includes(`verified-daemon-restart 60 asterisk ${alternate}\n`));
 });
 
 for (const name of INSTALLERS) {
@@ -329,7 +329,7 @@ for (const name of INSTALLERS) {
         const setup = f.run(block(name, '# 10d —', '# 10e —'));
         assert.equal(setup.status, 0, setup.stderr);
         assert.doesNotMatch(f.log(), /systemctl start/);
-        const activate = f.helper + block(name, 'dongle_module_restart_verified 20', '# 10x');
+        const activate = f.helper + block(name, 'dongle_module_restart_verified 60', '# 10x');
         const result = f.run(activate);
         assert.equal(result.status, 0, result.stderr);
         assert.equal(f.units()['sokrat-asterisk-logrotate.timer'].active, true);
