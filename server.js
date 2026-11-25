@@ -5019,6 +5019,19 @@ let cachedFedPeers = [];
 let cachedFedRemoteExts = [];
 let cachedFedTimestamp = 0;
 
+/**
+ * Drop the federation snapshot that the shell middleware bakes into every
+ * page (PBX scope bar, node badges, central-panel flags). Without this the
+ * server keeps serving the previous peer list for up to 30 s after a peer is
+ * added, edited, or removed, so the header/scope UI looks out of sync with the
+ * federation table until the TTL expires.
+ */
+function invalidateFederationShellCache() {
+    cachedFedTimestamp = 0;
+    cachedFedPeers = [];
+    cachedFedRemoteExts = [];
+}
+
 app.use(async (req, res, next) => {
     if (req.path.startsWith('/api/') || req.xhr) {
         res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
@@ -10788,6 +10801,9 @@ function updateDonglePortsInConf(dongleName, audioPort, dataPort) {
     if (!dName) throw new Error('Dongle name is required.');
     const cleanAudio = String(audioPort || '').trim();
     const cleanData = String(dataPort || '').trim();
+    if (cleanAudio && cleanData && cleanAudio.toLowerCase() === cleanData.toLowerCase()) {
+        throw new Error('Audio port and Data port cannot be the same device.');
+    }
     upsertSection(DONGLE_CONF_PATH, dName, { audio: cleanAudio, data: cleanData });
     return { dongleName: dName, audio: cleanAudio, data: cleanData };
 }
@@ -12438,7 +12454,7 @@ function readAsteriskFullLogTail(maxBytes = 512 * 1024) {
 const liveVoiceStateCache = new Map();
 const LIVE_VOICE_CACHE_MS = 15000;
 
-function isLiveDongleVoiceEnabled(dongleId) {
+async function isLiveDongleVoiceEnabled(dongleId) {
     const id = String(dongleId || '').trim().toLowerCase();
     if (!/^dongle[0-9]+$/.test(id)) return false;
     const now = Date.now();
@@ -12446,10 +12462,9 @@ function isLiveDongleVoiceEnabled(dongleId) {
     if (cached && (now - cached.at) < LIVE_VOICE_CACHE_MS) return cached.enabled;
     let enabled = false;
     try {
-        const output = execFileSync(ASTERISK_BIN, ['-rx', `dongle show device state ${id}`], {
+        const output = await execFileAsync(ASTERISK_BIN, ['-rx', `dongle show device state ${id}`], {
             encoding: 'utf8',
-            timeout: 2500,
-            stdio: ['ignore', 'pipe', 'ignore']
+            timeout: 2500
         }) || '';
         enabled = /^\s*Voice\s*:\s*Yes\s*$/mi.test(output);
     } catch (_) {}
@@ -12457,7 +12472,7 @@ function isLiveDongleVoiceEnabled(dongleId) {
     return enabled;
 }
 
-function annotateE173VoiceWarnings(devices) {
+async function annotateE173VoiceWarnings(devices) {
     const logTail = readAsteriskFullLogTail();
     const warnings = parseE173VoiceWarningState(logTail);
     const nonFatalWarnings = parseNonFatalWarningState(logTail);
@@ -12473,7 +12488,7 @@ function annotateE173VoiceWarnings(devices) {
         // Log entries can lag the live state. A modem already reporting
         // Voice: Yes has a usable PCM path; do not surface an old failed
         // AT^CVOICE=0 attempt from the log tail.
-        if (warning && !isLiveDongleVoiceEnabled(device.ID)) {
+        if (warning && !(await isLiveDongleVoiceEnabled(device.ID))) {
             device.voiceEnableWarning = {
                 attempts: warning.attempts,
                 messageEn: `Voice activation failed after ${warning.attempts} attempts. Audio may be missing on this dongle; retry AT^CVOICE=0 or restart the modem.`,
@@ -12530,11 +12545,11 @@ function getEnrichedDevices() {
                 if (!error && stdout) {
                     devices = parseDevicesOutput(stdout, false, astDbMappings);
                 }
-                enrichDongleRouting(devices).then(enriched => {
-                    cachedEnrichedDevices = annotateE173VoiceWarnings(withConfiguredEmptySlots(enriched));
+                enrichDongleRouting(devices).then(async enriched => {
+                    cachedEnrichedDevices = await annotateE173VoiceWarnings(withConfiguredEmptySlots(enriched));
                     lastEnrichedDevicesTime = Date.now();
                     resolve(cachedEnrichedDevices);
-                }).catch(() => resolve(annotateE173VoiceWarnings(withConfiguredEmptySlots(devices))));
+                }).catch(async () => resolve(await annotateE173VoiceWarnings(withConfiguredEmptySlots(devices))));
             });
         });
     });
@@ -13360,7 +13375,7 @@ async function countDongleChannels() {
         const out = String(await execFileAsync(ASTERISK_BIN, ['-rx', 'core show channels'], { timeout: 5000 }) || '');
         return out.split('\n').filter(line => /Dongle\//i.test(line)).length;
     } catch (_) {
-        return 0;
+        return null;
     }
 }
 
@@ -13825,7 +13840,14 @@ app.post('/api/gsm-dongles/virtual-replug/:dongleId', async (req, res) => {
         });
     }
 
-    if (await countDongleChannels() > 0) {
+    const activeChannels = await countDongleChannels();
+    if (activeChannels === null) {
+        return res.status(409).json({
+            success: false,
+            error: 'Cannot determine whether a dongle call is active; refusing a USB power cycle.'
+        });
+    }
+    if (activeChannels > 0) {
         return res.status(409).json({
             success: false,
             error: 'A dongle call is in progress; a USB power cycle would drop every line. Retry when idle.'
@@ -13837,6 +13859,21 @@ app.post('/api/gsm-dongles/virtual-replug/:dongleId', async (req, res) => {
         source: 'api:/api/gsm-dongles/virtual-replug'
     });
     try {
+        // Re-check immediately before the destructive step: a call may have
+        // arrived while the device lookup and audit write ran.
+        const rechecked = await countDongleChannels();
+        if (rechecked === null || rechecked > 0) {
+            appendDongleRestartAudit({
+                type: 'virtual_replug', phase: 'blocked_active_call', dongleId,
+                source: 'api:/api/gsm-dongles/virtual-replug'
+            });
+            return res.status(409).json({
+                success: false,
+                error: rechecked === null
+                    ? 'Cannot determine whether a dongle call is active; refusing a USB power cycle.'
+                    : 'A dongle call started while preparing the power cycle; it was not performed.'
+            });
+        }
         const method = await usbPowerCycleDevice(target.device);
         await new Promise(resolve => setTimeout(resolve, 6000));
         await execFileAsync(ASTERISK_BIN, ['-rx', 'module reload chan_dongle.so'], { timeout: 30000 }).catch(() => {});
@@ -24513,6 +24550,19 @@ app.put('/api/config/federation/settings', requireAuth, async (req, res) => {
         const nodeName = String(local_node_name || 'Main PBX').trim();
         const role = panel_role === 'central' ? 'central' : 'local';
 
+        // A peer may never use this PBX's own site code: the prefix dialplan
+        // would then route every local extension to that peer.
+        const [collision] = await pool.query(
+            'SELECT node_name FROM `asterisk`.`sokrat_federation_peers` WHERE site_code = ? LIMIT 1',
+            [siteCode]
+        );
+        if (collision && collision.length > 0) {
+            return res.status(409).json({
+                success: false,
+                error: `Site code ${siteCode} already belongs to peer "${collision[0].node_name}". Pick a different local site code.`
+            });
+        }
+
         await pool.query(`
             INSERT INTO \`asterisk\`.\`sokrat_federation_settings\` (id, local_site_code, local_node_name, panel_role)
             VALUES (1, ?, ?, ?)
@@ -24523,6 +24573,7 @@ app.put('/api/config/federation/settings', requireAuth, async (req, res) => {
         if (federationHub) {
             await federationHub.reloadSettingsAndPeers();
         }
+        invalidateFederationShellCache();
 
         res.json({ success: true, settings: { id: 1, local_site_code: siteCode, local_node_name: nodeName, panel_role: role } });
     } catch (err) {
@@ -24550,11 +24601,12 @@ app.get('/api/config/federation/peers', requireAuth, async (req, res) => {
 
         const [allRemoteExts] = await pool.query('SELECT * FROM `asterisk`.`sokrat_federation_remote_extensions` ORDER BY dial_alias ASC');
 
-        const enriched = [];
-        for (const peer of peers) {
+        // Qualify in parallel: each call shells out to the Asterisk CLI, and a
+        // sequential loop made the federation tab crawl on multi-node installs.
+        const enriched = await Promise.all(peers.map(async (peer) => {
             const outboundPeer = peer.iax_peer_outbound || `fed_out_site${peer.site_code}`;
             const qualify = await qualifyIaxPeer(outboundPeer);
-            enriched.push({
+            return {
                 ...peer,
                 iax_secret_enc: undefined, // Do not expose encrypted secret
                 api_key_enc: undefined,
@@ -24563,8 +24615,8 @@ app.get('/api/config/federation/peers', requireAuth, async (req, res) => {
                 qualifyStatus: qualify.status,
                 latencyMs: qualify.latencyMs,
                 qualifyDescription: qualify.statusDescription
-            });
-        }
+            };
+        }));
 
         res.json({ success: true, peers: enriched, remoteExtensions: allRemoteExts });
     } catch (err) {
@@ -24586,6 +24638,17 @@ app.post('/api/config/federation/peers', requireAuth, async (req, res) => {
             return res.status(400).json({ success: false, error: 'Host and Site Code are required.' });
         }
         const cleanSiteCode = String(site_code).trim().replace(/\D/g, '');
+        if (!cleanSiteCode) {
+            return res.status(400).json({ success: false, error: 'Site code must be numeric.' });
+        }
+        const [localRows] = await pool.query('SELECT local_site_code FROM `asterisk`.`sokrat_federation_settings` WHERE id = 1');
+        const localSiteCode = String(localRows[0]?.local_site_code || '10').trim();
+        if (cleanSiteCode === localSiteCode) {
+            return res.status(409).json({
+                success: false,
+                error: `Site code ${cleanSiteCode} is this PBX's own site code. A peer needs a different prefix or every local extension would be routed to it.`
+            });
+        }
         const cleanNodeName = String(node_name || `Site ${cleanSiteCode}`).trim();
         const secret = String(iax_secret || crypto.randomBytes(24).toString('hex')).trim();
         const encryptedSecret = encrypt(secret);
@@ -24626,6 +24689,7 @@ app.post('/api/config/federation/peers', requireAuth, async (req, res) => {
 
         await syncFederationAsteriskConfig(pool, decrypt);
         if (federationHub) await federationHub.reloadSettingsAndPeers();
+        invalidateFederationShellCache();
 
         res.json({
             success: true,
@@ -24634,6 +24698,9 @@ app.post('/api/config/federation/peers', requireAuth, async (req, res) => {
             note: 'Remote node must be bootstrapped (or have the same API key) before signed polling succeeds.'
         });
     } catch (err) {
+        if (err && err.code === 'ER_DUP_ENTRY') {
+            return res.status(409).json({ success: false, error: 'A peer with this site code already exists.' });
+        }
         res.status(500).json({ success: false, error: err.message });
     }
 });
@@ -24721,17 +24788,19 @@ app.delete('/api/config/federation/peers/:id', requireAuth, async (req, res) => 
 
         const [peerRows] = await pool.query('SELECT * FROM `asterisk`.`sokrat_federation_peers` WHERE id = ?', [peerId]);
         const peer = peerRows && peerRows[0];
-        if (peer) {
-            const siteCode = peer.site_code;
-            const { execFile: execFileCb } = require('child_process');
-            execFileCb(ASTERISK_BIN, ['-rx', `database del FEDERATION PEER_${siteCode}_EGRESS_ALLOWED`], () => {});
-
-            // Best-effort remote cleanup if remote host is reachable
-            try {
-                const { removeRemoteFederationSetup } = require('./lib/federation-bootstrap');
-                await removeRemoteFederationSetup(peer.host, peer.ssh_port || 22, 'root', req.body.sshPassword || 'Admin@123');
-            } catch (_) {}
+        if (!peer) {
+            return res.status(404).json({ success: false, error: 'Peer not found.' });
         }
+
+        const [settingsRows] = await pool.query('SELECT local_site_code FROM `asterisk`.`sokrat_federation_settings` WHERE id = 1');
+        const localSiteCode = String(settingsRows[0]?.local_site_code || '10').trim();
+
+        // Delete locally first. The previous implementation ran up to three
+        // 20-second SSH commands (with a hard-coded root password) before
+        // touching the local row, so "remove server" appeared to hang and the
+        // table kept showing the peer until a request timed out.
+        const { execFile: execFileCb } = require('child_process');
+        execFileCb(ASTERISK_BIN, ['-rx', `database del FEDERATION PEER_${peer.site_code}_EGRESS_ALLOWED`], () => {});
 
         await pool.query('DELETE FROM `asterisk`.`sokrat_federation_remote_extensions` WHERE peer_id = ?', [peerId]);
         await pool.query('DELETE FROM `asterisk`.`sokrat_federation_remote_dongles` WHERE peer_id = ?', [peerId]);
@@ -24749,15 +24818,31 @@ app.delete('/api/config/federation/peers/:id', requireAuth, async (req, res) => 
             await pool.query("UPDATE `asterisk`.`sokrat_federation_settings` SET panel_role = 'local' WHERE id = 1");
         }
 
-        // Invalidate in-memory caches immediately
-        cachedFedTimestamp = 0;
-        cachedFedPeers = [];
-        cachedFedRemoteExts = [];
+        invalidateFederationShellCache();
 
         await syncFederationAsteriskConfig(pool, decrypt);
         if (federationHub) await federationHub.reloadSettingsAndPeers();
 
-        res.json({ success: true, message: 'Federation peer removed successfully.' });
+        // Tell the removed node to drop its record of this hub over the signed
+        // federation API. Fire-and-forget: the local removal must not depend on
+        // the remote being reachable, and it is scoped to this hub only.
+        let remoteUnlink = 'skipped';
+        if (peer.api_key_enc) {
+            remoteUnlink = 'scheduled';
+            setImmediate(() => {
+                federationRequest(peer, '/api/federation/v1/depart', {
+                    method: 'POST',
+                    body: { site_code: localSiteCode },
+                    localSiteCode,
+                    decryptFn: decrypt,
+                    timeout: 5000
+                }).catch(err => {
+                    console.warn(`Federation depart notice to site ${peer.site_code} failed: ${err.message}`);
+                });
+            });
+        }
+
+        res.json({ success: true, message: 'Federation peer removed successfully.', remoteUnlink });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }

@@ -3027,7 +3027,7 @@ chmod 666 /dev/ttyUSB* 2>/dev/null || true
 systemctl daemon-reload
 udevadm control --reload-rules 2>/dev/null || true
 udevadm trigger 2>/dev/null || true
-dongle_module_restart_verified 20 || exit 1
+dongle_module_restart_verified 60 || exit 1
 systemctl start sokrat-asterisk-logrotate.timer
 
 # 10x — Overlay VPN clients (ZeroTier / Tailscale) for remote management

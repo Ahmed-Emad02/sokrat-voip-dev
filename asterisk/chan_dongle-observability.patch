@@ -175,7 +175,7 @@
  	cusd_utf8_str[res] = '\0';
  
  	ast_verb (1, "[%s] Got USSD type %d '%s': '%s'\n", PVT_ID(pvt), type, typestr, cusd_utf8_str);
-+	ast_log (LOG_NOTICE, "[%s] ussd result: type=%d '%s': '%s'\n", PVT_ID(pvt), type, typestr, cusd_utf8_str);
++	ast_debug (1, "[%s] ussd result: type=%d '%s': '%s'\n", PVT_ID(pvt), type, typestr, cusd_utf8_str);
  	ast_base64encode (text_base64, (unsigned char*)cusd_utf8_str, res, sizeof(text_base64));
  
  	// TODO: pass type
@@ -199,8 +199,8 @@
  
  	pvt->outgoing_sms = 1;
  
-+	ast_log (LOG_NOTICE, "[%s] sms send queued: destination='%s' parts=%d uid=%d\n",
-+		PVT_ID(pvt), destination, res, uid);
++	ast_log (LOG_NOTICE, "[%s] sms send queued: parts=%d uid=%d\n",
++		PVT_ID(pvt), res, uid);
 +
  	ast_free(pdus);
  	return 0;

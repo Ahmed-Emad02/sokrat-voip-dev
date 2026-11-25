@@ -61,7 +61,15 @@ if [ ! -f "$DONGLE_HELPER" ]; then
     exit 1
 fi
 . "$DONGLE_HELPER"
-. "$(dirname "$DONGLE_HELPER")/dongle-config.sh"
+DONGLE_CONFIG_HELPER="$INSTALL_DIR/scripts/dongle-config.sh"
+if [ ! -f "$DONGLE_CONFIG_HELPER" ] && [ -f "$(dirname "$0")/dongle-config.sh" ]; then
+    DONGLE_CONFIG_HELPER="$(dirname "$0")/dongle-config.sh"
+fi
+if [ ! -f "$DONGLE_CONFIG_HELPER" ]; then
+    echo "ERROR: Missing shared dongle configuration helper: $DONGLE_CONFIG_HELPER" >&2
+    exit 1
+fi
+. "$DONGLE_CONFIG_HELPER"
 dongle_module_require_idle || exit 1
 dongle_deployment_disable_watchdog
 
@@ -1914,7 +1922,7 @@ echo "  WARNING: the host firewall is off - every port is exposed to the network
 # 6. Drain/restart Asterisk & Refresh Sokrat Daemons
 echo "[6/7] Activating Asterisk binaries and refreshing Sokrat services..."
 bash "$(dirname "$DONGLE_HELPER")/enable-dongle-logging.sh" --no-reload
-dongle_module_restart_verified 20 asterisk "$MODULES_DIR" || exit 1
+dongle_module_restart_verified 60 asterisk "$MODULES_DIR" || exit 1
 systemctl daemon-reload
 systemctl start sokrat-asterisk-logrotate.timer
 
@@ -1960,6 +1968,16 @@ if systemctl is-active --quiet webmin 2>/dev/null || systemctl is-enabled --quie
     systemctl disable webmin 2>/dev/null || true
 fi
 rm -f /etc/systemd/system/webmin.service /usr/lib/systemd/system/webmin.service 2>/dev/null || true
+
+# Retire the removed Python dongle-autoconfig timer. Its slot map is still used
+# by the application runtime, but the script and units are gone in this release.
+if [ -f /etc/systemd/system/sokrat-dongle-autoconfig.timer ] || [ -f /etc/systemd/system/sokrat-dongle-autoconfig.service ]; then
+    systemctl disable --now sokrat-dongle-autoconfig.timer 2>/dev/null || true
+    systemctl stop sokrat-dongle-autoconfig.service 2>/dev/null || true
+    rm -f /etc/systemd/system/sokrat-dongle-autoconfig.service /etc/systemd/system/sokrat-dongle-autoconfig.timer
+    systemctl daemon-reload 2>/dev/null || true
+    echo "  Retired legacy dongle autoconfig timer (slot map preserved)"
+fi
 rm -f /etc/yum.repos.d/webmin.repo /etc/yum.repos.d/sokrat-webmin.repo 2>/dev/null || true
 
 systemctl daemon-reload 2>/dev/null || true

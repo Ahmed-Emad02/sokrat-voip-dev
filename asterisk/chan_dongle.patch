@@ -607,12 +607,13 @@ index 1832dae..711c65a 100644
  	}
  
  	return 0;
-@@ -1256,13 +1333,19 @@ static int at_response_cmgr(struct pvt* pvt, char * str, size_t len)
+@@ -1256,13 +1333,20 @@ static int at_response_cmgr(struct pvt* pvt, char * str, size_t len)
  	int mr, st;
  	char		msg[4096];
  	int		res;
 -	char		text_base64[40800];
-+	char		*text_base64 = ast_calloc(1, 40800);
++	size_t		b64_max = 4 * (((160 * 255) + 2) / 3) + 1;
++	char		*text_base64 = ast_calloc(1, b64_max);
 +	char		*fullmsg = ast_calloc(1, 160 * 255);
  	size_t msg_len = sizeof(msg);
  	int tpdu_type;
@@ -644,7 +645,8 @@ index 1832dae..711c65a 100644
  
 -				ast_verb (1, "[%s] Got full SMS from %s: '%s'\n", PVT_ID(pvt), oa, fullmsg);
 +				ast_verb (1, "[%s] Got full SMS from %s: '%s'; [ref=%d, index=%u]\n", PVT_ID(pvt), oa, fullmsg, udh.ref, pvt->incoming_sms_index);
- 				ast_base64encode (text_base64, (unsigned char*)fullmsg, fullmsg_len, sizeof(text_base64));
+-				ast_base64encode (text_base64, (unsigned char*)fullmsg, fullmsg_len, sizeof(text_base64));
++				ast_base64encode (text_base64, (unsigned char*)fullmsg, fullmsg_len, b64_max);
  
  				manager_event_new_sms(PVT_ID(pvt), oa, fullmsg);
 @@ -1370,6 +1453,8 @@ receive_next_no_delete:

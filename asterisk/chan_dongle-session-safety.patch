@@ -27,8 +27,8 @@
  
 -	pvt->outgoing_sms = 1;
 -
- 	ast_log (LOG_NOTICE, "[%s] sms send queued: destination='%s' parts=%d uid=%d\n",
- 		PVT_ID(pvt), destination, res, uid);
+ 	ast_log (LOG_NOTICE, "[%s] sms send queued: parts=%d uid=%d\n",
+ 		PVT_ID(pvt), res, uid);
  
 --- a/at_queue.c
 +++ b/at_queue.c

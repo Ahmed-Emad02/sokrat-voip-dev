@@ -3619,7 +3619,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                         slotStatus((isRtl ? 'تم حذف الخانات: ' : 'Slots removed: ') + data.removedSlots.join(', ')
                             + ((data.stopped && data.stopped.length)
                                 ? (isRtl ? ' — أُوقف السائق؛ يختفي المدخل بعد إعادة تشغيل أستريسك.' : ' — driver entry stopped; it disappears after the next Asterisk restart.')
-                                : ''));
+                                : '') + (data.partial && data.warning ? ' — ' + data.warning : ''), Boolean(data.partial));
                     }
                     selected = new Set([...selected].filter(name => slots.some(slot => slot.slot === name && slot.removable)));
                 } catch (error) {
@@ -3653,8 +3653,8 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                     title: isRtl ? 'حذف خانات دونجل' : 'Remove dongle slots',
                     message: removesAssigned
                         ? (isRtl
-                            ? `حذف الخانات التالية: ${names.join(', ')}؟ بعضها مخصص ومودمه غير متصل؛ ستُحذف إعداداته وستنقطع باقي الخطوط لثوانٍ أثناء إعادة تحميل الوحدة.`
-                            : `Remove ${names.join(', ')}? Some are assigned with no modem connected; their sections are deleted and the remaining lines reconnect for a few seconds while the module is reloaded.`)
+                            ? `حذف الخانات التالية: ${names.join(', ')}؟ بعضها مخصص ومودمه غير متصل؛ ستُحذف إعداداته ويسري التغيير عند إعادة تحميل السائق التالية (دون إعادة تحميل تلقائية).`
+                            : `Remove ${names.join(', ')}? Some are assigned with no modem connected; their sections are deleted and the change takes effect at the next driver reload (no automatic reload).`)
                         : (isRtl
                             ? `حذف الخانات الفارغة التالية فقط: ${names.join(', ')}؟ سيُحذف إعداد الخانات فقط، دون أي عمليات على المودم.`
                             : `Remove only these empty slots: ${names.join(', ')}? Only their configuration sections are deleted; no modem operations.`),
@@ -7173,6 +7173,11 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                 const key = id || window.activeDiagDongleId;
                 if (!key) return;
                 const ctx = deviceContext(key);
+                if (ctx.site && ctx.site !== FED_LOCAL_SITE) {
+                    showToast(isRtl ? 'التشخيص' : 'Diagnostics',
+                        isRtl ? 'تشخيص المودم متاح على الخادم المحلي فقط.' : 'Dongle diagnostics are available only on the local PBX.', 'error');
+                    return;
+                }
                 window.activeDiagDongleId = ctx.key;
                 if (diagTargetEl) diagTargetEl.textContent = ctx.rawId;
                 if (diagLoadingEl) diagLoadingEl.classList.remove('hidden');
@@ -7218,6 +7223,11 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
             window.toggleDongleRun = async function(id, isStopped) {
                 if (!isRootUser) return;
                 const ctx = deviceContext(id);
+                if (ctx.site && ctx.site !== FED_LOCAL_SITE) {
+                    showToast(isRtl ? 'خطأ' : 'Error',
+                        isRtl ? 'تحكم التشغيل/الإيقاف متاح على الخادم المحلي فقط.' : 'Dongle stop/start controls are available only on the local PBX.', 'error');
+                    return;
+                }
                 const ok = await window.sokratConfirm({
                     title: isStopped ? DIAG_LABELS.start : DIAG_LABELS.stopTitle,
                     message: isStopped ? `${DIAG_LABELS.startQuestion} (${ctx.rawId})` : `${DIAG_LABELS.stopMsg} (${ctx.rawId})`,

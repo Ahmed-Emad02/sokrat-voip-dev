@@ -16,7 +16,7 @@ SOKRAT_CHAN_DONGLE_COMMIT="${SOKRAT_CHAN_DONGLE_COMMIT:-7db8e75bc2b7c81b173e1bb4
 # Release-pinned module shipped in installer-bundle/binaries/chan_dongle.so.
 # This digest is mandatory for bundle installs only: compiler output from a
 # source build is not byte-identical and is never compared with it.
-SOKRAT_CHAN_DONGLE_BUNDLE_SHA256="7baa5c939d0f2c47decb1f71d6656a5803ca248aebf3d33a979a0f816c1b72f0"
+SOKRAT_CHAN_DONGLE_BUNDLE_SHA256="892a33a9159519633e5a99f0602ce759af75a04f397dc45502f33d0fcf58d40d"
 
 # Strip URL userinfo (user:password@) from any line passed on stdin. Used for
 # every origin string that reaches installer output, including git's own
@@ -389,7 +389,7 @@ dongle_module_require_idle() {
         echo "  ERROR: cannot determine active channels; refusing an unsafe dongle reload" >&2
         return 1
     fi
-    active=$(printf '%s\n' "$output" | awk '/active channels|active calls?/ {print $1; exit}')
+    active=$(printf '%s\n' "$output" | awk '/^[0-9]+ active (channels?|calls?)[[:space:]]*$/ {print $1; exit}')
     case "$active" in
         ''|*[!0-9]*)
             echo "  ERROR: cannot determine active channels; refusing an unsafe dongle reload" >&2
@@ -565,8 +565,16 @@ dongle_module_restart_verified() {
         before_map=$(awk '$NF ~ /\/chan_dongle\.so$/ {print $1 ":" $5; exit}' "$proc_root/$before_pid/maps") || return 1
         if ! output=$(_dongle_module_cli "$ast" "core restart gracefully") \
             || printf '%s\n' "$output" | grep -Eqi 'no such command|unable|failed|not found|already shutting'; then
-            echo "  ERROR: Asterisk refused the graceful binary restart" >&2
-            return 1
+            # A failed graceful request usually means the CLI socket was not
+            # ready yet, or the daemon died while restarting. systemd already
+            # owns the process; force the restart instead of failing the whole
+            # install, then verify the new generation below.
+            detail=$(printf '%s' "$output" | head -1)
+            echo "  WARNING: graceful restart was not acknowledged${detail:+ (${detail})}; forcing a systemd restart" >&2
+            if ! systemctl restart asterisk; then
+                echo "  ERROR: Asterisk could not be restarted" >&2
+                return 1
+            fi
         fi
     else
         systemctl start asterisk || return 1
