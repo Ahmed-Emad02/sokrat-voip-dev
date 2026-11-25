@@ -539,6 +539,49 @@ function buildCdrSource(scope) {
 }
 app.set('view engine', 'ejs');
 app.use((req, res, next) => { res.locals.assetVersion = ASSET_VERSION; next(); });
+
+// Serve pre-compressed JS/CSS from /js and /css. express.static streams files and
+// therefore bypasses the res.send compressor above; this trims the largest
+// render-blocking assets (notably tailwindcss-browser.js) on first load.
+const STATIC_COMPRESS_RE = /\.(?:js|css|svg|json)$/i;
+const staticCompressCache = new Map();
+app.use((req, res, next) => {
+    if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+    const accept = req.headers['accept-encoding'] || '';
+    const useBrotli = /\bbr\b/.test(accept);
+    const useGzip = !useBrotli && /\bgzip\b/.test(accept);
+    if (!useBrotli && !useGzip) return next();
+    const urlPath = String(req.path || '').split('?')[0];
+    if (!urlPath.startsWith('/js/') && !urlPath.startsWith('/css/')) return next();
+    if (!STATIC_COMPRESS_RE.test(urlPath)) return next();
+    let filePath;
+    try {
+        filePath = path.join(__dirname, 'public', decodeURIComponent(urlPath));
+        const stat = fs.statSync(filePath);
+        if (!stat.isFile()) return next();
+        const key = `${filePath}:${stat.mtimeMs}:${useBrotli ? 'br' : 'gzip'}`;
+        let compressed = staticCompressCache.get(key);
+        if (!compressed) {
+            const raw = fs.readFileSync(filePath);
+            compressed = useBrotli
+                ? zlib.brotliCompressSync(raw, { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 4, [zlib.constants.BROTLI_PARAM_SIZE_HINT]: raw.length } })
+                : zlib.gzipSync(raw, { level: 6 });
+            if (staticCompressCache.size > 200) staticCompressCache.clear();
+            staticCompressCache.set(key, compressed);
+        }
+        if (!compressed || compressed.length >= stat.size) return next();
+        const ext = path.extname(filePath).toLowerCase();
+        res.setHeader('Content-Type', ext === '.css' ? 'text/css; charset=utf-8' : ext === '.svg' ? 'image/svg+xml' : 'application/javascript; charset=utf-8');
+        res.setHeader('Content-Encoding', useBrotli ? 'br' : 'gzip');
+        res.setHeader('Vary', 'Accept-Encoding');
+        res.setHeader('Cache-Control', 'public, max-age=604800');
+        res.setHeader('Content-Length', compressed.length);
+        return res.end(req.method === 'HEAD' ? undefined : compressed);
+    } catch (_) {
+        return next();
+    }
+});
+
 const staticCacheOptions = { maxAge: '7d', etag: true };
 app.use(express.static(path.join(__dirname, 'public'), staticCacheOptions));
 app.use('/public', express.static(path.join(__dirname, 'public'), staticCacheOptions));
@@ -1871,9 +1914,6 @@ async function initAuthDb() {
         console.error('Feature-code hand-off boot sync error:', fcErr.message);
     }
     try {
-        await loadClientNameFromDb();
-    } catch (_) {}
-    try {
         await loadWebhookConfigFromDb();
     } catch (_) {}
     try {
@@ -2937,9 +2977,7 @@ app.use('/api/config', (req, res, next) => {
         subTab = 'ivrs';
     } else if (req.path.startsWith('/recordings')) {
         subTab = 'recordings';
-        subTab = 'ivrs';
-    } else if (req.path.startsWith('/recordings')) {
-        subTab = 'ivrs';
+    } else if (req.path.startsWith('/moh')) {
         subTab = 'recordings';
     } else if (req.path.startsWith('/trunks')) {
         subTab = 'trunks';
@@ -2967,6 +3005,12 @@ app.use('/api/config', (req, res, next) => {
     }
 
     if (!subTab) return next();
+
+    if (req.isApiKeyAuthenticated && req.apiKey) {
+        const scopes = getApiKeyScopes(req);
+        if (hasAnyScope(scopes, ['config', `config-${subTab}`])) return next();
+        return res.status(403).json({ success: false, error: 'Forbidden. API key missing required scope: config-' + subTab });
+    }
 
     const perms = req.session.userPermissions || [];
     if (perms.includes('config') || perms.includes('config-' + subTab)) {
@@ -4961,6 +5005,12 @@ let cachedBaseRoster = null;
 let cachedBaseRosterTimestamp = 0;
 let cachedEmployeeGroupNames = [];
 let cachedEmployeeGroupTimestamp = 0;
+let cachedAgentStatusMap = {};
+let cachedAgentStatusDefinitions = [];
+let cachedAgentStatusTimestamp = 0;
+let cachedGreetingConfigTimestamp = 0;
+let cachedServerTimezone = null;
+let cachedServerTimezoneTimestamp = 0;
 let cachedFedSettings = { local_site_code: '10', local_node_name: 'Main PBX', panel_role: 'local' };
 let cachedFedPeers = [];
 let cachedFedRemoteExts = [];
@@ -5116,25 +5166,31 @@ app.use(async (req, res, next) => {
                 cachedEmployeeGroupTimestamp = now;
             } catch (_) {}
         }
-        let agentStatusMap = {};
-        try {
-            const [statusRows] = await pool.query('SELECT extension, status, display_name, last_update FROM asterisk.synq_agent_status');
-            if (Array.isArray(statusRows)) {
-                statusRows.forEach(r => {
-                    agentStatusMap[String(r.extension)] = r;
-                });
-            }
-        } catch (_) {}
-
-        let customStatusDefinitions = [];
-        try {
-            const [defRows] = await pool.query(
-                'SELECT status_key, label_ar, label_en, desc_ar, desc_en, color, target_group FROM asterisk.synq_agent_status_definitions WHERE is_active = 1 ORDER BY sort_order ASC, id ASC'
-            );
-            if (Array.isArray(defRows)) {
-                customStatusDefinitions = defRows;
-            }
-        } catch (_) {}
+        let agentStatusMap = cachedAgentStatusMap;
+        let customStatusDefinitions = cachedAgentStatusDefinitions;
+        if (now - cachedAgentStatusTimestamp > 5000) {
+            try {
+                const [statusRows] = await pool.query('SELECT extension, status, display_name, last_update FROM asterisk.synq_agent_status');
+                if (Array.isArray(statusRows)) {
+                    const freshMap = {};
+                    statusRows.forEach(r => {
+                        freshMap[String(r.extension)] = r;
+                    });
+                    cachedAgentStatusMap = freshMap;
+                    agentStatusMap = freshMap;
+                }
+            } catch (_) {}
+            try {
+                const [defRows] = await pool.query(
+                    'SELECT status_key, label_ar, label_en, desc_ar, desc_en, color, target_group FROM asterisk.synq_agent_status_definitions WHERE is_active = 1 ORDER BY sort_order ASC, id ASC'
+                );
+                if (Array.isArray(defRows)) {
+                    cachedAgentStatusDefinitions = defRows;
+                    customStatusDefinitions = defRows;
+                }
+            } catch (_) {}
+            cachedAgentStatusTimestamp = now;
+        }
         if (getTenantId(req)) {
             const tenantExtSet = new Set((req.session.tenantExtensions || []).map(String));
             roster = roster.filter(emp => tenantExtSet.has(String(emp.extension)));
@@ -5188,11 +5244,22 @@ app.use(async (req, res, next) => {
         const currentTheme = req.session.theme || 'dark';
         res.locals.currentTheme = currentTheme;
 
-        reloadGreetingConfig();
+        if (now - cachedGreetingConfigTimestamp > 5000) {
+            reloadGreetingConfig();
+            cachedGreetingConfigTimestamp = now;
+        }
         res.locals.greetingMode = greetingConfig.mode || 'none';
         res.locals.greetingExtensions = greetingConfig.extensions || [];
-        res.locals.clientName = cachedClientName || '';
-        res.locals.serverTimezone = getSystemTimezone();
+        if (!clientNameLoaded) {
+            try { await ensureClientNameLoaded(); } catch (_) {}
+        }
+        res.locals.clientName = cachedClientName || '—';
+        res.locals.clientNameConfigured = cachedClientName || '';
+        if (!cachedServerTimezone || now - cachedServerTimezoneTimestamp > 60000) {
+            cachedServerTimezone = getSystemTimezone();
+            cachedServerTimezoneTimestamp = now;
+        }
+        res.locals.serverTimezone = cachedServerTimezone;
         res.locals.serverTimestamp = Date.now();
         if (now - cachedFedTimestamp > 30000) {
             try {
@@ -6338,6 +6405,21 @@ app.get('/api/settings/alerts/watchdog-status', requireAuth, (req, res) => {
 
 // --- CLIENT SETTINGS ROUTES ---
 let cachedClientName = '';
+let clientNameLoaded = false;
+let clientNameLoadPromise = null;
+
+async function ensureClientNameLoaded() {
+    if (clientNameLoaded) return cachedClientName;
+    if (!clientNameLoadPromise) {
+        clientNameLoadPromise = loadClientNameFromDb()
+            .catch(() => cachedClientName)
+            .finally(() => {
+                clientNameLoaded = true;
+                clientNameLoadPromise = null;
+            });
+    }
+    return clientNameLoadPromise;
+}
 
 async function loadClientNameFromDb() {
     try {
@@ -6361,11 +6443,11 @@ async function loadClientNameFromDb() {
     return cachedClientName;
 }
 
+ensureClientNameLoaded().catch(() => {});
+
 app.get('/api/settings/client', requireAuth, async (req, res) => {
     try {
-        if (!cachedClientName) {
-            await loadClientNameFromDb();
-        }
+        await ensureClientNameLoaded();
         res.json({ success: true, clientName: cachedClientName });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
@@ -6396,6 +6478,7 @@ const handleClientSettingsUpdate = async (req, res) => {
         }
 
         cachedClientName = clientName;
+        clientNameLoaded = true;
 
         // Synchronize machine hostname with client name
         let systemHostname = '';
@@ -8071,8 +8154,7 @@ app.get('/cdr', async (req, res) => {
         let countQuery = `
             SELECT COUNT(*) as total
             FROM ${cdrSource.table} c
-            LEFT JOIN ${tables.users} u ON c.src = u.extension
-            LEFT JOIN \`asteriskcdrdb\`.\`cdr_transcriptions\` stt ON stt.uniqueid = c.uniqueid
+            ${searchTranscript ? 'LEFT JOIN `asteriskcdrdb`.`cdr_transcriptions` stt ON stt.uniqueid = c.uniqueid' : ''}
             WHERE c.calldate BETWEEN ? AND ?
             ${tenantClause}
             ${cdrSource.filtersSql}
@@ -8084,7 +8166,7 @@ app.get('/cdr', async (req, res) => {
             SELECT c.calldate, c.src, c.dst, c.dcontext, c.lastdata, c.duration, c.billsec, ${CDR_DISPOSITION_SQL} as disposition, c.uniqueid, c.recordingfile, c.channel, c.dstchannel, c.did, c.userfield,
             COALESCE(u.name, NULLIF(TRIM(c.cnam), ''), 'No Name') as src_name,
             COALESCE(u_dst.name, 'No Name') as dst_name${nodeColumns},
-            stt.transcript, stt.status as stt_status, stt.duration_sec as stt_duration, stt.language as stt_lang,
+            (stt.uniqueid IS NOT NULL) as has_transcript, stt.status as stt_status, stt.duration_sec as stt_duration, stt.language as stt_lang,
             ${directionCase} as direction,
             ${callScopeCase} as call_scope
             FROM ${cdrSource.table} c
@@ -8239,8 +8321,31 @@ app.get('/cdr', async (req, res) => {
                 trunk: resolveTrunkForCdr(row, cdrTrunksList, cdrDonglesList)
             };
         });
+
+        // Voicemails are a separate view; call rows stay call-only.
+        let voicemailList = [];
+        try {
+            const rangeStartMs = moment(startDate).valueOf();
+            const rangeEndMs = moment(endDate).valueOf();
+            voicemailList = (await scanVoicemailsCached())
+                .filter(vm => {
+                    if (!vm.origtime) return true;
+                    return vm.origtime >= rangeStartMs && vm.origtime <= rangeEndMs;
+                })
+                .map(vm => ({
+                    ...vm,
+                    audioUrl: vm.wavFile
+                        ? `/vm-audio/${encodeURIComponent(vm.mailbox)}/${encodeURIComponent(vm.wavFile)}`
+                        : null
+            }));
+        } catch (vmErr) {
+            console.error('CDR voicemail merge error:', vmErr.message);
+        }
+
         res.render('cdr', {
             calls: formattedRows,
+            voicemails: voicemailList,
+            voicemailView: req.query.view === 'voicemails',
             availableTrunks,
             filters: { startDate, endDate, targetExtension: targetExtensionFilter, statusFilter: statusFilterList, searchSrc, searchDst, searchDid, searchUniqueId, searchTranscript, directionFilter, callScopeFilter, durationMin, durationMax, durationUnit, trunkFilter: trunkFilterList, page, perPage },
             pagination: { total, totalPages, page, perPage },
@@ -9080,8 +9185,23 @@ async function scanVoicemails() {
     return messages;
 }
 
-app.get('/voicemails', async (req, res) => {
-    const allMsgs = await scanVoicemails();
+let voicemailScanCache = { at: 0, data: null };
+const VOICEMAIL_SCAN_TTL_MS = 15000;
+
+async function scanVoicemailsCached(maxAgeMs = VOICEMAIL_SCAN_TTL_MS) {
+    const now = Date.now();
+    if (voicemailScanCache.data && (now - voicemailScanCache.at) < maxAgeMs) {
+        return voicemailScanCache.data;
+    }
+    const data = await scanVoicemails();
+    voicemailScanCache = { at: now, data };
+    return data;
+}
+
+app.get('/voicemails', (req, res) => res.redirect(302, '/cdr?view=voicemails'));
+
+app.get('/voicemails-legacy', async (req, res) => {
+    const allMsgs = await scanVoicemailsCached();
     const searchTranscript = req.query.searchTranscript ? String(req.query.searchTranscript).trim() : '';
     const searchCallerid = req.query.searchCallerid || '';
     const searchMailbox = req.query.searchMailbox || '';
@@ -9118,7 +9238,7 @@ app.get('/voicemails', async (req, res) => {
 });
 
 app.get('/api/voicemails', async (req, res) => {
-    const allMsgs = await scanVoicemails();
+    const allMsgs = await scanVoicemailsCached();
     const searchTranscript = req.query.searchTranscript ? String(req.query.searchTranscript).trim() : '';
     const searchCallerid = req.query.searchCallerid || '';
     const searchMailbox = req.query.searchMailbox || '';
@@ -9187,7 +9307,7 @@ app.get('/vm-audio/:mailbox/:file', requireAuth, (req, res) => {
 });
 
 app.get('/vm-export', async (req, res) => {
-    const allMsgs = await scanVoicemails();
+    const allMsgs = await scanVoicemailsCached();
     const searchCallerid = req.query.searchCallerid || '';
     const searchMailbox = req.query.searchMailbox || '';
     const startDate = req.query.startDate ? moment(req.query.startDate).format('YYYY-MM-DD HH:mm:ss') : '';
@@ -16894,16 +17014,20 @@ app.post('/api/blacklist/sync', async (req, res) => {
 // Server-rendered client bundle for the PBX configuration page. Rendering it
 // once per language keeps 700 KB of JavaScript out of the HTML and lets the
 // browser cache it across navigations.
+const configPageBundleCache = new Map();
 app.get('/js/config-page.js', requireAuth, (req, res) => {
     const lang = String(req.query.lang || '').toLowerCase() === 'ar' ? 'ar' : 'en';
     res.type('application/javascript; charset=utf-8');
     res.setHeader('Cache-Control', 'private, max-age=86400, must-revalidate');
     res.setHeader('Vary', 'Accept-Encoding');
+    const cached = configPageBundleCache.get(lang);
+    if (cached) return res.send(cached);
     res.render('scripts/config-page', { isRtl: lang === 'ar', defaultOutboundPatterns: DEFAULT_OUTBOUND_DIAL_PATTERNS }, (err, js) => {
         if (err) {
             console.error('config-page bundle render error:', err.message);
             return res.status(500).send('// bundle error');
         }
+        configPageBundleCache.set(lang, js);
         res.send(js);
     });
 });
@@ -16935,7 +17059,8 @@ app.get('/config', requireAuth, (req, res) => {
         currentLang,
         isRtl: currentLang === 'ar',
         isSuperAdmin: isSuperAdmin(req),
-        isRoot
+        isRoot,
+        embed: req.query.embed === '1'
     });
 });
 
@@ -17091,7 +17216,8 @@ function updateVoicemailConf(extNum, displayName, vmVal, reload = true) {
         lines = lines.filter(line => !line.trim().startsWith(`${extNum} =>`));
 
         if (vmVal === 'default' || vmVal === 'enabled') {
-            const entry = `${extNum} => ,${displayName || extNum},,,attach=no|saycid=no|envelope=no|delete=no`;
+            const safeName = String(displayName || extNum).replace(/[\u0000-\u001F\u007F]/g, ' ').trim() || extNum;
+            const entry = `${extNum} => ,${safeName},,,attach=no|saycid=no|envelope=no|delete=no`;
             lines.push(entry);
         }
 
@@ -17729,7 +17855,10 @@ async function provisionExtension(payload = {}, options = {}) {
     }
 
     const extNum = String(extension).trim();
-    const displayName = String(name).trim();
+    const displayName = String(name).replace(/[\u0000-\u001F\u007F]/g, ' ').trim();
+    if (!displayName) {
+        throw validationError('Display Name is required.');
+    }
     const extSecret = String(secret).trim();
     const vmVal = (voicemail === 'default' || voicemail === 'enabled' || voicemail === true) ? 'default' : 'novm';
     const extContext = 'from-internal';
@@ -17753,6 +17882,7 @@ async function provisionExtension(payload = {}, options = {}) {
         throw validationError(collisionError);
     }
 
+    try {
     await pool.query(`
         INSERT INTO \`asterisk\`.\`users\` (extension, password, name, voicemail, ringtimer, noanswer, recording, outboundcid, sipname, mohclass)
         VALUES (?, '', ?, ?, 0, '', 'out=always|in=always', '', '', 'default')
@@ -17860,6 +17990,20 @@ async function provisionExtension(payload = {}, options = {}) {
     }
 
     return { extension: extNum, name: displayName, secret: extSecret, tech: devTech, isWebRTC, jitter_buffer: effectiveJitterBufferFields(jitterBuffer) };
+    } catch (error) {
+        try {
+            await pool.query(`DELETE FROM \`asterisk\`.\`extension_policies\` WHERE extension = ?`, [extNum]);
+            await pool.query(`DELETE FROM ${tables.employeeExtras} WHERE extension = ?`, [extNum]);
+            await pool.query(`DELETE FROM \`asterisk\`.\`sip\` WHERE id = ?`, [extNum]);
+            await pool.query(`DELETE FROM \`asterisk\`.\`devices\` WHERE id = ?`, [extNum]);
+            await pool.query(`DELETE FROM \`asterisk\`.\`users\` WHERE extension = ?`, [extNum]);
+            updatePjsipCustomConfig(extNum, '', '', 'delete', false);
+            updateVoicemailConf(extNum, '', 'novm', false);
+            await execFileAsync(ASTERISK_BIN, ['-rx', `database deltree AMPUSER ${extNum}`]).catch(() => {});
+            await execFileAsync(ASTERISK_BIN, ['-rx', `database deltree DEVICE ${extNum}`]).catch(() => {});
+        } catch (_) {}
+        throw error;
+    }
 }
 
 app.post('/api/config/extensions', async (req, res) => {
@@ -17969,9 +18113,21 @@ app.post('/api/config/extensions/bulk', requireAuth, async (req, res) => {
 app.put('/api/config/extensions/:extension', async (req, res) => {
     try {
         const extNum = String(req.params.extension).trim();
+        if (!/^\d+$/.test(extNum)) {
+            return res.status(400).json({ success: false, error: 'Valid numeric Extension number is required.' });
+        }
         const { name, secret, voicemail, tech, denoise, vad_gate, vadGate, vad_db, vadDb, agc } = req.body;
-        const displayName = String(name || '').trim();
+        const displayName = String(name || '').replace(/[\u0000-\u001F\u007F]/g, ' ').trim();
         const extSecret = String(secret || '').trim();
+        const vadDbVal = (vad_db !== undefined ? vad_db : vadDb);
+        const vadDbAllowed = new Set(['off', '-55', '-50', '-45', '-42', '-38', '-35', '-30']);
+        if (vadDbVal !== undefined && !vadDbAllowed.has(String(vadDbVal).trim())) {
+            return res.status(400).json({ success: false, error: 'Invalid VAD dB value.' });
+        }
+        const agcAllowed = new Set(['off', '8000', '6000', '10000', '12000']);
+        if (agc !== undefined && !agcAllowed.has(String(agc).trim() || 'off')) {
+            return res.status(400).json({ success: false, error: 'Invalid AGC value.' });
+        }
         const vmVal = (voicemail === 'default' || voicemail === 'enabled' || voicemail === true) ? 'default' : 'novm';
 
         const [devRows] = await pool.query('SELECT tech FROM `asterisk`.`devices` WHERE id = ?', [extNum]);
@@ -17985,6 +18141,22 @@ app.put('/api/config/extensions/:extension', async (req, res) => {
             return res.status(404).json({ success: false, error: `Extension ${extNum} not found.` });
         }
         const currentUser = userRows[0];
+
+        const [currExtRows] = await pool.query(
+            `SELECT is_group_admin FROM ${tables.employeeExtras} WHERE extension = ?`,
+            [extNum]
+        );
+        const currentIsAdmin = currExtRows[0]?.is_group_admin ? 1 : 0;
+        let isGroupAdmin = currentIsAdmin;
+        if (req.body.is_group_admin !== undefined || req.body.isGroupAdmin !== undefined) {
+            const requestedAdmin = (req.body.is_group_admin === true || req.body.is_group_admin === 'true' || req.body.is_group_admin === 1 || req.body.is_group_admin === '1' || req.body.isGroupAdmin === true || req.body.isGroupAdmin === 'true' || req.body.isGroupAdmin === 1 || req.body.isGroupAdmin === '1') ? 1 : 0;
+            if (requestedAdmin !== currentIsAdmin && !isSuperAdmin(req)) {
+                return res.status(403).json({ success: false, error: 'Forbidden: Only Super Admins can modify Group Admin status' });
+            }
+            if (isSuperAdmin(req)) {
+                isGroupAdmin = requestedAdmin;
+            }
+        }
 
         // Validate and resolve the jitter-buffer update before changing any
         // extension or PBX state. Omitted jb_* fields preserve the current
@@ -18063,21 +18235,19 @@ app.put('/api/config/extensions/:extension', async (req, res) => {
         reloadPjsip();
         if (denoise !== undefined) {
             const denoiseVal = ['both', 'rx', 'tx', 'off'].includes(denoise) ? denoise : 'off';
-            await execPromise(`${ASTERISK_BIN} -rx "database put AMPUSER ${extNum}/ai_denoise ${denoiseVal}"`);
+            await execFileAsync(ASTERISK_BIN, ['-rx', `database put AMPUSER ${extNum}/ai_denoise ${denoiseVal}`]);
         }
         const vadGateVal = (vad_gate !== undefined ? vad_gate : vadGate);
         if (vadGateVal !== undefined) {
             const validVad = (vadGateVal === '0' || vadGateVal === 0 || vadGateVal === false) ? '0' : '1';
-            await execPromise(`${ASTERISK_BIN} -rx "database put AMPUSER ${extNum}/vad_gate ${validVad}"`);
+            await execFileAsync(ASTERISK_BIN, ['-rx', `database put AMPUSER ${extNum}/vad_gate ${validVad}`]);
         }
-        const vadDbVal = (vad_db !== undefined ? vad_db : vadDb);
         if (vadDbVal !== undefined) {
-            const validVadDb = String(vadDbVal).trim();
-            await execPromise(`${ASTERISK_BIN} -rx "database put AMPUSER ${extNum}/vad_db ${validVadDb}"`);
+            await execFileAsync(ASTERISK_BIN, ['-rx', `database put AMPUSER ${extNum}/vad_db ${String(vadDbVal).trim()}`]);
         }
         if (agc !== undefined) {
             const validAgc = String(agc).trim() || 'off';
-            await execPromise(`${ASTERISK_BIN} -rx "database put AMPUSER ${extNum}/agc ${validAgc}"`);
+            await execFileAsync(ASTERISK_BIN, ['-rx', `database put AMPUSER ${extNum}/agc ${validAgc}`]);
         }
         if (requestedJitterBuffer) {
             await applyExtensionJitterBuffer(extNum, requestedJitterBuffer);
@@ -18086,22 +18256,6 @@ app.put('/api/config/extensions/:extension', async (req, res) => {
         sipPresence[extNum] = false;
         pjsipPresence[extNum] = false;
         delete pendingOffline[extNum];
-
-        const [currExtRows] = await pool.query(
-            `SELECT is_group_admin FROM ${tables.employeeExtras} WHERE extension = ?`,
-            [extNum]
-        );
-        const currentIsAdmin = currExtRows[0]?.is_group_admin ? 1 : 0;
-        let isGroupAdmin = currentIsAdmin;
-        if (req.body.is_group_admin !== undefined || req.body.isGroupAdmin !== undefined) {
-            const requestedAdmin = (req.body.is_group_admin === true || req.body.is_group_admin === 'true' || req.body.is_group_admin === 1 || req.body.is_group_admin === '1' || req.body.isGroupAdmin === true || req.body.isGroupAdmin === 'true' || req.body.isGroupAdmin === 1 || req.body.isGroupAdmin === '1') ? 1 : 0;
-            if (requestedAdmin !== currentIsAdmin && !isSuperAdmin(req)) {
-                return res.status(403).json({ success: false, error: 'Forbidden: Only Super Admins can modify Group Admin status' });
-            }
-            if (isSuperAdmin(req)) {
-                isGroupAdmin = requestedAdmin;
-            }
-        }
 
         if (req.body.is_group_admin !== undefined || req.body.isGroupAdmin !== undefined || req.body.emp_group !== undefined || req.body.title !== undefined || req.body.photo !== undefined) {
             const empGroup = req.body.emp_group !== undefined ? (String(req.body.emp_group || '').trim() || null) : null;
@@ -18862,7 +19016,7 @@ app.delete('/api/config/ringgroups/:grpnum', async (req, res) => {
 function cleanQueueAgentList(value) {
     const raw = Array.isArray(value)
         ? value
-        : String(value === undefined || value === null ? '' : value).split(/[\r\n,;]+/);
+        : String(value === undefined || value === null ? '' : value).split(/[\r\n,;\-]+/);
 
     const seen = new Set();
     const cleaned = [];
@@ -18904,9 +19058,9 @@ async function readQueueDynamicAgents() {
 async function syncAstDbQueueAgents(num, agents) {
     try {
         const list = cleanQueueAgentList(agents);
-        await execPromise(`${ASTERISK_BIN} -rx "database deltree QPENALTY/${num}"`);
+        await execFileAsync(ASTERISK_BIN, ['-rx', `database deltree QPENALTY/${num}`]);
         for (const ext of list) {
-            await execPromise(`${ASTERISK_BIN} -rx "database put QPENALTY/${num}/agents ${ext} 0"`);
+            await execFileAsync(ASTERISK_BIN, ['-rx', `database put QPENALTY/${num}/agents ${ext} 0`]);
         }
     } catch (e) {
         console.error(`AstDB QPENALTY sync error for queue ${num}:`, e.message);
@@ -19232,11 +19386,6 @@ app.post('/api/config/queues', async (req, res) => {
         const joinEmptyVal = (req.body.joinempty !== undefined && String(req.body.joinempty).trim()) ? String(req.body.joinempty).trim() : 'yes';
         const leaveWhenEmptyVal = (req.body.leavewhenempty !== undefined && String(req.body.leavewhenempty).trim()) ? String(req.body.leavewhenempty).trim() : 'no';
 
-        await pool.query(`
-            INSERT INTO \`asterisk\`.\`queues_config\`
-            (extension, descr, grppre, alertinfo, joinannounce_id, ringing, agentannounce_id, maxwait, password, ivr_id, callback_id, dest, destcontinue, cwignore, qregex, queuewait, use_queue_context, togglehint, qnoanswer, callconfirm, callconfirm_id, monitor_type, monitor_heard, monitor_spoken)
-            VALUES (?, ?, '', '', ?, 0, 0, ?, '', 'none', 'none', ?, ?, ?, '', 0, 0, 0, 0, 0, 0, ?, 0, 0)
-        `, [num, name, annId, maxWaitVal, failDest, continueDest, cwignoreVal, monitorTypeVal]);
         const details = [
             [num, 'strategy', ringStrategy, 0],
             [num, 'autofill', isAutofill, 0],
@@ -19270,6 +19419,11 @@ app.post('/api/config/queues', async (req, res) => {
         const conn = await pool.getConnection();
         try {
             await conn.beginTransaction();
+            await conn.query(`
+                INSERT INTO \`asterisk\`.\`queues_config\`
+                (extension, descr, grppre, alertinfo, joinannounce_id, ringing, agentannounce_id, maxwait, password, ivr_id, callback_id, dest, destcontinue, cwignore, qregex, queuewait, use_queue_context, togglehint, qnoanswer, callconfirm, callconfirm_id, monitor_type, monitor_heard, monitor_spoken)
+                VALUES (?, ?, '', '', ?, 0, 0, ?, '', 'none', 'none', ?, ?, ?, '', 0, 0, 0, 0, 0, 0, ?, 0, 0)
+            `, [num, name, annId, maxWaitVal, failDest, continueDest, cwignoreVal, monitorTypeVal]);
             for (const row of details) {
                 await conn.query('INSERT INTO `asterisk`.`queues_details` (id, keyword, data, flags) VALUES (?, ?, ?, ?)', row);
             }
@@ -19295,6 +19449,9 @@ app.post('/api/config/queues', async (req, res) => {
 app.put('/api/config/queues/:extension', async (req, res) => {
     try {
         const num = String(req.params.extension).trim();
+        if (!/^\d+$/.test(num)) {
+            return res.status(400).json({ success: false, error: 'Valid numeric Queue number is required.' });
+        }
         const {
             descr, static_members, dynmembers, musicclass,
             joinannounce_id, recording, maxwait, timeout, retry, dest, failover, destcontinue,
@@ -19403,6 +19560,9 @@ app.put('/api/config/queues/:extension', async (req, res) => {
 app.delete('/api/config/queues/:extension', async (req, res) => {
     try {
         const num = String(req.params.extension).trim();
+        if (!/^\d+$/.test(num)) {
+            return res.status(400).json({ success: false, error: 'Valid numeric Queue number is required.' });
+        }
         const [existing] = await pool.query('SELECT extension FROM `asterisk`.`queues_config` WHERE extension = ?', [num]);
         if (existing.length === 0) {
             return res.status(404).json({ success: false, error: `Queue ${num} not found.` });
@@ -20787,6 +20947,20 @@ app.delete('/api/config/trunks/:trunkid', async (req, res) => {
             await connection.rollback();
             return res.status(404).json({ success: false, error: 'Trunk not found.' });
         }
+        const [usedRoutes] = await connection.query(`
+            SELECT r.route_id, r.name
+            FROM \`asterisk\`.\`outbound_route_trunks\` rt
+            JOIN \`asterisk\`.\`outbound_routes\` r ON r.route_id = rt.route_id
+            WHERE rt.trunk_id = ?
+        `, [trunkId]);
+        if (usedRoutes.length > 0) {
+            await connection.rollback();
+            const names = usedRoutes.map(route => route.name || `#${route.route_id}`).join(', ');
+            return res.status(409).json({
+                success: false,
+                error: `Trunk is used by outbound route(s): ${names}. Remove it from those routes first.`
+            });
+        }
         await deleteTrunkProtocolRows(connection, trunkId);
         await connection.query('DELETE FROM `asterisk`.`trunk_dialpatterns` WHERE trunkid = ?', [trunkId]);
         await connection.query('DELETE FROM `asterisk`.`outbound_route_trunks` WHERE trunk_id = ?', [trunkId]);
@@ -20992,29 +21166,39 @@ app.post('/api/config/routes/inbound', async (req, res) => {
         }
 
         const existing = otherDid;
-        if (existing.length > 0) {
-            await pool.query(`
-                UPDATE \`asterisk\`.\`incoming\`
-                SET destination = ?, description = ?, alertinfo = ?, ringing = ?, grppre = ?, pricid = ?, delay_answer = ?
-                WHERE extension = ? AND cidnum = ?
-            `, [dest, desc, alertInfoVal, ringingVal, grpPreVal, priCidVal, delayAnswerVal, ext, cid]);
-        } else {
-            await pool.query(`
-                INSERT INTO \`asterisk\`.\`incoming\`
-                (cidnum, extension, destination, privacyman, pmmaxretries, pmminlength, alertinfo, ringing, mohclass, description, grppre, delay_answer, pricid)
-                VALUES (?, ?, ?, 0, '3', '10', ?, ?, 'default', ?, ?, ?, ?)
-            `, [cid, ext, dest, alertInfoVal, ringingVal, desc, grpPreVal, delayAnswerVal, priCidVal]);
-        }
+        const conn = await pool.getConnection();
+        try {
+            await conn.beginTransaction();
+            if (existing.length > 0) {
+                await conn.query(`
+                    UPDATE \`asterisk\`.\`incoming\`
+                    SET destination = ?, description = ?, alertinfo = ?, ringing = ?, grppre = ?, pricid = ?, delay_answer = ?
+                    WHERE extension = ? AND cidnum = ?
+                `, [dest, desc, alertInfoVal, ringingVal, grpPreVal, priCidVal, delayAnswerVal, ext, cid]);
+            } else {
+                await conn.query(`
+                    INSERT INTO \`asterisk\`.\`incoming\`
+                    (cidnum, extension, destination, privacyman, pmmaxretries, pmminlength, alertinfo, ringing, mohclass, description, grppre, delay_answer, pricid)
+                    VALUES (?, ?, ?, 0, '3', '10', ?, ?, 'default', ?, ?, ?, ?)
+                `, [cid, ext, dest, alertInfoVal, ringingVal, desc, grpPreVal, delayAnswerVal, priCidVal]);
+            }
 
-        // Universal call recording: this route always records (product policy).
-        await pool.query(`
-            DELETE FROM \`asterisk\`.\`callrecording_module\`
-            WHERE extension = ? AND cidnum = ? AND display = 'did'
-        `, [ext, cid]).catch(() => {});
-        await pool.query(`
-            INSERT INTO \`asterisk\`.\`callrecording_module\` (\`extension\`, \`cidnum\`, \`callrecording\`, \`display\`)
-            VALUES (?, ?, 'force', 'did')
-        `, [ext, cid]).catch(() => {});
+            // Universal call recording: this route always records (product policy).
+            await conn.query(`
+                DELETE FROM \`asterisk\`.\`callrecording_module\`
+                WHERE extension = ? AND cidnum = ? AND display = 'did'
+            `, [ext, cid]);
+            await conn.query(`
+                INSERT INTO \`asterisk\`.\`callrecording_module\` (\`extension\`, \`cidnum\`, \`callrecording\`, \`display\`)
+                VALUES (?, ?, 'force', 'did')
+            `, [ext, cid]);
+            await conn.commit();
+        } catch (routeError) {
+            await conn.rollback().catch(() => {});
+            throw routeError;
+        } finally {
+            conn.release();
+        }
 
         await reloadPbxConfigPromise();
         res.json({
@@ -21219,30 +21403,45 @@ app.post('/api/config/ivrs', async (req, res) => {
         const invalidRetry = invalid_loops ? String(invalid_loops) : '3';
         const invalidRec = invalid_retry_recording || 'default';
         const invalidDest = invalid_destination || 'app-blackhole,hangup,1';
+        const ivrSelections = (Array.isArray(entries) ? entries : [])
+            .map(entry => String(entry.selection || '').trim())
+            .filter(Boolean);
+        if (new Set(ivrSelections).size !== ivrSelections.length) {
+            return res.status(400).json({ success: false, error: 'IVR menu digits must be unique.' });
+        }
 
-        const [insertRes] = await pool.query(`
-            INSERT INTO \`asterisk\`.\`ivr_details\`
-            (name, description, announcement, directdial, timeout_time, timeout_loops, timeout_retry_recording, timeout_destination, invalid_loops, invalid_retry_recording, invalid_destination, timeout_enabled)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '1')
-        `, [
-            ivrName, ivrDesc, announceId, dirDial,
-            timeoutSec, timeoutRetry, timeoutRec, timeoutDest,
-            invalidRetry, invalidRec, invalidDest
-        ]);
+        let newIvrId;
+        const conn = await pool.getConnection();
+        try {
+            await conn.beginTransaction();
+            const [insertRes] = await conn.query(`
+                INSERT INTO \`asterisk\`.\`ivr_details\`
+                (name, description, announcement, directdial, timeout_time, timeout_loops, timeout_retry_recording, timeout_destination, invalid_loops, invalid_retry_recording, invalid_destination, timeout_enabled)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '1')
+            `, [
+                ivrName, ivrDesc, announceId, dirDial,
+                timeoutSec, timeoutRetry, timeoutRec, timeoutDest,
+                invalidRetry, invalidRec, invalidDest
+            ]);
+            newIvrId = insertRes.insertId;
 
-        const newIvrId = insertRes.insertId;
-
-        // Insert IVR entries (digit options)
-        if (Array.isArray(entries) && entries.length) {
-            for (const entry of entries) {
-                const targetDest = String(entry.dest || entry.destination || '').trim();
-                if (entry.selection && targetDest) {
-                    await pool.query(`
-                        INSERT INTO \`asterisk\`.\`ivr_entries\` (ivr_id, selection, dest, ivr_ret)
-                        VALUES (?, ?, ?, 0)
-                    `, [newIvrId, String(entry.selection).trim(), targetDest]);
+            if (Array.isArray(entries) && entries.length) {
+                for (const entry of entries) {
+                    const targetDest = String(entry.dest || entry.destination || '').trim();
+                    if (entry.selection && targetDest) {
+                        await conn.query(`
+                            INSERT INTO \`asterisk\`.\`ivr_entries\` (ivr_id, selection, dest, ivr_ret)
+                            VALUES (?, ?, ?, 0)
+                        `, [newIvrId, String(entry.selection).trim(), targetDest]);
+                    }
                 }
             }
+            await conn.commit();
+        } catch (ivrError) {
+            await conn.rollback().catch(() => {});
+            throw ivrError;
+        } finally {
+            conn.release();
         }
 
         await reloadPbxConfigPromise();
@@ -21283,6 +21482,12 @@ app.put('/api/config/ivrs/:id', async (req, res) => {
         const invalidRetry = invalid_loops ? String(invalid_loops) : '3';
         const invalidRec = invalid_retry_recording !== undefined ? invalid_retry_recording : (existingIvr.invalid_retry_recording || 'default');
         const invalidDest = invalid_destination || 'app-blackhole,hangup,1';
+        const ivrSelections = (Array.isArray(entries) ? entries : [])
+            .map(entry => String(entry.selection || '').trim())
+            .filter(Boolean);
+        if (new Set(ivrSelections).size !== ivrSelections.length) {
+            return res.status(400).json({ success: false, error: 'IVR menu digits must be unique.' });
+        }
 
         const conn = await pool.getConnection();
         try {
@@ -21481,38 +21686,67 @@ app.post('/api/config/routes/outbound', async (req, res) => {
         const routeCid = String(outcid || '').trim();
         const routeCidMode = routeCid ? String(outcid_mode || '').trim() : '';
 
-        // 1. Insert into outbound_routes
-        const [rResult] = await pool.query(`
-            INSERT INTO \`asterisk\`.\`outbound_routes\` (name, outcid, outcid_mode, password, emergency_route, intracompany_route, mohclass)
-            VALUES (?, ?, ?, '', '', '', 'default')
-        `, [routeName, routeCid, routeCidMode]);
-        const routeId = rResult.insertId;
-
-        // 2. Insert patterns
-        for (const p of routePatterns) {
-            await pool.query(`
-                INSERT INTO \`asterisk\`.\`outbound_route_patterns\` (route_id, match_pattern_prefix, match_pattern_pass, match_cid, prepend_digits)
-                VALUES (?, ?, ?, ?, ?)
-            `, [routeId, String(p.prefix || '').trim(), String(p.pattern || '').trim(), String(p.cid || '').trim(), String(p.prepend || '').trim()]);
+        const trunkIds = trunks.map(id => Number.parseInt(id, 10));
+        if (trunkIds.some(id => !Number.isInteger(id) || id <= 0)) {
+            return res.status(400).json({ success: false, error: 'All trunk IDs must be valid integers.' });
+        }
+        const uniqueTrunkIds = [...new Set(trunkIds)];
+        const cleanedPatterns = routePatterns.map(p => ({
+            prefix: String(p.prefix || '').trim(),
+            pattern: String(p.pattern || '').trim(),
+            cid: String(p.cid || '').trim(),
+            prepend: String(p.prepend || '').trim()
+        }));
+        if (cleanedPatterns.some(p => !p.pattern)) {
+            return res.status(400).json({ success: false, error: 'Every dial pattern needs a match pattern.' });
         }
 
-        // 3. Insert trunks in order (seq)
-        for (let i = 0; i < trunks.length; i++) {
-            await pool.query(`
-                INSERT INTO \`asterisk\`.\`outbound_route_trunks\` (route_id, trunk_id, seq)
-                VALUES (?, ?, ?)
-            `, [routeId, parseInt(trunks[i], 10), i]);
+        let routeId;
+        const conn = await pool.getConnection();
+        try {
+            await conn.beginTransaction();
+            const [existingTrunks] = await conn.query(
+                'SELECT trunkid FROM `asterisk`.`trunks` WHERE trunkid IN (?) FOR UPDATE',
+                [uniqueTrunkIds]
+            );
+            if (existingTrunks.length !== uniqueTrunkIds.length) {
+                throw Object.assign(new Error('One or more selected trunks no longer exist.'), { statusCode: 400 });
+            }
+
+            const [rResult] = await conn.query(`
+                INSERT INTO \`asterisk\`.\`outbound_routes\` (name, outcid, outcid_mode, password, emergency_route, intracompany_route, mohclass)
+                VALUES (?, ?, ?, '', '', '', 'default')
+            `, [routeName, routeCid, routeCidMode]);
+            routeId = rResult.insertId;
+
+            for (const p of cleanedPatterns) {
+                await conn.query(`
+                    INSERT INTO \`asterisk\`.\`outbound_route_patterns\` (route_id, match_pattern_prefix, match_pattern_pass, match_cid, prepend_digits)
+                    VALUES (?, ?, ?, ?, ?)
+                `, [routeId, p.prefix, p.pattern, p.cid, p.prepend]);
+            }
+
+            for (let i = 0; i < trunkIds.length; i++) {
+                await conn.query(`
+                    INSERT INTO \`asterisk\`.\`outbound_route_trunks\` (route_id, trunk_id, seq)
+                    VALUES (?, ?, ?)
+                `, [routeId, trunkIds[i], i]);
+            }
+
+            const [seqRow] = await conn.query('SELECT COALESCE(MAX(seq), -1) + 1 AS nextSeq FROM `asterisk`.`outbound_route_sequence`');
+            const nextSeq = seqRow[0]?.nextSeq || 0;
+            await conn.query('DELETE FROM `asterisk`.`outbound_route_sequence` WHERE route_id = ?', [routeId]);
+            await conn.query(`
+                INSERT INTO \`asterisk\`.\`outbound_route_sequence\` (route_id, seq)
+                VALUES (?, ?)
+            `, [routeId, nextSeq]);
+            await conn.commit();
+        } catch (routeError) {
+            await conn.rollback().catch(() => {});
+            throw routeError;
+        } finally {
+            conn.release();
         }
-
-        // 4. Insert sequence position (next available seq)
-        const [seqRow] = await pool.query('SELECT COALESCE(MAX(seq), -1) + 1 AS nextSeq FROM `asterisk`.`outbound_route_sequence`');
-        const nextSeq = seqRow[0]?.nextSeq || 0;
-
-        await pool.query('DELETE FROM `asterisk`.`outbound_route_sequence` WHERE route_id = ?', [routeId]);
-        await pool.query(`
-            INSERT INTO \`asterisk\`.\`outbound_route_sequence\` (route_id, seq)
-            VALUES (?, ?)
-        `, [routeId, nextSeq]);
 
         const reloadRes = await reloadPbxConfigPromise();
         res.json({
@@ -21523,7 +21757,7 @@ app.post('/api/config/routes/outbound', async (req, res) => {
             ...(reloadRes.error ? { reloadError: reloadRes.error } : {})
         });
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        res.status(error.statusCode || 500).json({ success: false, error: error.message });
     }
 });
 
@@ -21546,6 +21780,20 @@ app.put('/api/config/routes/outbound/:route_id', async (req, res) => {
 
         const routeCid = String(outcid || '').trim();
         const routeCidMode = routeCid ? String(outcid_mode || '').trim() : '';
+        const trunkIds = trunks.map(id => Number.parseInt(id, 10));
+        if (trunkIds.some(id => !Number.isInteger(id) || id <= 0)) {
+            return res.status(400).json({ success: false, error: 'All trunk IDs must be valid integers.' });
+        }
+        const uniqueTrunkIds = [...new Set(trunkIds)];
+        const cleanedPatterns = patterns.map(p => ({
+            prefix: String(p.prefix || '').trim(),
+            pattern: String(p.pattern || '').trim(),
+            cid: String(p.cid || '').trim(),
+            prepend: String(p.prepend || '').trim()
+        }));
+        if (cleanedPatterns.some(p => !p.pattern)) {
+            return res.status(400).json({ success: false, error: 'Every dial pattern needs a match pattern.' });
+        }
 
         // Patterns and trunks are replaced atomically: a failure mid-write used to
         // leave the route with no patterns or no trunks, silently killing outbound
@@ -21553,6 +21801,17 @@ app.put('/api/config/routes/outbound/:route_id', async (req, res) => {
         const conn = await pool.getConnection();
         try {
             await conn.beginTransaction();
+            const [routeRows] = await conn.query('SELECT route_id FROM `asterisk`.`outbound_routes` WHERE route_id = ? FOR UPDATE', [routeId]);
+            if (routeRows.length === 0) {
+                throw Object.assign(new Error('Outbound route not found.'), { statusCode: 404 });
+            }
+            const [existingTrunks] = await conn.query(
+                'SELECT trunkid FROM `asterisk`.`trunks` WHERE trunkid IN (?) FOR UPDATE',
+                [uniqueTrunkIds]
+            );
+            if (existingTrunks.length !== uniqueTrunkIds.length) {
+                throw Object.assign(new Error('One or more selected trunks no longer exist.'), { statusCode: 400 });
+            }
             await conn.query(`
                 UPDATE \`asterisk\`.\`outbound_routes\`
                 SET name = ?, outcid = ?, outcid_mode = ?
@@ -21560,21 +21819,19 @@ app.put('/api/config/routes/outbound/:route_id', async (req, res) => {
             `, [routeName, routeCid, routeCidMode, routeId]);
 
             await conn.query('DELETE FROM `asterisk`.`outbound_route_patterns` WHERE route_id = ?', [routeId]);
-            for (const p of patterns) {
+            for (const p of cleanedPatterns) {
                 await conn.query(`
                     INSERT INTO \`asterisk\`.\`outbound_route_patterns\` (route_id, match_pattern_prefix, match_pattern_pass, match_cid, prepend_digits)
                     VALUES (?, ?, ?, ?, ?)
-                `, [routeId, String(p.prefix || '').trim(), String(p.pattern || '').trim(), String(p.cid || '').trim(), String(p.prepend || '').trim()]);
+                `, [routeId, p.prefix, p.pattern, p.cid, p.prepend]);
             }
 
             await conn.query('DELETE FROM `asterisk`.`outbound_route_trunks` WHERE route_id = ?', [routeId]);
-            for (let i = 0; i < trunks.length; i++) {
-                const trunkId = parseInt(trunks[i], 10);
-                if (!Number.isFinite(trunkId)) continue;
+            for (let i = 0; i < trunkIds.length; i++) {
                 await conn.query(`
                     INSERT INTO \`asterisk\`.\`outbound_route_trunks\` (route_id, trunk_id, seq)
                     VALUES (?, ?, ?)
-                `, [routeId, trunkId, i]);
+                `, [routeId, trunkIds[i], i]);
             }
             await conn.commit();
         } catch (routeError) {
@@ -21593,7 +21850,7 @@ app.put('/api/config/routes/outbound/:route_id', async (req, res) => {
             ...(reloadRes.error ? { reloadError: reloadRes.error } : {})
         });
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        res.status(error.statusCode || 500).json({ success: false, error: error.message });
     }
 });
 
@@ -22330,6 +22587,10 @@ app.post('/api/config/timeconditions', async (req, res) => {
         if (!timegroup_id) {
             return res.status(400).json({ success: false, error: 'Time Group is required' });
         }
+        const [tcGroup] = await pool.query('SELECT id FROM `asterisk`.`timegroups_groups` WHERE id = ?', [parseInt(timegroup_id, 10) || 0]);
+        if (!tcGroup.length) {
+            return res.status(400).json({ success: false, error: 'Selected Time Group does not exist.' });
+        }
         if (!truegoto || !falsegoto) {
             return res.status(400).json({ success: false, error: 'True and False destinations are required' });
         }
@@ -22362,6 +22623,10 @@ app.put('/api/config/timeconditions/:id', async (req, res) => {
         }
         if (!timegroup_id) {
             return res.status(400).json({ success: false, error: 'Time Group is required' });
+        }
+        const [tcGroup] = await pool.query('SELECT id FROM `asterisk`.`timegroups_groups` WHERE id = ?', [parseInt(timegroup_id, 10) || 0]);
+        if (!tcGroup.length) {
+            return res.status(400).json({ success: false, error: 'Selected Time Group does not exist.' });
         }
         if (!truegoto || !falsegoto) {
             return res.status(400).json({ success: false, error: 'True and False destinations are required' });
@@ -23582,7 +23847,11 @@ app.post('/api/config/moh/upload', requireAuth, (req, res) => {
         const catParam = req.query.category || req.body.category || 'default';
         const catName = String(catParam).trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_');
         const categories = parseMohConf();
-        const cat = categories.find(c => c.name === catName) || categories[0];
+        const cat = categories.find(c => c.name === catName);
+        if (!cat) {
+            try { fs.unlinkSync(rawPath); } catch (_) {}
+            return res.status(404).json({ success: false, error: 'MoH category not found.' });
+        }
         let catDir = cat.directory ? path.resolve(cat.directory) : (catName === 'default' ? MOH_ROOT : path.join(MOH_ROOT, catName));
 
         if (!fs.existsSync(catDir)) fs.mkdirSync(catDir, { recursive: true });
@@ -23636,7 +23905,10 @@ app.delete('/api/config/moh/file', requireAuth, async (req, res) => {
         const catName = category.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_');
         const cleanFile = path.basename(filename);
         const categories = parseMohConf();
-        const cat = categories.find(c => c.name === catName) || categories[0];
+        const cat = categories.find(c => c.name === catName);
+        if (!cat) {
+            return res.status(404).json({ success: false, error: 'MoH category not found.' });
+        }
         let catDir = cat.directory ? path.resolve(cat.directory) : (catName === 'default' ? MOH_ROOT : path.join(MOH_ROOT, catName));
 
         const targetFile = path.join(catDir, cleanFile);
@@ -23733,7 +24005,10 @@ app.get('/api/config/moh/stream/:category/:file', requireAuth, (req, res) => {
         const catName = req.params.category.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_');
         const fileName = path.basename(req.params.file);
         const categories = parseMohConf();
-        const cat = categories.find(c => c.name === catName) || categories[0];
+        const cat = categories.find(c => c.name === catName);
+        if (!cat) {
+            return res.status(404).send('MoH category not found.');
+        }
         let catDir = cat.directory ? path.resolve(cat.directory) : (catName === 'default' ? MOH_ROOT : path.join(MOH_ROOT, catName));
 
         const filePath = path.join(catDir, fileName);

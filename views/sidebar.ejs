@@ -312,7 +312,6 @@ function can(tab) {
 <link rel="stylesheet" href="/css/flatpickr.min.css">
 <script src="/js/flatpickr.min.js"></script>
 <script src="/js/anime.min.js"></script>
-<script src="/js/jssip.min.js"></script>
 <!-- Global Theme Override Styles -->
 <style>
     *, *::before, *::after {
@@ -454,6 +453,72 @@ function can(tab) {
 
     .light-theme .text-white {
         color: #111827 !important;
+    }
+    /* The rule above is for type on light surfaces. A control painted with a
+       saturated accent/danger fill keeps white labels instead: the fill class
+       itself, nested label spans, and stroke icons. The component classes at
+       the end paint their fill from their own stylesheet rule rather than a
+       utility, so they must be listed here. The generic black-label rules also
+       target descendants, hence the `*` and svg selectors. */
+    .light-theme :is(
+        .bg-\[var\(--accent-color\)\], .bg-\[var\(--accent-hover\)\],
+        .bg-red-500, .bg-red-600, .bg-red-600\/80, .bg-red-700,
+        .bg-rose-500, .bg-rose-600, .bg-rose-700,
+        .bg-emerald-500, .bg-emerald-600, .bg-amber-500, .bg-amber-600,
+        .storage-tab-btn.active, .q-tab.active, .q-btn-primary,
+        .q-filter button[aria-pressed="true"], .q-player-btn,
+        .dialer-control-danger, .config-tab-active, .btn-primary,
+        .config-btn-primary
+    ),
+    .light-theme :is(
+        .bg-\[var\(--accent-color\)\], .bg-\[var\(--accent-hover\)\],
+        .bg-red-500, .bg-red-600, .bg-red-600\/80, .bg-red-700,
+        .bg-rose-500, .bg-rose-600, .bg-rose-700,
+        .bg-emerald-500, .bg-emerald-600, .bg-amber-500, .bg-amber-600,
+        .storage-tab-btn.active, .q-tab.active, .q-btn-primary,
+        .q-filter button[aria-pressed="true"], .q-player-btn,
+        .dialer-control-danger, .config-tab-active, .btn-primary,
+        .config-btn-primary
+    ) *,
+    .light-theme :is(
+        .bg-\[var\(--accent-color\)\], .bg-\[var\(--accent-hover\)\],
+        .bg-red-500, .bg-red-600, .bg-red-600\/80, .bg-red-700,
+        .bg-rose-500, .bg-rose-600, .bg-rose-700,
+        .bg-emerald-500, .bg-emerald-600, .bg-amber-500, .bg-amber-600,
+        .storage-tab-btn.active, .q-tab.active, .q-btn-primary,
+        .q-filter button[aria-pressed="true"], .q-player-btn,
+        .dialer-control-danger, .config-tab-active, .btn-primary,
+        .config-btn-primary
+    ) svg,
+    .light-theme :is(
+        .bg-\[var\(--accent-color\)\], .bg-\[var\(--accent-hover\)\],
+        .bg-red-500, .bg-red-600, .bg-red-600\/80, .bg-red-700,
+        .bg-rose-500, .bg-rose-600, .bg-rose-700,
+        .bg-emerald-500, .bg-emerald-600, .bg-amber-500, .bg-amber-600,
+        .storage-tab-btn.active, .q-tab.active, .q-btn-primary,
+        .q-filter button[aria-pressed="true"], .q-player-btn,
+        .dialer-control-danger, .config-tab-active, .btn-primary,
+        .config-btn-primary
+    ) svg * {
+        color: #ffffff !important;
+        stroke: #ffffff !important;
+    }
+    /* Other saturated fills used by status chips and maintenance actions keep
+       white labels for the same reason. */
+    .light-theme :is(
+        .bg-purple-500, .bg-purple-600, .bg-blue-500, .bg-blue-600,
+        .bg-indigo-500, .bg-indigo-600, .bg-sky-500, .bg-sky-600,
+        .bg-teal-500, .bg-teal-600, .bg-cyan-500, .bg-cyan-600,
+        .bg-emerald-400, .bg-red-600\/80
+    ),
+    .light-theme :is(
+        .bg-purple-500, .bg-purple-600, .bg-blue-500, .bg-blue-600,
+        .bg-indigo-500, .bg-indigo-600, .bg-sky-500, .bg-sky-600,
+        .bg-teal-500, .bg-teal-600, .bg-cyan-500, .bg-cyan-600,
+        .bg-emerald-400, .bg-red-600\/80
+    ) * {
+        color: #ffffff !important;
+        stroke: #ffffff !important;
     }
     .light-theme select, .light-theme input, .light-theme .user-input, .light-theme button.user-input {
         background-color: #ffffff !important;
@@ -804,12 +869,46 @@ function can(tab) {
 
     /* Inactive nav items */
     .nav-item:not(.bg-\[var\(--accent-color\)\]) {
-        /* Hover bg (revealed): subtle warm highlight */
-        background: var(--bg-hover) !important;
+        background: transparent !important;
+    }
+    .nav-item:not(.bg-\[var\(--accent-color\)\]):hover,
+    .nav-item:not(.bg-\[var\(--accent-color\)\]):focus-visible {
+        background: transparent !important;
+        color: #ffffff !important;
+    }
+    .nav-item:not(.bg-\[var\(--accent-color\)\]):hover *,
+    .nav-item:not(.bg-\[var\(--accent-color\)\]):focus-visible * {
+        color: #ffffff !important;
+    }
+    .nav-item:not(.bg-\[var\(--accent-color\)\])::before,
+    .nav-item:not(.bg-\[var\(--accent-color\)\])::after {
+        /* Two red panels rest open at the edges, then close inward on hover. */
+        content: '' !important;
+        position: absolute !important;
+        top: 0 !important;
+        bottom: 0 !important;
+        width: 50% !important;
+        z-index: -1 !important;
+        background: #991b1b !important;
+        transform: scaleX(0) !important;
+        transition: transform 280ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+        pointer-events: none !important;
     }
     .nav-item:not(.bg-\[var\(--accent-color\)\])::before {
-        /* Resting cover: red tint */
-        background: rgba(185, 28, 28, 0.40) !important;
+        left: 0 !important;
+        right: auto !important;
+        transform-origin: left center !important;
+    }
+    .nav-item:not(.bg-\[var\(--accent-color\)\])::after {
+        right: 0 !important;
+        left: auto !important;
+        transform-origin: right center !important;
+    }
+    .nav-item:not(.bg-\[var\(--accent-color\)\]):hover::before,
+    .nav-item:not(.bg-\[var\(--accent-color\)\]):hover::after,
+    .nav-item:not(.bg-\[var\(--accent-color\)\]):focus-visible::before,
+    .nav-item:not(.bg-\[var\(--accent-color\)\]):focus-visible::after {
+        transform: scaleX(1) !important;
     }
 
     /* Light theme active nav item */
@@ -863,10 +962,45 @@ function can(tab) {
 
     /* Light theme: inactive nav items */
     .light-theme .nav-item:not(.bg-\[var\(--accent-color\)\]) {
-        background: rgba(185, 28, 28, 0.08) !important;
+        background: transparent !important;
+    }
+    .light-theme .nav-item:not(.bg-\[var\(--accent-color\)\]):hover,
+    .light-theme .nav-item:not(.bg-\[var\(--accent-color\)\]):focus-visible {
+        background: transparent !important;
+        color: #ffffff !important;
+    }
+    .light-theme .nav-item:not(.bg-\[var\(--accent-color\)\]):hover *,
+    .light-theme .nav-item:not(.bg-\[var\(--accent-color\)\]):focus-visible * {
+        color: #ffffff !important;
+    }
+    .light-theme .nav-item:not(.bg-\[var\(--accent-color\)\])::before,
+    .light-theme .nav-item:not(.bg-\[var\(--accent-color\)\])::after {
+        content: '' !important;
+        position: absolute !important;
+        top: 0 !important;
+        bottom: 0 !important;
+        width: 50% !important;
+        z-index: -1 !important;
+        background: #991b1b !important;
+        transform: scaleX(0) !important;
+        transition: transform 280ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+        pointer-events: none !important;
     }
     .light-theme .nav-item:not(.bg-\[var\(--accent-color\)\])::before {
-        background: rgba(185, 28, 28, 0.22) !important;
+        left: 0 !important;
+        right: auto !important;
+        transform-origin: left center !important;
+    }
+    .light-theme .nav-item:not(.bg-\[var\(--accent-color\)\])::after {
+        right: 0 !important;
+        left: auto !important;
+        transform-origin: right center !important;
+    }
+    .light-theme .nav-item:not(.bg-\[var\(--accent-color\)\]):hover::before,
+    .light-theme .nav-item:not(.bg-\[var\(--accent-color\)\]):hover::after,
+    .light-theme .nav-item:not(.bg-\[var\(--accent-color\)\]):focus-visible::before,
+    .light-theme .nav-item:not(.bg-\[var\(--accent-color\)\]):focus-visible::after {
+        transform: scaleX(1) !important;
     }
 
     /* Light theme: config tab inactive */
@@ -1017,8 +1151,8 @@ function can(tab) {
     }
 
     /* 2. WHITE MODE (html.light-theme): Button labels, text, spans, and icons must be BLACK */
-    html.light-theme button:not(.btn-primary):not(.config-btn-primary):not(.bg-red-600):not(.bg-red-700):not(.bg-rose-600):not(.bg-rose-700):not(.bg-\[var\(--accent-color\)\]):not(.bg-\[var\(--accent-hover\)\]):not(.config-tab-active):not(.nav-item.bg-\[var\(--accent-color\)\]):not(.bg-emerald-600):not(.bg-blue-600):not(.bg-purple-600):not(.bg-indigo-600):not(.bg-sky-600):not(.bg-amber-600):not([class*="bg-red-"]):not([class*="bg-rose-600"]):not([class*="bg-rose-700"]),
-    html.light-theme button:not(.btn-primary):not(.config-btn-primary):not(.bg-red-600):not(.bg-red-700):not(.bg-rose-600):not(.bg-rose-700):not(.bg-\[var\(--accent-color\)\]):not(.bg-\[var\(--accent-hover\)\]):not(.config-tab-active):not(.nav-item.bg-\[var\(--accent-color\)\]):not(.bg-emerald-600):not(.bg-blue-600):not(.bg-purple-600):not(.bg-indigo-600):not(.bg-sky-600):not(.bg-amber-600):not([class*="bg-red-"]):not([class*="bg-rose-600"]):not([class*="bg-rose-700"]) *,
+    html.light-theme button:not(:where(.btn-primary, .config-btn-primary, .bg-red-600, .bg-red-700, .bg-rose-600, .bg-rose-700, .bg-\[var\(--accent-color\)\], .bg-\[var\(--accent-hover\)\], .config-tab-active, .nav-item.bg-\[var\(--accent-color\)\], .bg-emerald-600, .bg-blue-600, .bg-purple-600, .bg-indigo-600, .bg-sky-600, .bg-amber-600, [class*="bg-red-"], [class*="bg-rose-600"], [class*="bg-rose-700"])),
+    html.light-theme button:not(:where(.btn-primary, .config-btn-primary, .bg-red-600, .bg-red-700, .bg-rose-600, .bg-rose-700, .bg-\[var\(--accent-color\)\], .bg-\[var\(--accent-hover\)\], .config-tab-active, .nav-item.bg-\[var\(--accent-color\)\], .bg-emerald-600, .bg-blue-600, .bg-purple-600, .bg-indigo-600, .bg-sky-600, .bg-amber-600, [class*="bg-red-"], [class*="bg-rose-600"], [class*="bg-rose-700"])) *,
     html.light-theme input[type="button"],
     html.light-theme input[type="submit"]:not(.btn-primary):not(.config-btn-primary):not(.bg-red-600):not(.bg-red-700):not(.bg-rose-600):not(.bg-rose-700):not(.bg-\[var\(--accent-color\)\]),
     html.light-theme input[type="reset"],
@@ -1047,8 +1181,8 @@ function can(tab) {
         color: #000000 !important;
     }
 
-    html.light-theme button:not(.btn-primary):not(.config-btn-primary):not(.bg-red-600):not(.bg-red-700):not(.bg-rose-600):not(.bg-rose-700):not(.bg-\[var\(--accent-color\)\]):not(.bg-\[var\(--accent-hover\)\]):not(.config-tab-active):not(.nav-item.bg-\[var\(--accent-color\)\]):not(.bg-emerald-600):not(.bg-blue-600):not(.bg-purple-600):not(.bg-indigo-600):not(.bg-sky-600):not(.bg-amber-600):not([class*="bg-red-"]):not([class*="bg-rose-600"]):not([class*="bg-rose-700"]) svg,
-    html.light-theme button:not(.btn-primary):not(.config-btn-primary):not(.bg-red-600):not(.bg-red-700):not(.bg-rose-600):not(.bg-rose-700):not(.bg-\[var\(--accent-color\)\]):not(.bg-\[var\(--accent-hover\)\]):not(.config-tab-active):not(.nav-item.bg-\[var\(--accent-color\)\]):not(.bg-emerald-600):not(.bg-blue-600):not(.bg-purple-600):not(.bg-indigo-600):not(.bg-sky-600):not(.bg-amber-600):not([class*="bg-red-"]):not([class*="bg-rose-600"]):not([class*="bg-rose-700"]) svg *,
+    html.light-theme button:not(:where(.btn-primary, .config-btn-primary, .bg-red-600, .bg-red-700, .bg-rose-600, .bg-rose-700, .bg-\[var\(--accent-color\)\], .bg-\[var\(--accent-hover\)\], .config-tab-active, .nav-item.bg-\[var\(--accent-color\)\], .bg-emerald-600, .bg-blue-600, .bg-purple-600, .bg-indigo-600, .bg-sky-600, .bg-amber-600, [class*="bg-red-"], [class*="bg-rose-600"], [class*="bg-rose-700"])) svg,
+    html.light-theme button:not(:where(.btn-primary, .config-btn-primary, .bg-red-600, .bg-red-700, .bg-rose-600, .bg-rose-700, .bg-\[var\(--accent-color\)\], .bg-\[var\(--accent-hover\)\], .config-tab-active, .nav-item.bg-\[var\(--accent-color\)\], .bg-emerald-600, .bg-blue-600, .bg-purple-600, .bg-indigo-600, .bg-sky-600, .bg-amber-600, [class*="bg-red-"], [class*="bg-rose-600"], [class*="bg-rose-700"])) svg *,
     html.light-theme a.config-btn-secondary svg,
     html.light-theme a.btn-link:not(.btn-primary) svg,
     html.light-theme .btn-ghost svg {
@@ -1658,6 +1792,31 @@ function can(tab) {
         background-color: var(--bg-secondary, #ffffff) !important;
     }
 
+    /* Brand wordmark typography */
+    .sidebar-brand-logo {
+        width: 38px;
+        height: 38px;
+        object-fit: contain;
+        flex-shrink: 0;
+    }
+    .sidebar-brand-logo-light {
+        display: none;
+    }
+    html.light-theme .sidebar-brand-logo-dark {
+        display: none;
+    }
+    html.light-theme .sidebar-brand-logo-light {
+        display: block;
+    }
+    .sidebar-brand-title,
+    .sidebar-brand-title * {
+        font-family: 'JetBrains Mono', 'Cairo', monospace !important;
+        font-size: 1.25rem !important;
+        font-weight: 800 !important;
+        line-height: 1.1;
+        letter-spacing: 0.02em !important;
+    }
+
     /* Premium smooth collapse transition */
     @media (min-width: 768px) {
         #appSidebar {
@@ -1679,11 +1838,13 @@ function can(tab) {
             overflow: hidden;
             vertical-align: middle;
         }
-        #brandLogo {
-            transition: width 260ms cubic-bezier(0.4, 0, 0.2, 1),
-                        height 260ms cubic-bezier(0.4, 0, 0.2, 1),
-                        margin 260ms cubic-bezier(0.4, 0, 0.2, 1) !important;
-            will-change: width, height;
+        #appSidebar .sidebar-info-row {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            max-width: 100%;
+            white-space: normal;
+            overflow: visible;
+            vertical-align: top;
         }
         #appSidebar .nav-item {
             transition: background-color 150ms ease, color 150ms ease, padding 260ms cubic-bezier(0.4, 0, 0.2, 1);
@@ -1701,12 +1862,27 @@ function can(tab) {
         }
         html.sidebar-collapsed #appSidebar .sidebar-header-box,
         #appSidebar.sidebar-collapsed .sidebar-header-box {
-            flex-direction: column !important;
+            display: flex !important;
             align-items: center !important;
             justify-content: center !important;
-            gap: 0.5rem !important;
+            gap: 0 !important;
             padding-top: 0.5rem !important;
             padding-bottom: 0.5rem !important;
+        }
+        html.sidebar-collapsed #appSidebar .sidebar-info-row,
+        #appSidebar.sidebar-collapsed .sidebar-info-row {
+            display: grid !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
+            height: 29px !important;
+            min-height: 29px !important;
+            max-height: 29px !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 0 4px !important;
+            overflow: hidden !important;
+            transform: none !important;
+            pointer-events: none !important;
         }
         #toggleSidebarCollapseBtn {
             position: absolute !important;
@@ -1753,12 +1929,6 @@ function can(tab) {
             height: 48px !important;
             padding: 0 !important;
             justify-content: center !important;
-        }
-        html.sidebar-collapsed #appSidebar #brandLogo,
-        #appSidebar.sidebar-collapsed #brandLogo {
-            width: 3.5rem !important;
-            height: 3.5rem !important;
-            margin: 0 auto !important;
         }
         html.sidebar-collapsed #appSidebar .sidebar-text,
         html.sidebar-collapsed #appSidebar .sidebar-brand-title,
@@ -1861,21 +2031,60 @@ function can(tab) {
     .settings-launcher {
         align-items: center;
         background: transparent !important;
-        border: 1px solid var(--border-primary) !important;
+        border: 0 !important;
         border-radius: 0.65rem !important;
-        color: var(--text-secondary) !important;
+        color: var(--text-primary) !important;
         display: flex;
-        gap: 0.65rem;
-        height: 2.5rem;
-        padding: 0 0.7rem;
+        gap: 0.5rem;
+        height: 2.25rem;
+        padding: 0 0.6rem;
         transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, width 320ms cubic-bezier(0.2, 0.8, 0.2, 1), padding 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
         width: 100%;
     }
+    .settings-launcher svg {
+        color: var(--text-primary) !important;
+    }
+    .settings-launcher:not(#never)::before,
+    .settings-launcher:not(#never)::after {
+        content: '' !important;
+        position: absolute !important;
+        top: 0 !important;
+        bottom: 0 !important;
+        width: 50% !important;
+        z-index: -1 !important;
+        background: #991b1b !important;
+        transform: scaleX(0) !important;
+        transition: transform 280ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+        pointer-events: none !important;
+    }
+    .settings-launcher:not(#never)::before {
+        left: 0 !important;
+        right: auto !important;
+        transform-origin: left center !important;
+    }
+    .settings-launcher:not(#never)::after {
+        right: 0 !important;
+        left: auto !important;
+        transform-origin: right center !important;
+    }
     .settings-launcher:hover,
     .settings-launcher[aria-expanded="true"] {
-        background: var(--bg-hover) !important;
-        border-color: var(--border-accent) !important;
-        color: var(--text-primary) !important;
+        background: transparent !important;
+        border-color: transparent !important;
+        color: #ffffff !important;
+    }
+    .settings-launcher:not(#never):hover::before,
+    .settings-launcher:not(#never):hover::after,
+    .settings-launcher:not(#never):focus-visible::before,
+    .settings-launcher:not(#never):focus-visible::after,
+    .settings-launcher[aria-expanded="true"]:not(#never)::before,
+    .settings-launcher[aria-expanded="true"]:not(#never)::after {
+        transform: scaleX(1) !important;
+    }
+    .settings-launcher:not(#never):hover *,
+    .settings-launcher:not(#never):focus-visible *,
+    .settings-launcher[aria-expanded="true"]:not(#never) * {
+        color: #ffffff !important;
     }
     .settings-launcher.settings-launcher-animating {
         animation: settingsLauncherPop 320ms cubic-bezier(0.22, 1, 0.36, 1);
@@ -2142,7 +2351,8 @@ function can(tab) {
         width: 14px !important;
         height: 14px !important;
         pointer-events: none !important;
-        transition: opacity 220ms ease, transform 220ms cubic-bezier(0.16, 1, 0.3, 1), color 220ms ease !important;
+        transition: opacity 300ms ease, transform 460ms cubic-bezier(0.16, 1, 0.3, 1), color 300ms ease !important;
+        will-change: opacity, transform !important;
     }
     .settings-switch-icon-sun {
         color: #f59e0b !important;
@@ -2169,16 +2379,19 @@ function can(tab) {
         box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6), 0 0 8px rgba(56, 189, 248, 0.25) !important;
         pointer-events: none !important;
         transform: translateX(26px) !important;
-        transition: transform 280ms cubic-bezier(0.34, 1.56, 0.64, 1), width 180ms ease, background 220ms ease, border-color 220ms ease, box-shadow 220ms ease !important;
+        transition: transform 460ms cubic-bezier(0.16, 1, 0.3, 1), scale 140ms ease, background 260ms ease, border-color 260ms ease, box-shadow 260ms ease !important;
+        will-change: transform !important;
+        backface-visibility: hidden !important;
     }
     .settings-theme-switch:active .settings-switch-thumb {
-        width: 25px !important;
+        scale: 1.06 !important;
     }
     .settings-switch-thumb-glyph {
         width: 12px !important;
         height: 12px !important;
         color: #38bdf8 !important;
-        transition: transform 280ms cubic-bezier(0.34, 1.56, 0.64, 1), color 220ms ease !important;
+        transition: transform 460ms cubic-bezier(0.16, 1, 0.3, 1), color 220ms ease !important;
+        will-change: transform !important;
     }
     .light-theme .settings-theme-switch {
         background: linear-gradient(135deg, #e0f2fe 0%, #fef3c7 100%) !important;
@@ -2362,10 +2575,6 @@ function can(tab) {
         }
     }
     @media (max-width: 640px) {
-        #brandLogo {
-            width: 2.5rem !important;
-            height: 2.5rem !important;
-        }
         .nav-item {
             padding-left: 0.75rem !important;
             padding-right: 0.75rem !important;
@@ -2794,6 +3003,18 @@ function can(tab) {
     .light-theme .flatpickr-day {
         color: #0f172a !important;
     }
+    /* Selected / range days sit on the accent fill, so their label stays white
+       (the rule above would otherwise repaint them near-black). */
+    .light-theme .flatpickr-day.selected,
+    .light-theme .flatpickr-day.startRange,
+    .light-theme .flatpickr-day.endRange,
+    .light-theme .flatpickr-day.selected:hover,
+    .light-theme .flatpickr-day.selected:focus,
+    .light-theme .flatpickr-day.startRange:hover,
+    .light-theme .flatpickr-day.endRange:hover {
+        color: #ffffff !important;
+        background: var(--accent-color) !important;
+    }
     .light-theme .flatpickr-time {
         border-top-color: #f1f5f9 !important;
     }
@@ -3003,7 +3224,6 @@ function can(tab) {
     })();
 
     function updateThemeUI(isLight) {
-        const logo = document.getElementById('brandLogo');
         const modeLabels = document.querySelectorAll('.settings-control-subtitle[data-light-label]');
         const tracks = document.querySelectorAll('.settings-theme-switch');
         const thumbs = document.querySelectorAll('.settings-switch-thumb');
@@ -3028,10 +3248,6 @@ function can(tab) {
         modeLabels.forEach(modeLabel => {
             modeLabel.textContent = isLight ? modeLabel.dataset.lightLabel : modeLabel.dataset.darkLabel;
         });
-
-        if (logo) {
-            logo.src = isLight ? '/logo.png' : '/logo_light_text.png';
-        }
     }
 
     function toggleTheme(e) {
@@ -3360,20 +3576,12 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
     </button>
     <div class="flex flex-col gap-4 overflow-y-auto no-scrollbar flex-1">
         <!-- Brand Header inside Sidebar -->
-        <div class="sidebar-header-box relative flex flex-col items-center justify-center py-2.5 border-b border-[var(--border-primary)] pb-4">
-
-            <div class="flex flex-col items-center gap-2.5">
-                <img id="brandLogo" src="/logo_light_text.png" alt="Sokrat VOIP" class="w-36 h-36 object-contain rounded-xl transition-all duration-300">
-                <script>
-                    (function() {
-                        const theme = localStorage.getItem('theme') || 'dark';
-                        document.getElementById('brandLogo').src = theme === 'light' ? '/logo.png' : '/logo_light_text.png';
-                    })();
-                </script>
-                <h1 class="sidebar-brand-title text-sm font-black text-[var(--text-primary)] tracking-widest font-vibrant-display uppercase">
-                    Sokrat <span class="text-[var(--accent-color)]">VOIP</span>
-                </h1>
-            </div>
+        <div class="sidebar-header-box relative flex items-center gap-1.5 px-1 py-2 border-b border-[var(--border-primary)]">
+            <img src="/logo_light_text.png" alt="" class="sidebar-brand-logo sidebar-brand-logo-dark" aria-hidden="true">
+            <img src="/logo.png" alt="" class="sidebar-brand-logo sidebar-brand-logo-light" aria-hidden="true">
+            <h1 class="sidebar-brand-title text-sm font-black text-[var(--text-primary)] tracking-widest font-vibrant-display uppercase min-w-0 flex-1 truncate">
+                Sokrat <span class="text-[var(--accent-color)]">VOIP</span>
+            </h1>
         </div>
 
         <!-- Sidebar Menu Navigation -->
@@ -3383,7 +3591,12 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
             <a href="/?lang=<%= currentLang %>" title="<%= sbT.dashLink %>"
                class="nav-item flex items-center px-4 py-3 rounded-lg transition-all duration-150 text-sm font-semibold relative
                <%= curPage === '/' ? 'bg-[var(--accent-color)] text-white border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
-                <span class="sidebar-png-icon shrink-0" aria-hidden="true" style="display:inline-block;width:18px;height:18px;margin-inline-end:10px;background-color:currentColor;-webkit-mask:url('/grid-bold.png') center/contain no-repeat;mask:url('/grid-bold.png') center/contain no-repeat;"></span>
+                <svg class="w-4 h-4 me-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect x="3" y="3" width="7" height="8" rx="1.5"/>
+                    <rect x="14" y="3" width="7" height="5" rx="1.5"/>
+                    <rect x="14" y="12" width="7" height="9" rx="1.5"/>
+                    <rect x="3" y="15" width="7" height="6" rx="1.5"/>
+                </svg>
                 <span class="sidebar-text"><%= sbT.dashLink %></span>
             </a>
             <% } %>
@@ -3547,24 +3760,16 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
         </nav>
     </div>
     <!-- Sidebar Footer Action Panel -->
-    <div class="flex flex-col gap-4 border-t border-[var(--border-primary)] pt-4 mt-auto">
-        <!-- System Clock & User info -->
-        <div class="sidebar-info-row flex flex-col gap-1 px-1">
-            <div class="flex items-center justify-between text-xs font-semibold text-[var(--text-secondary)]">
-                <span class="text-[9px] font-black uppercase text-[var(--text-muted)] tracking-wider"><%= sbT.clientLabel || (isRtl ? 'عميل' : 'client') %></span>
-                <span id="sidebarClientName" class="text-[var(--text-primary)] font-semibold truncate max-w-[130px]" title="<%= (typeof clientName !== 'undefined' && clientName) ? clientName : '' %>"><%= (typeof clientName !== 'undefined' && clientName) ? clientName : '' %></span>
+    <div class="flex flex-col gap-2.5 border-t border-[var(--border-primary)] pt-2.5 mt-auto">
+        <!-- Client & System Clock -->
+        <div class="sidebar-info-row grid grid-cols-2 gap-x-3 px-1">
+            <div class="min-w-0">
+                <div class="text-[8px] font-black uppercase text-[var(--text-muted)] tracking-wider"><%= sbT.clientLabel || (isRtl ? 'عميل' : 'client') %></div>
+                <div id="sidebarClientName" class="text-[11px] leading-4 text-[var(--text-primary)] font-semibold truncate" data-client-name="<%= (typeof clientNameConfigured !== 'undefined' && clientNameConfigured) ? clientNameConfigured : '' %>" title="<%= (typeof clientName !== 'undefined' && clientName) ? clientName : '—' %>"><%= (typeof clientName !== 'undefined' && clientName) ? clientName : '—' %></div>
             </div>
-            <div class="flex items-center justify-between text-xs font-semibold text-[var(--text-secondary)]">
-                <span class="text-[9px] font-black uppercase text-[var(--text-muted)] tracking-wider"><%= sbT.liveClock %></span>
-                <span id="digitalClock" class="font-mono text-sm tracking-tight text-[var(--accent-color)]">00:00:00</span>
-            </div>
-            <div class="flex items-center justify-between text-xs font-semibold text-[var(--text-secondary)]">
-                <span class="text-[9px] font-black uppercase text-[var(--text-muted)] tracking-wider"><%= sbT.userLabel || (isRtl ? 'المستخدم' : 'User') %></span>
-                <span class="text-[var(--text-primary)] font-semibold"><%= typeof currentUser !== 'undefined' ? currentUser : '' %></span>
-            </div>
-            <div class="flex items-center justify-between text-xs font-semibold text-[var(--text-secondary)]">
-                <span class="text-[9px] font-black uppercase text-[var(--text-muted)] tracking-wider"><%= sbT.versionLabel || (isRtl ? 'الإصدار' : 'Version') %></span>
-                <span class="text-[var(--text-secondary)] font-mono">v1.1.0</span>
+            <div class="min-w-0">
+                <div class="text-[8px] font-black uppercase text-[var(--text-muted)] tracking-wider"><%= sbT.liveClock %></div>
+                <div id="digitalClock" class="font-mono text-xs font-bold tracking-tight text-[var(--accent-color)] whitespace-nowrap">00:00:00</div>
             </div>
         </div>
 
@@ -3602,7 +3807,7 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
                 Root
             </span>
             <% } else if (isSuper) { %>
-            <span class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-blue-950 text-blue-300 border border-blue-800">
+            <span class="text-[10px] font-bold text-black">
                 Admin
             </span>
             <% } %>
@@ -3710,7 +3915,6 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
 
                 <div class="mt-auto pt-2 space-y-2">
                     <div class="flex items-center justify-between px-1 text-[11px] text-[var(--text-muted)] font-mono">
-                        <span class="text-[var(--text-secondary)] font-bold"><%= typeof currentUser !== 'undefined' ? currentUser : '' %></span>
                         <span>v1.1.0</span>
                     </div>
                     <a href="/logout" class="settings-signout w-full justify-center">
@@ -5964,7 +6168,8 @@ function openClientModal() {
         modal.style.setProperty('display', 'flex', 'important');
         modal.style.pointerEvents = 'auto';
     }
-    const currentVal = document.getElementById('sidebarClientName') ? document.getElementById('sidebarClientName').textContent.trim() : '';
+    const sidebarEl = document.getElementById('sidebarClientName');
+    const currentVal = sidebarEl ? String(sidebarEl.dataset.clientName || '') : '';
     const input = document.getElementById('clientNameInput');
     if (input) input.value = currentVal;
     loadClientSettings();
@@ -5995,6 +6200,19 @@ async function loadClientSettings() {
 }
 window.loadClientSettings = loadClientSettings;
 
+function applySidebarClientName(name) {
+    const updated = name || '';
+    const sidebarEl = document.getElementById('sidebarClientName');
+    if (sidebarEl) {
+        sidebarEl.textContent = updated || '—';
+        sidebarEl.title = updated || '—';
+        sidebarEl.dataset.clientName = updated;
+    }
+}
+window.addEventListener('storage', function(event) {
+    if (event.key === 'sokrat:clientName') applySidebarClientName(event.newValue);
+});
+
 async function saveClientSettings(event) {
     if (event && event.preventDefault) event.preventDefault();
     const input = document.getElementById('clientNameInput');
@@ -6018,11 +6236,8 @@ async function saveClientSettings(event) {
         const data = await resp.json();
         if (data.success) {
             const updated = data.clientName || '';
-            const sidebarEl = document.getElementById('sidebarClientName');
-            if (sidebarEl) {
-                sidebarEl.textContent = updated;
-                sidebarEl.title = updated;
-            }
+            applySidebarClientName(updated);
+            try { localStorage.setItem('sokrat:clientName', updated); } catch (_) {}
             if (msgEl) {
                 msgEl.className = 'text-xs text-green-400 text-center';
                 msgEl.textContent = isRtlLang() ? 'تم حفظ اسم العميل بنجاح!' : 'Client name saved successfully!';
@@ -6799,8 +7014,9 @@ function pruneDetachedDropdownMenus() {
     });
 }
 
-function enhanceSelectElements() {
-    document.querySelectorAll('select:not([multiple]):not(.enhanced-select):not(.no-enhance):not(.flatpickr-monthDropdown-months)').forEach(select => {
+function enhanceSelectElements(root) {
+    const scope = root && typeof root.querySelectorAll === 'function' ? root : document;
+    scope.querySelectorAll('select:not([multiple]):not(.enhanced-select):not(.no-enhance):not(.flatpickr-monthDropdown-months)').forEach(select => {
         if (!select.parentNode) return;
         select.classList.add('enhanced-select');
 

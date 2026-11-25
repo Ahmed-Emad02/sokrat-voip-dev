@@ -21,6 +21,8 @@
     const inspectorEmpty = document.getElementById('canvas-inspector-empty');
     const inspectorBody = document.getElementById('canvas-inspector-body');
     const palette = document.getElementById('canvas-palette-grid');
+    const addBtn = document.getElementById('canvas-add-btn');
+    const addMenu = document.getElementById('canvas-add-menu');
     const searchInput = document.getElementById('canvas-search');
     const applyBtn = document.getElementById('canvas-apply-btn');
     const discardBtn = document.getElementById('canvas-discard-btn');
@@ -32,7 +34,10 @@
     const reviewStatus = document.getElementById('canvas-review-status');
     const reviewApply = document.getElementById('canvas-review-apply');
     const editorOverlay = document.getElementById('canvas-editor-overlay');
+    const classicFrame = document.getElementById('canvas-classic-frame');
+    const classicLoading = document.getElementById('canvas-classic-loading');
     const editorTitle = document.getElementById('canvas-editor-title');
+    const editorIcon = document.getElementById('canvas-editor-icon');
     const editorForm = document.getElementById('canvas-native-form');
     const editorFields = document.getElementById('canvas-form-fields');
     const editorStatus = document.getElementById('canvas-form-status');
@@ -160,6 +165,7 @@
         future: [],
         reviewPlan: null,
         selectedKey: null,
+        hoverKey: null,
         pending: null,
         zoom: 1,
         pan: { x: 70, y: 70 },
@@ -180,7 +186,7 @@
         timegroups: []
     };
 
-    const STORAGE_KEY = 'sokrat_pbx_canvas_layout_v8';
+    const STORAGE_KEY = 'sokrat_pbx_canvas_layout_v9';
 
     function esc(value) {
         return String(value == null ? '' : value)
@@ -421,6 +427,7 @@
 
     function renderNodes() {
         if (!nodesLayer) return;
+        state.hoverKey = null;
         nodesLayer.innerHTML = '';
         const selected = state.selectedKey;
         const pending = state.pending;
@@ -463,6 +470,7 @@
                 </div>`;
             nodesLayer.appendChild(nodeEl);
         });
+        applyNodeFocus();
         emptyEl.classList.toggle('visible', state.nodes.length === 0);
         requestAnimationFrame(drawEdges);
         renderMinimap();
@@ -499,7 +507,8 @@
         const height = viewport.clientHeight;
         edgesSvg.setAttribute('viewBox', `0 0 ${width} ${height}`);
         const selectedEdge = state.selectedEdgeId;
-        const selectedNode = state.selectedKey;
+        const selectedNode = state.hoverKey || state.selectedKey;
+        edgesSvg.classList.toggle('focusing', Boolean(selectedNode));
         const query = state.filter;
         const matching = query ? new Set(state.nodes.filter(node => nodeMatches(node, query)).map(node => node.key)) : null;
         edgesSvg.innerHTML = state.draftEdges.map(edge => {
@@ -512,7 +521,7 @@
             const dx = Math.max(45, Math.abs(b.x - a.x) / 2);
             const path = `M ${a.x.toFixed(1)} ${a.y.toFixed(1)} C ${(a.x + dx).toFixed(1)} ${a.y.toFixed(1)}, ${(b.x - dx).toFixed(1)} ${b.y.toFixed(1)}, ${b.x.toFixed(1)} ${b.y.toFixed(1)}`;
             const related = selectedNode && (edge.source === selectedNode || edge.target === selectedNode);
-            const dimmed = matching && !matching.has(edge.source) && !matching.has(edge.target);
+            const dimmed = (matching && !matching.has(edge.source) && !matching.has(edge.target)) || (selectedNode && !related);
             return `<path class="canvas-edge-path${edge.id === selectedEdge ? ' selected' : ''}${related ? ' neighbor' : ''}${dimmed ? ' dimmed' : ''}" data-edge-id="${esc(edge.id)}" data-source-key="${esc(edge.source)}" data-target-key="${esc(edge.target)}" d="${path}" vector-effect="non-scaling-stroke"></path>`;
         }).join('') + (state.pending && state.connectPointer ? (() => {
             const source = findPort(state.pending.nodeKey, state.pending.portId);
@@ -548,22 +557,39 @@
         }
         const minX = Math.min(...state.nodes.map(n => n.x));
         const minY = Math.min(...state.nodes.map(n => n.y));
-        const maxX = Math.max(...state.nodes.map(n => n.x + 280));
+        const maxX = Math.max(...state.nodes.map(n => n.x + 340));
         const maxY = Math.max(...state.nodes.map(n => n.y + 180));
         const scale = Math.min((minimap.clientWidth - 10) / Math.max(1, maxX - minX), (minimap.clientHeight - 10) / Math.max(1, maxY - minY));
         minimap.innerHTML = state.nodes.map(node => {
             const meta = Model.TYPE_META[node.type] || Model.TYPE_META.external;
-            return `<div class="canvas-minimap-node" style="left:${(5 + (node.x - minX) * scale).toFixed(1)}px;top:${(5 + (node.y - minY) * scale).toFixed(1)}px;width:${Math.max(4, 280 * scale).toFixed(1)}px;height:${Math.max(3, 80 * scale).toFixed(1)}px;background:${meta.color}"></div>`;
+            return `<div class="canvas-minimap-node" style="left:${(5 + (node.x - minX) * scale).toFixed(1)}px;top:${(5 + (node.y - minY) * scale).toFixed(1)}px;width:${Math.max(4, 340 * scale).toFixed(1)}px;height:${Math.max(3, 80 * scale).toFixed(1)}px;background:${meta.color}"></div>`;
         }).join('');
+    }
+
+    function applyNodeFocus() {
+        const focusKey = state.hoverKey || state.selectedKey;
+        const related = new Set();
+        if (focusKey) {
+            related.add(focusKey);
+            state.draftEdges.forEach(edge => {
+                if (edge.source === focusKey) related.add(edge.target);
+                if (edge.target === focusKey) related.add(edge.source);
+            });
+        }
+        state.nodes.forEach(node => {
+            const el = nodesLayer.querySelector(`[data-node-key="${cssEscape(node.key)}"]`);
+            if (!el) return;
+            el.classList.toggle('focused', Boolean(focusKey) && node.key === focusKey);
+            el.classList.toggle('selected', node.key === state.selectedKey);
+            el.classList.toggle('related', Boolean(focusKey) && node.key !== focusKey && related.has(node.key));
+            el.classList.toggle('dimmed', Boolean(focusKey) && !related.has(node.key));
+        });
     }
 
     function selectNode(key) {
         state.selectedKey = key;
         state.selectedEdgeId = null;
-        state.nodes.forEach(node => {
-            const el = nodesLayer.querySelector(`[data-node-key="${cssEscape(node.key)}"]`);
-            if (el) el.classList.toggle('selected', node.key === key);
-        });
+        applyNodeFocus();
         renderInspector();
         drawEdges();
     }
@@ -660,7 +686,9 @@
                                     : node.refId;
         if (node.type !== 'timegroup') {
             params.set('canvasEditType', node.type);
-            if (id !== undefined && id !== null && String(id) !== '') params.set('canvasEditId', String(id));
+            if (node.type === 'inbound' || (id !== undefined && id !== null && String(id) !== '')) {
+                params.set('canvasEditId', String(id === undefined || id === null ? '' : id));
+            }
             if (node.type === 'inbound') params.set('canvasEditCid', data.cidnum || '');
         }
         if (node.type === 'timegroup') params.set('canvasEditType', 'timegroup');
@@ -696,6 +724,12 @@
         editorSubmit.hidden = false;
         editorDelete.hidden = true;
         editorClassic.hidden = true;
+        editorOverlay.classList.remove('classic-mode');
+        if (classicFrame) {
+            classicFrame.hidden = true;
+            classicFrame.src = 'about:blank';
+        }
+        if (classicLoading) classicLoading.classList.add('hidden');
         if (reload) {
             loadData().then(() => {
                 if (wasAdd) fitView();
@@ -1107,8 +1141,29 @@
         });
     }
 
+    function sectionTheme(section, index) {
+        const title = String(section && section.title || '').toLowerCase();
+        const rules = [
+            [/outbound|route definition|route name/, 'violet'],
+            [/dial pattern|prefix|pattern/, 'amber'],
+            [/trunk|failover|sequence/, 'emerald'],
+            [/credential|device|extension/, 'cyan'],
+            [/voice|audio|dsp|denoise/, 'sky'],
+            [/webrtc|policy|auto answer|dnd/, 'indigo'],
+            [/employee|profile|photo/, 'purple'],
+            [/destination|after timeout|continue/, 'rose'],
+            [/time|schedule|rule/, 'amber'],
+            [/member|ring|queue/, 'rose'],
+            [/option|entry|menu|ivr/, 'sky']
+        ];
+        for (const [pattern, theme] of rules) {
+            if (pattern.test(title)) return theme;
+        }
+        return ['violet', 'amber', 'emerald', 'cyan', 'sky', 'rose'][index % 6];
+    }
+
     function renderNativeForm(form) {
-        editorFields.innerHTML = form.sections.map(section => `<section class="canvas-form-section"><h3 class="canvas-form-section-head">${esc(section.title)}</h3><div class="canvas-form-grid">${section.fields.map(field => fieldHtml(field, form.values[field.name])).join('')}</div></section>`).join('');
+        editorFields.innerHTML = form.sections.map((section, index) => `<section class="canvas-form-section canvas-theme-${sectionTheme(section, index)}"><h3 class="canvas-form-section-head">${esc(section.title)}</h3><div class="canvas-form-grid">${section.fields.map(field => fieldHtml(field, form.values[field.name])).join('')}</div></section>`).join('');
         editorStatus.textContent = '';
         editorStatus.classList.remove('error');
         editorSubmit.disabled = Boolean(form.readOnly);
@@ -1185,7 +1240,7 @@
         }
     }
 
-    async function openCanvasEditor(node, type) {
+    async function openNativeCanvasEditor(node, type) {
         if (isDirty()) {
             toast(LABELS.draftFirst, 'error');
             return;
@@ -1193,6 +1248,11 @@
         const cardType = node ? node.type : type;
         const supported = ['extension', 'inbound', 'outbound', 'trunk', 'ringgroup', 'queue', 'ivr', 'timecondition', 'timegroup', 'announcement', 'moh'];
         if (!supported.includes(cardType)) return;
+        if (editorIcon) {
+            const meta = Model.TYPE_META[cardType] || Model.TYPE_META.external;
+            editorIcon.innerHTML = iconSvg(cardType);
+            editorIcon.style.setProperty('--editor-accent', meta.color || '#a78bfa');
+        }
         editorTitle.textContent = (node ? (isRtl ? 'تعديل ' : 'Edit ') : (isRtl ? 'إضافة ' : 'Add ')) + typeLabel(cardType) + (node ? ' · ' + node.title : '');
         editorLoading.classList.remove('hidden');
         editorFields.innerHTML = '';
@@ -1221,6 +1281,78 @@
             editorStatus.classList.add('error');
             editorSubmit.disabled = true;
         }
+    }
+
+    function classicEditorUrl(node, cardType) {
+        const url = new URL('/config', window.location.origin);
+        url.searchParams.set('embed', '1');
+        const tabForType = {
+            extension: 'extensions',
+            inbound: 'inbound',
+            outbound: 'outbound',
+            trunk: 'trunks',
+            ringgroup: 'ringgroups',
+            queue: 'queues',
+            ivr: 'ivr',
+            timecondition: 'timeconditions',
+            timegroup: 'timegroups',
+            announcement: 'announcements'
+        };
+        if (tabForType[cardType]) url.searchParams.set('tab', tabForType[cardType]);
+        if (node) {
+            let editId = node.refId;
+            let editCid = '';
+            if (cardType === 'inbound') {
+                editId = (node.data && node.data.extension) || '';
+                editCid = (node.data && node.data.cidnum) || '';
+            }
+            url.searchParams.set('canvasEditType', cardType);
+            url.searchParams.set('canvasEditId', String(editId));
+            if (editCid || cardType === 'inbound') url.searchParams.set('canvasEditCid', String(editCid));
+        } else {
+            url.searchParams.set('canvasNew', cardType);
+        }
+        return url.toString();
+    }
+
+    async function openCanvasEditor(node, type) {
+        if (isDirty()) {
+            toast(LABELS.draftFirst, 'error');
+            return;
+        }
+        const cardType = node ? node.type : type;
+        const supported = ['extension', 'inbound', 'outbound', 'trunk', 'ringgroup', 'queue', 'ivr', 'timecondition', 'timegroup', 'announcement', 'moh'];
+        if (!supported.includes(cardType)) return;
+        // MOH has no classic modal; keep the native editor for it.
+        if (cardType === 'moh') return openNativeCanvasEditor(node, type);
+
+        state.editor = { mode: node ? 'edit' : 'add', node, type: cardType, classic: true };
+        editorOverlay.classList.add('open', 'classic-mode');
+        editorOverlay.setAttribute('aria-hidden', 'false');
+        classicLoading.classList.remove('hidden');
+        classicFrame.hidden = false;
+        classicFrame.onload = () => {
+            let attempts = 0;
+            const reveal = () => {
+                if (!state.editor || !state.editor.classic) {
+                    classicLoading.classList.add('hidden');
+                    return;
+                }
+                let ready = false;
+                try {
+                    const doc = classicFrame.contentDocument;
+                    ready = Boolean(doc && doc.querySelector('.fixed.inset-0:not(.hidden)'));
+                } catch (_) {}
+                if (ready || attempts >= 80) {
+                    classicLoading.classList.add('hidden');
+                    return;
+                }
+                attempts += 1;
+                setTimeout(reveal, 100);
+            };
+            reveal();
+        };
+        classicFrame.src = classicEditorUrl(node, cardType);
     }
 
     function removeEdge(id) {
@@ -1836,7 +1968,7 @@
     }
 
     async function checkConflicts(plan) {
-        if (!plan.updates.length) return;
+        if (!plan.updates.length && !plan.deletions.length) return;
         const { entities, failures } = await fetchEntities();
         if (failures.length) throw new Error(LABELS.loadFailed + failures.join(', '));
         const fresh = Model.buildGraph(entities);
@@ -1846,6 +1978,13 @@
             const current = fresh.nodeMap.get(update.nodeKey);
             if (!previous || !current || Model.entitySignature(previous) !== Model.entitySignature(current)) {
                 conflicts.push(update.label);
+            }
+        });
+        plan.deletions.filter(deletion => !deletion.completed).forEach(deletion => {
+            const previous = state.baseNodes.find(node => node.key === deletion.nodeKey);
+            const current = fresh.nodeMap.get(deletion.nodeKey);
+            if (!previous || !current || Model.entitySignature(previous) !== Model.entitySignature(current)) {
+                conflicts.push(deletion.label || deletion.nodeKey);
             }
         });
         if (conflicts.length) throw new Error(LABELS.conflict + ' (' + conflicts.join(', ') + ')');
@@ -1861,6 +2000,9 @@
         const data = await response.json().catch(() => ({}));
         if (!response.ok || data.success === false) {
             throw new Error((operation.label || operation.url) + ': ' + (data.error || ('HTTP ' + response.status)));
+        }
+        if (data.applied === false) {
+            throw new Error((operation.label || operation.url) + ': ' + (data.reloadError || data.warning || 'PBX reload failed.'));
         }
         return data;
     }
@@ -1912,6 +2054,54 @@
     function attachEvents() {
         renderPalette();
 
+        function positionAddMenu() {
+            if (!addBtn || !addMenu || addMenu.hidden) return;
+            let anchor = addBtn.getBoundingClientRect();
+            if (!anchor.width && mobileMenuBtn) anchor = mobileMenuBtn.getBoundingClientRect();
+            const width = addMenu.offsetWidth;
+            const height = addMenu.offsetHeight;
+            const pad = 8;
+            const gap = 6;
+            let left = isRtl ? anchor.right - width : anchor.left;
+            left = Math.max(pad, Math.min(left, window.innerWidth - width - pad));
+            let top = anchor.bottom + gap;
+            if (top + height > window.innerHeight - pad) {
+                top = Math.max(pad, anchor.top - height - gap);
+            }
+            addMenu.style.top = `${Math.round(top)}px`;
+            addMenu.style.left = `${Math.round(left)}px`;
+        }
+
+        function setAddMenuOpen(open) {
+            if (!addBtn || !addMenu) return;
+            addMenu.hidden = !open;
+            addBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+            if (open) {
+                requestAnimationFrame(() => {
+                    positionAddMenu();
+                    const first = addMenu.querySelector('[data-add-type]');
+                    if (first) first.focus();
+                });
+            }
+        }
+        window.addEventListener('resize', positionAddMenu);
+        if (addBtn) {
+            addBtn.addEventListener('click', event => {
+                event.stopPropagation();
+                setAddMenuOpen(addMenu.hidden);
+            });
+        }
+        document.addEventListener('pointerdown', event => {
+            if (!addMenu || addMenu.hidden) return;
+            if (event.target.closest('#canvas-add-menu, #canvas-add-btn')) return;
+            setAddMenuOpen(false);
+        });
+        document.addEventListener('keydown', event => {
+            if (event.key !== 'Escape' || !addMenu || addMenu.hidden) return;
+            setAddMenuOpen(false);
+            if (addBtn) addBtn.focus();
+        });
+
         function setMobileActionsOpen(open) {
             if (!topActionsEl || !mobileMenuBtn) return;
             topActionsEl.classList.toggle('open', open);
@@ -1937,7 +2127,15 @@
         palette.addEventListener('click', event => {
             const button = event.target.closest('[data-add-type]');
             if (!button) return;
+            setAddMenuOpen(false);
             openCanvasEditor(null, button.dataset.addType);
+        });
+
+        window.addEventListener('message', event => {
+            if (event.origin !== window.location.origin) return;
+            const data = event.data || {};
+            if (data.source !== 'sokrat-config-embed' || data.action !== 'close') return;
+            if (state.editor && state.editor.classic) closeCanvasEditor(true);
         });
 
         viewport.addEventListener('pointerdown', startPan);
@@ -1957,6 +2155,34 @@
             state.reverseTargetKey = null;
             closeConnectionChooser();
             renderAll();
+        });
+
+        nodesLayer.addEventListener('pointerover', event => {
+            const card = event.target.closest('.canvas-node');
+            if (!card) return;
+            const key = card.dataset.nodeKey;
+            if (!key || key === state.hoverKey) return;
+            state.hoverKey = key;
+            applyNodeFocus();
+            drawEdges();
+        });
+        nodesLayer.addEventListener('pointerout', event => {
+            const card = event.target.closest('.canvas-node');
+            if (!card) return;
+            const nextCard = event.relatedTarget && event.relatedTarget.closest
+                ? event.relatedTarget.closest('.canvas-node')
+                : null;
+            if (nextCard === card) return;
+            if (state.hoverKey !== card.dataset.nodeKey) return;
+            state.hoverKey = null;
+            applyNodeFocus();
+            drawEdges();
+        });
+        nodesLayer.addEventListener('pointerleave', () => {
+            if (!state.hoverKey) return;
+            state.hoverKey = null;
+            applyNodeFocus();
+            drawEdges();
         });
 
         nodesLayer.addEventListener('click', event => {
@@ -2041,6 +2267,7 @@
             toast(isRtl ? 'تم تجاهل المسودة.' : 'Draft discarded.', '');
         });
         document.getElementById('canvas-editor-close').addEventListener('click', () => closeCanvasEditor(false));
+        document.getElementById('canvas-classic-escape').addEventListener('click', () => closeCanvasEditor(false));
         document.getElementById('canvas-form-cancel').addEventListener('click', () => closeCanvasEditor(false));
         editorDelete.addEventListener('click', () => {
             const node = state.editor && state.editor.node;

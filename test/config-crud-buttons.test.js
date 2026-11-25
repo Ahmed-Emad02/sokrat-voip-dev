@@ -148,7 +148,7 @@ test('views/config.ejs renders all PBX modals and forms with correct IDs', async
         isSuperAdmin: true,
         isRoot: true,
         user: { username: 'admin', isRoot: true },
-        currentUser: { username: 'admin', isRoot: true },
+        currentUser: 'root',
         allowedTabs: ['extensions', 'ringgroups', 'inbound', 'trunks', 'outbound', 'queues', 'timegroups', 'timeconditions', 'voicemail', 'ivr', 'recordings', 'diagram', 'announcements', 'modem', 'dongles', 'terminal'],
         isTabAllowed: (t) => true
     });
