@@ -143,6 +143,13 @@ static void busy_context(at_res_t result, int control, int detached) {
  struct pvt p; struct ast_channel a={0},b={0}; init(&p); struct cpvt *first=call(&p,detached?NULL:&a,1), *second=call(&p,&b,2); enqueue(first,CMD_AT_D,RES_OK,"ATD1;\r"); enqueue(second,CMD_AT_D,RES_OK,"ATD2;\r"); p.dialing=1;
  at_response_busy(&p,result,control); assert(a.controls==(detached?0:1)); if(!detached) assert(a.control==control && a.hangups==1 && !a.tech_pvt); assert(b.controls==0 && b.hangups==0 && b.tech_pvt==second); assert(p.state.chansno==1); assert(at_queue_head_task(&p)->cpvt==second); assert(at_queue_head_cmd(&p)->cmd==CMD_AT_D); assert(strstr(wire,"ATD2")); assert(at_queue_run(&p)==0); assert(strstr(wire,"ATD2")); at_queue_flush(&p); cpvt_free(second);
 }
+static void immediate_hangup(void) {
+ struct pvt p; init(&p); struct cpvt c={0}; c.pvt=&p;
+ c.call_idx=0; c.state=CALL_STATE_INIT; at_hangup_immediality(&c); assert(strcmp(wire,"AT+CHUP\r")==0);
+ wire_len=0; wire[0]=0; c.call_idx=1; c.state=CALL_STATE_DIALING; at_hangup_immediality(&c); assert(strcmp(wire,"AT+CHUP\r")==0);
+ wire_len=0; wire[0]=0; c.call_idx=1; c.state=CALL_STATE_ACTIVE; at_hangup_immediality(&c); assert(strcmp(wire,"AT+CHUP\r")==0);
+ assert(!strstr(wire,"CHLD"));
+}
 static void sms_ownership(void) {
  struct pvt p; init(&p); part(&p); assert(p.outgoing_sms==1); p.desired_state=DEV_STATE_RESTARTED; finish_part(&p,RES_OK); assert(p.outgoing_sms==0 && p.state.at_tasks==0 && p.state.at_cmds==0 && wakeups==1);
  init(&p); part(&p); part(&p); assert(at_enqueue_pdu(&p.sys_chan,"0011",4,1,18)==0); assert(p.outgoing_sms==3); p.desired_state=DEV_STATE_RESTARTED; finish_part(&p,RES_OK); assert(p.outgoing_sms==2 && wakeups==0); finish_part(&p,RES_ERROR); assert(p.outgoing_sms==1 && wakeups==0); finish_part(&p,RES_OK); assert(p.outgoing_sms==0 && wakeups==1 && p.state.at_cmds==0);
@@ -157,4 +164,4 @@ static void reload_preserves_restart(void) {
  struct pvt p; init(&p); part(&p); pvt_config_t settings=p.settings; strcpy(settings.unique.data_tty,"/dev/offline-fixture"); assert(pvt_reconfigure(&p,&settings,RESTATE_TIME_CONVENIENT)==0); assert(p.desired_state==DEV_STATE_RESTARTED); assert(pvt_reconfigure(&p,&settings,RESTATE_TIME_CONVENIENT)==0); assert(p.desired_state==DEV_STATE_RESTARTED && p.restart_time==RESTATE_TIME_CONVENIENT && wakeups==0); finish_part(&p,RES_OK); assert(p.restart_time==RESTATE_TIME_NOW && wakeups==1);
  init(&p); assert(pvt_enabled(&p)); p.terminate_monitor=1; assert(!pvt_enabled(&p));
 }
-int main(void) { barrier(CMD_AT_CMGR,RES_CMGR); barrier(CMD_AT_CMGS,RES_SMS_PROMPT); bounded_probe(); busy_context(RES_BUSY,AST_CONTROL_BUSY,0); busy_context(RES_NO_CARRIER,AST_CONTROL_CONGESTION,0); busy_context(RES_NO_DIALTONE,AST_CONTROL_CONGESTION,1); sms_ownership(); reload_preserves_restart(); puts("dongle queue/response behavior: ok"); return 0; }
+int main(void) { barrier(CMD_AT_CMGR,RES_CMGR); barrier(CMD_AT_CMGS,RES_SMS_PROMPT); bounded_probe(); busy_context(RES_BUSY,AST_CONTROL_BUSY,0); busy_context(RES_NO_CARRIER,AST_CONTROL_CONGESTION,0); busy_context(RES_NO_DIALTONE,AST_CONTROL_CONGESTION,1); immediate_hangup(); sms_ownership(); reload_preserves_restart(); puts("dongle queue/response behavior: ok"); return 0; }

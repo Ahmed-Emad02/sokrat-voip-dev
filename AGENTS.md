@@ -58,8 +58,12 @@ Guidance and operational gotchas for AI agents working in `/opt/sokrat-voip`.
 * **Canceled Outgoing Calls Must Retain Modem Tracking Until Teardown Response:**
   * `channel_hangup()` already queues `AT+CHUP`/`AT+CHLD=1x` when `CALL_FLAG_NEED_HANGUP` is set, clearing the flag on successful enqueue before `disactivate_call()`. Do not enqueue a duplicate hangup or force outgoing `INIT`/`DIALING`/`ALERTING` calls to `RELEASED` during local cleanup.
   * Drop the Asterisk channel references normally, but retain modem call tracking and busy state until a successful hangup acknowledgement or modem-reported release. The `CHUP`/`CHLD_1x` OK handler may release only its own acknowledged `task->cpvt` when it is not `sys_chan` and has no channel; it must not sweep other detached calls or independently clear `pvt->dialing`. `change_channel_state()` handles dialing cleanup for the released call. A hangup ERROR is not success or proof that the radio call ended: preserve tracking and busy state until modem-reported release/disconnect. Local hangup alone is not a modem teardown acknowledgement.
-  * The exact trigger of the unresponsive dongle incident is unproven. Continuing `^BOOT` URCs do not prove dead hardware or a responsive AT command interface. The observed USB hub has no port power switching: USB reset/rebind is not a true power cycle, and software reset recovery must not be promised.
+  * The unresponsive-dongle incident is explained by this teardown path: an `ATD` timeout entered `disconnect_dongle()`, which wrote `AT+CHLD=1x` before `^ORIG`/`^CONF` and triggered Huawei HW BUG 1. Do not reintroduce targeted `CHLD` in immediate teardown. Continuing `^BOOT` URCs alone do not prove a responsive AT interface; require an `AT`/`OK` exchange before declaring the modem healthy.
 * **AT timeout and queue discipline:**
+  * Session teardown must never send `AT+CHLD=1x` while an outgoing `ATD` is
+    unacknowledged. `at_hangup_immediality()` uses `AT+CHUP`; `CHLD` before
+    `^ORIG`/`^CONF` is Huawei HW BUG 1 and wedges the modem. Regression:
+    `test/dongle-driver-behavior.test.js` (`immediate_hangup`).
   * A timeout alone does not prove firmware failure; parser/framing bugs can lose valid replies.
   * Compact `+CLCC`/`+CMGR` framing must preserve final payload fields and terminal replies.
   * A lost CLCC poll must not immediately transmit the next queued SMS command.

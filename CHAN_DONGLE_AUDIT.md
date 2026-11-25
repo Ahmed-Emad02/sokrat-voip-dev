@@ -297,21 +297,20 @@ The Sokrat VoIP platform requires strict adherence to four fundamental architect
 
 ---
 
-### 2.4 Invalid `AT+CHLD=10` Command Syntax on Early Hangup
-* **File & Lines:** `at_command.c:996–1003`
+### 2.4 Unsafe `AT+CHLD=1x` During Session Teardown
+* **File & Lines:** `at_command.c:1070` (`at_hangup_immediality`) and `chan_dongle.c:304` (`disconnect_dongle`)
 * **Patch Status:** `FIXED IN PATCH`
-* **Production Resolution:** `at_enqueue_hangup()` in `at_command.c:925` now guards `call_idx > 0` before formatting `AT+CHLD=1%d`, falling back to standard `AT+CHUP\r` on unindexed calls and preventing invalid `AT+CHLD=10` command syntax.
+* **Production Resolution:** `at_hangup_immediality()` always sends `AT+CHUP\r`. The targeted `AT+CHLD=1x` form is never used on the immediate teardown path. `at_enqueue_hangup()` keeps its `call_idx > 0` guard for normal channel hangups.
 * **Code Reference:**
   ```c
   EXPORT_DEF void at_hangup_immediality(struct cpvt* cpvt) {
-      char buf[20];
-      int length = snprintf(buf, sizeof(buf), cmd_chld1x, cpvt->call_idx);
-      if(length > 0)
-          at_write(cpvt->pvt, buf, length);
+      static const char cmd_chup[] = "AT+CHUP\r";
+      if (cpvt && cpvt->pvt)
+          at_write(cpvt->pvt, cmd_chup, STRLEN(cmd_chup));
   }
   ```
 * **Mechanism & Impact:**  
-  When an un-indexed call (`call_idx == 0`) is terminated via `at_hangup_immediality()`, it formats `cmd_chld1x` (`"AT+CHLD=1%d\r"`) as `AT+CHLD=10\r`. Under 3GPP GSM specifications, call index values must be in the range `1–9`. The modem rejects `AT+CHLD=10` with `ERROR`, failing to terminate the cellular radio session immediately.
+  An `ATD` timeout goes directly to `disconnect_dongle()`, which called `at_hangup_immediality()` for the unacknowledged call. That wrote `AT+CHLD=1x` before the modem had emitted `^ORIG`/`^CONF`. Huawei firmware documents this exact sequence as **HW BUG 1**: it stops answering every subsequent AT command. The session then closed the ttys and the modem stayed silent across reconnects, reboots and USB re-enumeration. `AT+CHUP` is the abort form for an unconfirmed dial and avoids the firmware lock.
 
 ---
 
