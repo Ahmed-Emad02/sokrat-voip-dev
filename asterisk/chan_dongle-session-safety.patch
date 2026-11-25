@@ -1,0 +1,205 @@
+--- a/at_command.c
++++ b/at_command.c
+@@ -17,6 +17,7 @@
+ */
+ 
+ #include "ast_config.h"
++#include <asterisk.h>			/* ast_shutting_down() */
+ 
+ #include <asterisk/utils.h>
+ 
+@@ -303,6 +304,12 @@
+ 	ssize_t res;
+ 	pvt_t* pvt = cpvt->pvt;
+ 
++	if (ast_shutting_down() || pvt->terminate_monitor)
++	{
++		chan_dongle_err = E_DEVICE_DISABLED;
++		return -1;
++	}
++
+ 	if (!pvt->has_sms)
+ 	{
+ 		chan_dongle_err = E_SMS_UNSUPPORTED;
+@@ -355,8 +362,6 @@
+ 		}
+ 	}
+ 
+-	pvt->outgoing_sms = 1;
+-
+ 	ast_log (LOG_NOTICE, "[%s] sms send queued: parts=%d uid=%d\n",
+ 		PVT_ID(pvt), res, uid);
+ 
+--- a/at_queue.c
++++ b/at_queue.c
+@@ -63,6 +63,8 @@
+ 	if (task)
+ 	{
+ 		PVT_STATE(pvt, at_tasks)--;
++		if (task->sms)
++			pvt->outgoing_sms--;
+ 		PVT_STATE(pvt, at_cmds) -= task->cmdsno - task->cindex;
+ 		ast_debug (4, "[%s] remove task with %u command(s) begin with '%s' expected response '%s' from queue\n",
+ 				PVT_ID(pvt), task->cmdsno, at_cmd2str (task->cmds[0].cmd),
+@@ -107,6 +109,11 @@
+ 			e->cpvt = cpvt;
+ 
+ 			memcpy(&e->cmds[0], cmds, cmdsno * sizeof(*cmds));
++			e->sms = 0;
++			for (unsigned i = 0; i < cmdsno; ++i)
++				if (cmds[i].cmd == CMD_AT_CMGS || cmds[i].cmd == CMD_AT_SMSTEXT)
++					e->sms = 1;
++			pvt->outgoing_sms += e->sms;
+ 
+ 
+ 			if(prio)
+@@ -223,6 +230,7 @@
+ 	if (task)
+ 	{
+ 		unsigned index = task->cindex;
++		unsigned sms = task->sms;
+ 
+ 		task->cindex++;
+ 		PVT_STATE(pvt, at_cmds)--;
+@@ -234,6 +242,10 @@
+ 		if((task->cindex >= task->cmdsno) || (task->cmds[index].res != res && (task->cmds[index].flags & ATQ_CMD_FLAG_IGNORE) == 0))
+ 		{
+ 			at_queue_remove(pvt);
++			/* The task and every remaining command are gone before restart
++			 * eligibility is evaluated, including CMGS/write failure paths. */
++			if (sms)
++				pvt_try_restate(pvt);
+ 		}
+ 	}
+ }
+--- a/at_queue.h
++++ b/at_queue.h
+@@ -81,6 +81,7 @@
+ 	struct cpvt*	cpvt;
+ 
+ 	int uid;
++	unsigned int sms:1;	/* one accepted CMGS/SMSTEXT part owned by this task */
+ 
+ 	at_queue_cmd_t	cmds[0];	/* this field must be last */
+ } at_queue_task_t;
+--- a/at_response.c
++++ b/at_response.c
+@@ -254,9 +254,6 @@
+ 				break;
+ 
+ 			case CMD_AT_SMSTEXT:
+-				pvt->outgoing_sms = 0;
+-				pvt_try_restate(pvt);
+-
+ 				/* TODO: move to +CMGS: handler */
+ 				ast_verb (3, "[%s] Successfully sent SMS message %p\n", PVT_ID(pvt), task);
+ 				ast_log (LOG_NOTICE, "[%s] Successfully sent SMS message %p\n", PVT_ID(pvt), task);
+@@ -542,9 +539,6 @@
+ 
+ 			case CMD_AT_CMGS:
+ 			case CMD_AT_SMSTEXT:
+-				pvt->outgoing_sms = 0;
+-				pvt_try_restate(pvt);
+-
+ 				{
+ 					char payload[SMSDB_PAYLOAD_MAX_LEN];
+ 					char dst[SMSDB_DST_MAX_LEN];
+@@ -1909,22 +1903,25 @@
+ 	return 0;
+ }
+ 
+-static void at_response_busy(struct pvt* pvt, enum ast_control_frame_type control)
++static void at_response_busy(struct pvt* pvt, at_res_t res, enum ast_control_frame_type control)
+ {
+-	const struct at_queue_task * task = at_queue_head_task (pvt);
+-	struct cpvt* cpvt = task ? task->cpvt : NULL;
++	const struct at_queue_task *task = at_queue_head_task(pvt);
++	struct cpvt *cpvt = task ? task->cpvt : NULL;
+ 
+-	if(cpvt == &pvt->sys_chan || !cpvt)
++	if (cpvt == &pvt->sys_chan || !cpvt)
+ 		cpvt = pvt->last_dialed_cpvt;
+ 
+-	pvt->dialing = 0;
+-	if(cpvt)
++	/* Capture the original call before completing its task. Queue cleanup
++	 * cannot free a dial cpvt; releasing it below can, so never use it after
++	 * change_channel_state(). No newly queued task is consumed by this event. */
++	at_queue_handle_result(pvt, res);
++	if (cpvt)
+ 	{
+-		CPVT_SET_FLAGS(cpvt, CALL_FLAG_NEED_HANGUP);
+-		queue_control_channel (cpvt, control);
+-		if(cpvt->channel == NULL || cpvt->state == CALL_STATE_DIALING || cpvt->state == CALL_STATE_INIT) {
++		CPVT_RESET_FLAGS(cpvt, CALL_FLAG_NEED_HANGUP);
++		queue_control_channel(cpvt, control);
++		if (cpvt->channel == NULL || cpvt->state == CALL_STATE_DIALING ||
++			cpvt->state == CALL_STATE_INIT || cpvt->state == CALL_STATE_ALERTING)
+ 			change_channel_state(cpvt, CALL_STATE_RELEASED, 0);
+-		}
+ 	}
+ 	request_clcc(pvt);
+ }
+@@ -2089,28 +2086,16 @@
+ 
+ 			case RES_BUSY:
+ 				ast_log (LOG_ERROR, "[%s] Receive BUSY\n", PVT_ID(pvt));
+-				/* Complete the in-flight command first: the handler enqueues a
+-				 * CLCC poll, and removing the queue head afterwards would discard
+-				 * that fresh command instead of the one this event answers. */
+-				at_queue_handle_result (pvt, at_res);
+-				at_response_busy(pvt, AST_CONTROL_BUSY);
++				at_response_busy(pvt, at_res, AST_CONTROL_BUSY);
+ 				break;
+ 
+ 			case RES_NO_DIALTONE:
+ 				ast_log (LOG_ERROR, "[%s] Receive NO DIALTONE\n", PVT_ID(pvt));
+-				/* Complete the in-flight command first: the handler enqueues a
+-				 * CLCC poll, and removing the queue head afterwards would discard
+-				 * that fresh command instead of the one this event answers. */
+-				at_queue_handle_result (pvt, at_res);
+-				at_response_busy(pvt, AST_CONTROL_CONGESTION);
++				at_response_busy(pvt, at_res, AST_CONTROL_CONGESTION);
+ 				break;
+ 			case RES_NO_CARRIER:
+ 				ast_log (LOG_ERROR, "[%s] Receive NO CARRIER\n", PVT_ID(pvt));
+-				/* Complete the in-flight command first: the handler enqueues a
+-				 * CLCC poll, and removing the queue head afterwards would discard
+-				 * that fresh command instead of the one this event answers. */
+-				at_queue_handle_result (pvt, at_res);
+-				at_response_busy(pvt, AST_CONTROL_CONGESTION);
++				at_response_busy(pvt, at_res, AST_CONTROL_CONGESTION);
+ 				break;
+ 			case RES_CPIN:
+ 				/* fatal */
+--- a/chan_dongle.c
++++ b/chan_dongle.c
+@@ -1088,7 +1088,7 @@
+ #/* */
+ EXPORT_DECL int pvt_enabled(const struct pvt * pvt)
+ {
+-	return pvt->current_state == DEV_STATE_STARTED && (pvt->desired_state == pvt->current_state || pvt->restart_time == RESTATE_TIME_CONVENIENT);
++	return !pvt->terminate_monitor && pvt->current_state == DEV_STATE_STARTED && (pvt->desired_state == pvt->current_state || pvt->restart_time == RESTATE_TIME_CONVENIENT);
+ }
+ 
+ #/* */
+@@ -1699,7 +1699,7 @@
+ 	else
+ 	{
+ 		/* check what changes require starting or stopping */
+-		if(pvt->desired_state != SCONFIG(settings, initstate)) {
++		if(CONF_SHARED(pvt, initstate) != SCONFIG(settings, initstate)) {
+ 			dev_state_t previous = pvt->desired_state;
+ 			pvt->desired_state = SCONFIG(settings, initstate);
+ 
+--- a/chan_dongle.h
++++ b/chan_dongle.h
+@@ -177,7 +177,7 @@
+ 	unsigned int		dialing;			/*!< HW state; true from ATD response OK until CEND or CONN for this call idx */
+ 	unsigned int		ring:1;				/*!< HW state; true if has incoming call from first RING until CEND or CONN */
+ 	unsigned int		cwaiting:1;			/*!< HW state; true if has incoming call waiting from first CCWA until CEND or CONN for */
+-	unsigned int		outgoing_sms:1;			/*!< outgoing sms */
++	unsigned int		outgoing_sms;			/*!< accepted SMS parts still owned by the AT queue */
+ 	unsigned int		volume_sync_step:2;		/*!< volume synchronized stage */
+ #define VOLUME_SYNC_BEGIN	0
+ #define VOLUME_SYNC_DONE	3

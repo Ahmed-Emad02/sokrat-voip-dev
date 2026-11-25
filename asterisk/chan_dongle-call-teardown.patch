@@ -1,0 +1,65 @@
+--- a/at_read.c
++++ b/at_read.c
+@@ -126,6 +126,16 @@
+ 			}
+ 			else if (res > 0)
+ 			{
++				/* A compact reply can leave the terminal result without the CRLF
++				 * prologue (e.g. "...145\r\nOK\r\n"). Classify it as a result
++				 * instead of discarding it as multiline noise. */
++				if (rb_memcmp (rb, "OK\r", 3) == 0 || rb_memcmp (rb, "ERROR\r", 6) == 0 ||
++					rb_memcmp (rb, "NO CARRIER\r", 11) == 0 || rb_memcmp (rb, "BUSY\r", 5) == 0)
++				{
++					*read_result = 1;
++					return at_read_result_iov (dev, read_result, rb, iov);
++				}
++
+ 				if (rb_memcmp (rb, "\n", 1) == 0)
+ 				{
+ 					ast_debug (5, "[%s] multiline response\n", dev);
+@@ -173,7 +183,10 @@
+ 				iovcnt = rb_read_until_mem_iov (rb, iov, "\n\r\nOK\r\n", 7);
+ 				if (iovcnt <= 0)
+ 				{
+-					iovcnt = rb_read_until_mem_iov (rb, iov, "\r\nOK\r\n", 6);
++					/* Compact replies are "...",145\r\nOK\r\n: stop before the
++					 * NL of the payload's final CRLF. Framing that ends at the CR
++					 * makes at_response() drop the last payload digit and lose OK. */
++					iovcnt = rb_read_until_mem_iov (rb, iov, "\nOK\r\n", 5);
+ 				}
+ 				if (iovcnt > 0)
+ 				{
+--- a/at_response.c
++++ b/at_response.c
+@@ -2061,19 +2061,28 @@
+ 
+ 			case RES_BUSY:
+ 				ast_log (LOG_ERROR, "[%s] Receive BUSY\n", PVT_ID(pvt));
+-				at_response_busy(pvt, AST_CONTROL_BUSY);
++				/* Complete the in-flight command first: the handler enqueues a
++				 * CLCC poll, and removing the queue head afterwards would discard
++				 * that fresh command instead of the one this event answers. */
+ 				at_queue_handle_result (pvt, at_res);
++				at_response_busy(pvt, AST_CONTROL_BUSY);
+ 				break;
+ 
+ 			case RES_NO_DIALTONE:
+ 				ast_log (LOG_ERROR, "[%s] Receive NO DIALTONE\n", PVT_ID(pvt));
+-				at_response_busy(pvt, AST_CONTROL_CONGESTION);
++				/* Complete the in-flight command first: the handler enqueues a
++				 * CLCC poll, and removing the queue head afterwards would discard
++				 * that fresh command instead of the one this event answers. */
+ 				at_queue_handle_result (pvt, at_res);
++				at_response_busy(pvt, AST_CONTROL_CONGESTION);
+ 				break;
+ 			case RES_NO_CARRIER:
+ 				ast_log (LOG_ERROR, "[%s] Receive NO CARRIER\n", PVT_ID(pvt));
+-				at_response_busy(pvt, AST_CONTROL_CONGESTION);
++				/* Complete the in-flight command first: the handler enqueues a
++				 * CLCC poll, and removing the queue head afterwards would discard
++				 * that fresh command instead of the one this event answers. */
+ 				at_queue_handle_result (pvt, at_res);
++				at_response_busy(pvt, AST_CONTROL_CONGESTION);
+ 				break;
+ 			case RES_CPIN:
+ 				/* fatal */

@@ -1,131 +1,128 @@
-# Dongle autoconfiguration
+# Dongle configuration and recovery
 
-Port-based dongle discovery and `dongle.conf` reconciliation for Huawei
-modems managed by `chan_dongle`.
+## Configuration ownership
 
-## Why
+`/etc/asterisk/dongle.conf` owns the logical `dongleN` slots. An existing
+configuration is preserved even when it contains no `dongle0` section.
+Fresh installations create empty capacity slots, not guessed `/dev/ttyUSB*`
+bindings. Root can add/remove empty slots through **GSM Dongles → Dongle
+slots** or `/api/gsm-dongles/slots`.
 
-`/dev/ttyUSB*` numbers are assigned in enumeration order and move when a USB
-device re-enumerates. `by-id` is not usable for the fleet's Huawei modems
-because they report the same `ID_SERIAL` (`HUAWEI_HUAWEI_Mobile`) and their
-links collide. The stable identity is the physical USB port.
+Huawei devices can expose different numbers and roles of serial interfaces.
+Use the model/interface inventory and `/dev/serial/by-path/...` bindings.
+The physical USB port is stable while `/dev/ttyUSB*` enumeration numbers and
+the fleet's colliding Huawei `by-id` names are not.
 
-This tool maps a physical USB port to a logical `dongleN`, discovers the
-audio/data interfaces from udev and the model table, and writes
-`/dev/serial/by-path/...` paths into `dongle.conf`.
+Discovery may fill or repair existing slots; it does not create additional
+capacity slots. A modem needs an available slot before it can be adopted.
+Serial probing must not open any interface of a modem already owned by
+another process. Unknown models and unknown ownership fail closed.
 
-## Files
+The former `scripts/dongle-autoconfig.py` package and its reconciliation timer
+are retired. Do not install or invoke them.
 
-- `scripts/dongle-autoconfig.py` — CLI launcher.
-- `scripts/dongle_autoconfig/` — discovery, classification, config editor,
-  apply/rollback, watchdog.
-- `/etc/sokrat/dongle-slots.json` — human-owned slot map (not auto-created).
-- `/var/lib/sokrat/dongle-autoconfig/backups/` — pre-apply backups.
-- `/etc/sokrat/dongle-autoconfig.disabled` — rollback/disable flag.
-- `sokrat-dongle-autoconfig.timer` — runs reconciliation every 60 seconds.
+## Automatic reconciliation
 
-## Bootstrap safely
+The Node application schedules reconciliation after startup, USB-link changes,
+and live/configured IMSI drift. Settings are in
+`/etc/sokrat/dongle-auto-adopt.json`. USB events use trailing debounce and an
+enumeration-readiness check rather than a periodic port-probing loop.
 
-Run from the repository checkout:
+Configuration writes preserve unrelated sections and metadata. Active or
+unknown call/SMS state postpones disruptive operations. Failed changes are
+rolled back per slot; rollback never unloads the entire dongle module.
+An orphaned runtime entry can remain stopped until the next natural Asterisk
+restart rather than resetting every modem to clear a cosmetic entry.
 
-```bash
-sudo python3 scripts/dongle-autoconfig.py inventory
-sudo python3 scripts/dongle-autoconfig.py bootstrap --json
-```
+An intentional `initstate=stop`, removal, or empty unassigned slot is not a
+recovery failure. Recovery must not resurrect it.
 
-Review the proposed slot map. Write it only when it matches the physical
-port layout:
+For eligible unhealthy slots, the app recovery watchdog can request a targeted
+restart after 90 seconds and a USB detach/rebind after a further 120 seconds.
+Persistent failure is flagged for attention. USB deauthorization, rebind and
+reset are **not guaranteed physical power cycles**; recovery cannot repair an
+unresponsive baseband by software on every hub.
 
-```bash
-sudo python3 scripts/dongle-autoconfig.py bootstrap --write
-```
+## Driver safety
 
-Existing `dongle.conf` sections are matched by their real tty targets. A
-stale section with no present hardware is not added to the map.
+- Configuration reload applies the requested restart policy before checking
+  eligibility. Repeating an unchanged reload does not cancel a pending change.
+- Graceful changes wait for modem call tracking and all accepted SMS parts,
+  not just Asterisk's active-channel count.
+- Local hangup preserves modem call tracking until modem acknowledgement.
+  BUSY/NO CARRIER uses the original dial's context even when another AT task
+  is queued.
+- A CLCC `ERROR` is nonfatal. A lost CLCC response holds the queue behind a
+  bounded, identifiable CSQ resynchronization probe. Late terminal responses
+  cannot complete the next SMS command. Failed resynchronization disconnects
+  rather than leaving an indefinitely busy ghost call.
+- Inbox polling starts only after SMS initialization succeeds. Voice-only
+  hardware rejects SMS submission explicitly.
 
-## Plan and apply
+## Deployment
 
-Default is read-only:
+`scripts/dongle-module.sh` builds from the pinned upstream commit and the
+complete ordered `asterisk/chan_dongle-series`. Every listed patch is required;
+missing or incompatible patches abort before replacing an installed driver.
+Patch state is checked from the actual hunks, never a source-text marker.
 
-```bash
-sudo python3 scripts/dongle-autoconfig.py plan
-sudo python3 scripts/dongle-autoconfig.py plan --json
-```
+The stripped release artifact is
+`installer-bundle/binaries/chan_dongle.so`; its SHA-256 is pinned in the shared
+helper. Regenerate the artifact and its pin together after C changes.
 
-Apply is explicit and idle-gated:
+`module reload chan_dongle.so` reads configuration; it does **not** activate
+new binary code. Binary replacement is atomic and activation uses a verified
+graceful daemon restart. Verification checks the daemon generation and mapped
+driver inode rather than accepting an old module's `Running` status. Asterisk
+may re-exec with the same PID.
 
-```bash
-sudo python3 scripts/dongle-autoconfig.py apply --yes
-```
+Online install, offline install, upgrade and restore share these policies.
+`sokrat-watchdog` is left disabled; Laya autonomous maintenance is not
+automatically enabled. Upgrade/restore do not start a disabled daemon or erase
+the SIM's SMS storage.
 
-`apply` refuses when `core show channels count` reports active calls. It
-backs up `dongle.conf`, writes atomically, reloads `chan_dongle.so`, waits,
-and validates every changed dongle's `State` and `IMSI`. On failure it
-restores the exact previous file and reloads again.
+## Logs and incident bundles
 
-## Enable the timer
+Driver lifecycle, call transitions, restart decisions, configuration changes,
+network registration and SMS/USSD events are recorded in
+`/var/log/asterisk/full`. Persistent Asterisk settings are verbose 3/debug 2.
+The logging setup preserves operator categories and avoids duplicate `full`
+channels across Issabel regeneration.
 
-From the checkout you want to test:
+Rotation retains 14 archives with a 250 MB size threshold and frequent checks.
+This is a check-interval bound, not an instantaneous hard size limit; a burst
+can exceed the threshold before the next check.
 
-```bash
-sudo bash scripts/install-dongle-autoconfig.sh --repo "$PWD"
-```
-
-The helper substitutes the checkout path into the service unit, installs the
-timer, and enables it only when `/etc/sokrat/dongle-slots.json` exists.
-
-If `/etc/sokrat/dongle-slots.json` is absent, the service is a no-op.
-
-## Health recovery
-
-`reconcile --auto` also runs the watchdog. If a dongle is `Not connected`,
-`Unknown`, or has an empty IMSI for more than two minutes, and it has no
-active calls, it queues `dongle reset` (which sends `AT+CFUN=1,1`). A
-cooldown and a per-hour retry limit prevent a reset loop. The by-path links
-make the modem re-enumeration safe.
-
-## Rollback
-
-The UI button is under **Configuration → Modem Conf → Dongle Slot
-Management → Rollback Autoconfig**. It is root-only.
-
-It restores the permanent `pre-autoconfig.bak` from the autoconfig backup
-directory, reloads `chan_dongle.so`, and writes the disable flag so the
-timer cannot immediately re-apply the new layout.
-
-CLI equivalent:
-
-```bash
-sudo python3 scripts/dongle-autoconfig.py status
-sudo python3 scripts/dongle-autoconfig.py rollback --yes
-```
-
-To re-enable autoconfiguration after a rollback, remove the flag and run a
-fresh plan:
+Collect a read-only snapshot:
 
 ```bash
-sudo rm -f /etc/sokrat/dongle-autoconfig.disabled
-sudo python3 scripts/dongle-autoconfig.py plan
+sudo bash scripts/dongle-debug-bundle.sh
 ```
 
-## Tests
+The collector creates a new private directory, bounds command execution time,
+and records collection failures. Existing/custom output directories are not
+reused. Bundles contain subscriber identities, phone numbers and potentially
+message content; do not publish or attach them without reviewing/redacting.
+
+## Verification
+
+Run isolated regression tests without hardware:
 
 ```bash
-cd /opt/sokrat-voip-dongle-autoconfig
-python3 -m unittest discover -s test/dongle_autoconfig -p 'test_*.py'
-node --test test/dongle-autoconfig.test.js
+node --test test/dongle-module-install.test.js test/dongle-graceful-restart.test.js test/live-cellular-opt-in.test.js
+python3 -m unittest discover -s test -p 'test_probe_dongle_serial.py'
 ```
 
-The tests use temporary directories and fake udev/Asterisk output; they do
-not touch `/etc/asterisk` or reload Asterisk.
+Read-only deployed-host checks are explicit:
 
-## Safety model
+```bash
+SOKRAT_HOST_TESTS=1 node --test test/dongle-module-installed.test.js
+```
 
-- Never writes without `--yes`.
-- Never reloads with active calls unless `--force` is given.
-- Preserves all unrelated `dongle.conf` lines and comments.
-- Preserves file owner/mode on atomic replace.
-- Keeps 20 backups.
-- Fails closed on unknown models: set `audio_interface` and
-  `data_interface` explicitly in the slot map.
-- Rollback disables the timer's reconciliation path.
+Cellular scenarios place real calls and send SMS/USSD, potentially consuming
+credit. They are excluded by default and require a maintenance window:
+
+```bash
+SOKRAT_LIVE_TESTS=1 node --test test/cross-dongle-call-scenarios.test.js
+SOKRAT_LIVE_TESTS=1 bash scripts/test-cross-dongle-scenarios.sh
+```

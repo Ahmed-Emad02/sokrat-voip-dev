@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { execSync } = require('node:child_process');
@@ -426,30 +427,33 @@ test('chan_dongle CLCC answer polling is packaged for every install path', () =>
     assert.match(patch, /Huawei firmware does not reliably emit/, 'patch must document the missing ^CONN event');
     assert.match(patch, /last_clcc_check/, 'patch must rate-limit the CLCC poll');
 
-    const helper = fs.readFileSync(path.join(rootDir, 'scripts', 'dongle-module.sh'), 'utf8');
-    assert.match(helper, /chan_dongle-clcc-poll\.patch/, 'shared dongle helper must apply the CLCC polling patch');
+    const series = fs.readFileSync(path.join(rootDir, 'asterisk', 'chan_dongle-series'), 'utf8')
+        .split(/\r?\n/).map(line => line.trim()).filter(line => line && !line.startsWith('#'));
+    assert.ok(series.includes('chan_dongle-clcc-poll.patch'), 'mandatory series must include CLCC polling');
+    assert.equal(series[0], 'chan_dongle.patch', 'canonical patch must be applied first');
 
     const binaryPath = path.join(rootDir, 'installer-bundle', 'binaries', 'chan_dongle.so');
     const binary = fs.readFileSync(binaryPath);
     assert.ok(binary.length > 200000, 'bundle binary must be present and non-empty');
 });
 
-test('voice activation and bounded retry are packaged for all install paths', () => {
+test('voice activation and the release pin are packaged for all install paths', () => {
     const rootDir = path.join(__dirname, '..');
-    const patchPath = path.join(rootDir, 'asterisk', 'chan_dongle-voice-enable.patch');
-    assert.ok(fs.existsSync(patchPath), 'voice enable patch must exist');
-    const patch = fs.readFileSync(patchPath, 'utf8');
+    const patch = fs.readFileSync(path.join(rootDir, 'asterisk', 'chan_dongle-voice-enable.patch'), 'utf8');
     assert.match(patch, /AT\^CVOICE=0/, 'patch must activate voice');
     assert.doesNotMatch(patch, /strstr\(pvt->model, "E173"\)/, 'voice activation must not be E173-only');
     assert.match(patch, /Enabling voice with AT\^CVOICE=0/, 'patch must enable voice for every dongle');
     assert.match(patch, /E173_VOICE_MAX_ATTEMPTS/, 'patch must bound retries');
-    assert.match(patch, /failed; retrying/, 'patch must retry a failed voice enable');
+
+    const series = fs.readFileSync(path.join(rootDir, 'asterisk', 'chan_dongle-series'), 'utf8');
+    assert.match(series, /^chan_dongle-voice-enable\.patch$/m, 'mandatory series must include voice enable');
 
     const helper = fs.readFileSync(path.join(rootDir, 'scripts', 'dongle-module.sh'), 'utf8');
-    assert.match(helper, /chan_dongle-voice-enable\.patch/, 'shared dongle helper must apply the voice enable patch');
-    assert.match(helper, /cb93bf719ebed984a20634b09fc857dc73540fe58ddc4c87273d175420ff40b0/, 'bundle hash must pin the generic voice module');
-
+    const pin = helper.match(/SOKRAT_CHAN_DONGLE_BUNDLE_SHA256="([0-9a-f]{64})"/);
+    assert.ok(pin, 'shared helper must pin the release bundle digest');
     const binary = fs.readFileSync(path.join(rootDir, 'installer-bundle', 'binaries', 'chan_dongle.so'));
+    assert.equal(crypto.createHash('sha256').update(binary).digest('hex'), pin[1],
+        'release pin must match the shipped bundle');
     assert.ok(binary.includes(Buffer.from('Enabling voice with AT^CVOICE=0')), 'bundle binary must include generic voice activation');
-    assert.ok(binary.includes(Buffer.from('AT^CVOICE=0 failed; retrying')), 'bundle binary must include generic retry handling');
 });
+

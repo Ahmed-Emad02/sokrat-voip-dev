@@ -274,20 +274,21 @@ The 264 API endpoints are organized into 31 functional modules:
 - [**20. PBX Configuration: Visual Dialplan & Core Reload**](#pbx-diagram-reload) *(2 endpoints)*
   - [`GET` /api/config/diagram](#get-apiconfigdiagram)
   - [`POST` /api/config/reload](#post-apiconfigreload)
-- [**21. Hardware Modem DSP, JitterBuffer, Gain & RTCP**](#modem-dsp) *(13 endpoints)*
+- [**21. Hardware Modem DSP, JitterBuffer, Gain & RTCP**](#modem-dsp) *(11 endpoints)*
   - [`GET` /api/config/modem](#get-apiconfigmodem)
   - [`GET` /api/config/modem/reports](#get-apiconfigmodemreports)
   - [`GET` /api/config/modem/rtcp](#get-apiconfigmodemrtcp)
   - [`POST` /api/config/modem/gain](#post-apiconfigmodemgain)
   - [`POST` /api/config/modem/reset](#post-apiconfigmodemreset)
-  - [`POST` /api/config/modem/dongle-slot](#post-apiconfigmodemdongle-slot)
-  - [`DELETE` /api/config/modem/dongle-slot/:dongleName?](#delete-apiconfigmodemdongle-slotdonglename)
   - [`GET` /api/config/modem/jitterbuffer](#get-apiconfigmodemjitterbuffer)
   - [`POST` /api/config/modem/jitterbuffer](#post-apiconfigmodemjitterbuffer)
   - [`GET` /api/config/dongle-mappings](#get-apiconfigdongle-mappings)
   - [`POST` /api/config/dongle-mappings/:dongleName/toggle](#post-apiconfigdongle-mappingsdonglenametoggle)
-- [**22. Hardware GSM Dongles, Cellular Gateways, USSD & SMS**](#gsm-dongles) *(20 endpoints)*
+- [**22. Hardware GSM Dongles, Cellular Gateways, USSD & SMS**](#gsm-dongles) *(23 endpoints)*
   - [`GET` /api/gsm-dongles](#get-apigsm-dongles)
+  - [`GET` /api/gsm-dongles/slots](#get-apigsm-donglesslots)
+  - [`POST` /api/gsm-dongles/slots](#post-apigsm-donglesslots)
+  - [`DELETE` /api/gsm-dongles/slots/:slot](#delete-apigsm-donglesslotsslot)
   - [`POST` /api/gsm-dongles/save-number](#post-apigsm-donglessave-number)
   - [`POST` /api/gsm-dongles/reset-usb-port](#post-apigsm-donglesreset-usb-port)
   - [`POST` /api/gsm-dongles/reload/:dongleId](#post-apigsm-donglesreloaddongleid)
@@ -5260,71 +5261,69 @@ curl -X POST http://localhost:8080/api/config/modem/reset -b cookie.txt
 
 ---
 
-<a id="post-apiconfigmodemdongle-slot"></a>
-### `POST` /api/config/modem/dongle-slot
+<a id="get-apigsm-donglesslots"></a>
+### `GET` /api/gsm-dongles/slots
 
-**Description**: Binds a physical USB bus/port topology address to a fixed logical modem slot index, preventing device drift across server reboots.
-
-- **Authentication**: Session Cookie (`config` or `config-modem` permission)
-- **Headers**: Cookie: connect.sid=<session_cookie>, Content-Type: application/json
-- **System Impact**: Saves persistent device mapping in `asterisk.dongle_slots` and updates udev rules.
-
-#### Request Parameters
-
-| Name | Location | Type | Required | Description |
-| :--- | :--- | :--- | :---: | :--- |
-| `dongleName` | `body` | `string` | **Yes** | Logical dongle name (e.g. 'dongle0') |
-| `usbBusPort` | `body` | `string` | **Yes** | USB sysfs path (e.g. '1-1.2:1.0') |
-| `imei` | `body` | `string` | No | Hardware IMEI identifier |
-
-#### Example Request
-
-```bash
-curl -X POST http://localhost:8080/api/config/modem/dongle-slot -b cookie.txt \
-  -H 'Content-Type: application/json' \
-  -d '{"dongleName":"dongle0","usbBusPort":"1-1.2:1.0","imei":"353142035570335"}'
-```
-
-#### Example Response
+Lists configured logical slots and their removal eligibility. Requires an
+interactive session whose username is exactly `root`; API keys, federation
+identities and other privileged users are denied.
 
 ```json
 {
   "success": true,
-  "message": "Dongle slot bound successfully."
+  "slots": [
+    { "slot": "dongle0", "empty": false, "removable": false, "state": "Free" },
+    { "slot": "dongle3", "empty": true, "removable": true, "state": "empty" }
+  ],
+  "suggestedSlot": "dongle4"
 }
 ```
 
 ---
 
-<a id="delete-apiconfigmodemdongle-slotdonglename"></a>
-### `DELETE` /api/config/modem/dongle-slot/:dongleName?
+<a id="post-apigsm-donglesslots"></a>
+### `POST` /api/gsm-dongles/slots
 
-**Description**: Unbinds a physical USB slot mapping for a specific dongle or all dongles.
+Adds empty slots in one atomic config write. Body `{}` adds one slot;
+`{"count": n}` adds `n` (1–32) consecutive lowest-unused names in a single
+backup/commit. Returns HTTP 201 with `addedSlots`, `slot` (only when one was
+added), the updated `slots` and the `backup` path. Unknown fields and invalid
+counts return HTTP 400; fewer than `count` free names returns HTTP 409 with no
+write. The root-session restriction above applies.
 
-- **Authentication**: Session Cookie (`config` or `config-modem` permission)
-- **Headers**: Cookie: connect.sid=<session_cookie>
-- **System Impact**: Removes entries from `asterisk.dongle_slots`.
+Adoption never creates a slot. A discovered modem either refreshes its own
+slot or fills an empty/vacant configured one; otherwise the pass reports it as
+`skipped: no empty slot (add one manually)`.
 
-#### Request Parameters
+Only empty sections in `dongle.conf` are created: no IMEI, SIM, serial port,
+USB rule, trunk or modem is assigned, and no scan, reload or reset runs.
+Empty slots appear on the dongle page as ordinary `Not Connected` cards.
 
-| Name | Location | Type | Required | Description |
-| :--- | :--- | :--- | :---: | :--- |
-| `dongleName` | `path` | `string` | No | Dongle identifier to unbind (omit to unbind all) |
+---
 
-#### Example Request
+<a id="delete-apigsm-donglesslotsslot"></a>
+### `DELETE` /api/gsm-dongles/slots
 
-```bash
-curl -X DELETE http://localhost:8080/api/config/modem/dongle-slot/dongle0 -b cookie.txt
-```
+Removes slots by explicit name. Body `{"slots": ["dongle3", "dongle4"]}`
+removes 1–32 slots in one atomic commit; `DELETE /api/gsm-dongles/slots/:slot`
+removes a single name through the same validation. Every target is checked
+before any write, so a batch with a missing (HTTP 404) or invalid (HTTP 400)
+slot is rejected whole and the file is untouched.
 
-#### Example Response
+An assigned slot may be removed only when its modem is **not connected**
+(`Not Connected`, `Not initialized`, `Stopped`, `Disconnected`): its section is
+deleted and its orphaned pvt is stopped. The driver entry disappears on the next
+natural Asterisk restart; no module reload is performed (a driver rebuild has
+been observed to drop a modem off the USB bus). A slot whose device is `Free`,
+ringing, or in a call is protected (HTTP 409), as is a runtime-only entry with
+no config section or an empty section that still has an Asterisk row.
+Unknown runtime status fails closed with HTTP 503.
+The root-session restriction above applies.
 
-```json
-{
-  "success": true,
-  "message": "Dongle slot unpinned."
-}
-```
+Returns `removedSlots`, `slot` (only for a single removal), the updated `slots`
+and the `backup` path. Only empty configuration sections are removed: no live
+modem commands, reloads or resets occur, and existing modem/SIM assignments are
+never deleted.
 
 ---
 

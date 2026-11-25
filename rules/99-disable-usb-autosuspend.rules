@@ -1,0 +1,10 @@
+# USB runtime power management: OFF.
+#
+# A PBX with USB GSM modems must never autosuspend the bus. The kernel default
+# here is usbcore.autosuspend=2 (two idle seconds), and a suspend/resume cycle
+# on a Huawei modem can drop or re-enumerate the device right after a call when
+# its serial ports go idle. This rule pins power/control="on" for every USB
+# device, which is vendor- and model-agnostic, so it holds on any server.
+#
+# Do not weaken it back to "auto": the file name is the contract.
+ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{power/control}="on"

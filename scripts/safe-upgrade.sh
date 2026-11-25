@@ -12,7 +12,7 @@
 #      (Condition 32 crash fix, UAF prevention, and audio jitter buffer).
 #   5. Sanitizes Asterisk dialplans: removes legacy automated dongle restart
 #      triggers and fixes hangup handlers that cause transfer disconnects.
-#   6. Safely reloads chan_dongle.so in RAM and restarts background Sokrat daemons.
+#   6. Drains/restarts Asterisk to activate its binary, then refreshes Sokrat daemons.
 #   7. Verifies system and GSM modem operational status.
 # ==============================================================================
 
@@ -36,14 +36,6 @@ REPO_URL="https://github.com/Ahmed-Emad02/sokrat-voip-dev.git"
 PUSH_GATEWAY_DIR="${PUSH_GATEWAY_DIR:-/opt/sokrat-push-gateway}"
 FCM_SOURCE="${FCM_CREDENTIALS_FILE:-$INSTALL_DIR/installer-bundle/secrets/firebase-service-account.json}"
 [ -f "$FCM_SOURCE" ] || FCM_SOURCE=/etc/sokrat/firebase/service-account.json
-install -d -m 0755 /etc/sokrat /etc/sokrat/firebase
-if [ -f "$FCM_SOURCE" ] && [ "$FCM_SOURCE" != /etc/sokrat/firebase/service-account.json ]; then
-    install -m 0644 "$FCM_SOURCE" /etc/sokrat/firebase/service-account.json
-fi
-if [ -f /etc/sokrat/firebase/service-account.json ] && [ -f "$PUSH_GATEWAY_DIR/.env" ]; then
-    grep -q '^FCM_ENABLED=' "$PUSH_GATEWAY_DIR/.env" && sed -i 's/^FCM_ENABLED=.*/FCM_ENABLED=true/' "$PUSH_GATEWAY_DIR/.env" || printf '%s\n' 'FCM_ENABLED=true' >> "$PUSH_GATEWAY_DIR/.env"
-    grep -q '^GOOGLE_APPLICATION_CREDENTIALS=' "$PUSH_GATEWAY_DIR/.env" && sed -i 's|^GOOGLE_APPLICATION_CREDENTIALS=.*|GOOGLE_APPLICATION_CREDENTIALS=/etc/sokrat/firebase/service-account.json|' "$PUSH_GATEWAY_DIR/.env" || printf '%s\n' 'GOOGLE_APPLICATION_CREDENTIALS=/etc/sokrat/firebase/service-account.json' >> "$PUSH_GATEWAY_DIR/.env"
-fi
 SRC_CHAN_DONGLE="/usr/src/asterisk-chan-dongle"
 MODULES_DIR="/usr/lib64/asterisk/modules"
 BACKUP_TIMESTAMP=$(date +%Y%m%d_%H%M%S)
@@ -56,6 +48,38 @@ echo "========================================================"
 if [ "$(id -u)" -ne 0 ]; then
     echo "ERROR: This script must be run as root." >&2
     exit 1
+fi
+
+# Refuse before changing configuration, databases or binaries if call safety
+# cannot be established. Check again at activation to cover calls arriving later.
+DONGLE_HELPER="$INSTALL_DIR/scripts/dongle-module.sh"
+if [ ! -f "$DONGLE_HELPER" ] && [ -f "$(dirname "$0")/dongle-module.sh" ]; then
+    DONGLE_HELPER="$(dirname "$0")/dongle-module.sh"
+fi
+if [ ! -f "$DONGLE_HELPER" ]; then
+    echo "ERROR: Missing shared dongle module installer: $DONGLE_HELPER" >&2
+    exit 1
+fi
+. "$DONGLE_HELPER"
+DONGLE_CONFIG_HELPER="$INSTALL_DIR/scripts/dongle-config.sh"
+if [ ! -f "$DONGLE_CONFIG_HELPER" ] && [ -f "$(dirname "$0")/dongle-config.sh" ]; then
+    DONGLE_CONFIG_HELPER="$(dirname "$0")/dongle-config.sh"
+fi
+if [ ! -f "$DONGLE_CONFIG_HELPER" ]; then
+    echo "ERROR: Missing shared dongle configuration helper: $DONGLE_CONFIG_HELPER" >&2
+    exit 1
+fi
+. "$DONGLE_CONFIG_HELPER"
+dongle_module_require_idle || exit 1
+dongle_deployment_disable_watchdog
+
+install -d -m 0755 /etc/sokrat /etc/sokrat/firebase
+if [ -f "$FCM_SOURCE" ] && [ "$FCM_SOURCE" != /etc/sokrat/firebase/service-account.json ]; then
+    install -m 0644 "$FCM_SOURCE" /etc/sokrat/firebase/service-account.json
+fi
+if [ -f /etc/sokrat/firebase/service-account.json ] && [ -f "$PUSH_GATEWAY_DIR/.env" ]; then
+    grep -q '^FCM_ENABLED=' "$PUSH_GATEWAY_DIR/.env" && sed -i 's/^FCM_ENABLED=.*/FCM_ENABLED=true/' "$PUSH_GATEWAY_DIR/.env" || printf '%s\n' 'FCM_ENABLED=true' >> "$PUSH_GATEWAY_DIR/.env"
+    grep -q '^GOOGLE_APPLICATION_CREDENTIALS=' "$PUSH_GATEWAY_DIR/.env" && sed -i 's|^GOOGLE_APPLICATION_CREDENTIALS=.*|GOOGLE_APPLICATION_CREDENTIALS=/etc/sokrat/firebase/service-account.json|' "$PUSH_GATEWAY_DIR/.env" || printf '%s\n' 'GOOGLE_APPLICATION_CREDENTIALS=/etc/sokrat/firebase/service-account.json' >> "$PUSH_GATEWAY_DIR/.env"
 fi
 
 # Federation's automated SSH bootstrap requires sshpass. Existing nodes that
@@ -447,20 +471,8 @@ EOF_LOCK
     systemd-tmpfiles --create /etc/tmpfiles.d/sokrat-lock.conf 2>/dev/null || true
 fi
 
-# Ensure callwaiting=no and u2diag=-1 in /etc/asterisk/dongle.conf if present
-if [ -f /etc/asterisk/dongle.conf ]; then
-    if grep -q '^;callwaiting=' /etc/asterisk/dongle.conf; then
-        sed -i 's/^;callwaiting=.*/callwaiting=no/' /etc/asterisk/dongle.conf
-    elif ! grep -q '^callwaiting=' /etc/asterisk/dongle.conf; then
-        sed -i '/^\[defaults\]/a callwaiting=no' /etc/asterisk/dongle.conf
-    fi
-    if grep -q '^u2diag=0' /etc/asterisk/dongle.conf; then
-        sed -i 's/^u2diag=0.*/u2diag=-1                      ; -1 = do not send ^U2DIAG (21.x firmwares reject it); 0 = set ^U2DIAG=0 on older modems/' /etc/asterisk/dongle.conf
-    fi
-    if ! grep -q '^syscfg=' /etc/asterisk/dongle.conf; then
-        sed -i '/^\[defaults\]/a syscfg=2,0,3fffffff,1,2         ; Huawei band/RAT configuration (2=Auto 2G/3G, 0=Auto order, 3fffffff=All bands, 1=Roam, 2=All domains)' /etc/asterisk/dongle.conf
-    fi
-fi
+# Existing dongle.conf (including port, SIM and baud settings) is operator-owned.
+# Do not rewrite it while applying code/schema upgrades.
 
 # Fix udev autosuspend rule to prevent permission denied on USB interfaces
 if [ -f /etc/udev/rules.d/99-disable-usb-autosuspend.rules ]; then
@@ -469,22 +481,6 @@ if [ -f /etc/udev/rules.d/99-disable-usb-autosuspend.rules ]; then
     udevadm trigger 2>/dev/null || true
 fi
 
-# Enable and start Sokrat Laya Autonomous Maintenance Daemon
-if [ -f /etc/systemd/system/sokrat-laya.service ]; then
-    systemctl daemon-reload
-    systemctl enable sokrat-laya.service 2>/dev/null || true
-    systemctl restart sokrat-laya.service 2>/dev/null || true
-    echo "  Sokrat Laya GSM autonomous maintenance daemon enabled and active"
-fi
-
-# Flush saturated SMS storage on all active dongles
-if command -v asterisk >/dev/null 2>&1; then
-    for d in $(asterisk -rx "dongle show devices" 2>/dev/null | awk 'NR>1 && ($3=="Free" || $3=="Active") {print $1}'); do
-        [ -n "$d" ] || continue
-        asterisk -rx "dongle cmd $d AT+CMGD=1,4" >/dev/null 2>&1 || true
-    done
-    echo "  Modem SMS storage flushed via AT+CMGD=1,4"
-fi
 
 # Decommission local whisper and migrate STT settings to Cloud AI
 mysql "${MYSQL_AUTH[@]}" asterisk -e "
@@ -1923,31 +1919,12 @@ for fwsvc in iptables ip6tables; do
 done
 echo "  WARNING: the host firewall is off - every port is exposed to the network"
 
-# 6. Reload Asterisk Modules & Sokrat Daemons
-echo "[6/7] Refreshing Asterisk modules and restarting Sokrat services..."
-dongle_module_require_idle || exit 1
-if command -v systemctl &>/dev/null && systemctl is-active asterisk >/dev/null 2>&1; then
-    echo "  Restarting Asterisk service to reload shared driver libraries..."
-    systemctl restart asterisk
-    sleep 2
-elif command -v asterisk &>/dev/null && pgrep -x asterisk >/dev/null 2>&1; then
-    asterisk -rx "module unload chan_dongle.so" >/dev/null 2>&1 || true
-    dongle_module_wait_stopped 10 || {
-        echo "  ERROR: chan_dongle.so did not unload; refusing to claim a reload" >&2
-        exit 1
-    }
-    asterisk -rx "module unload func_rnnoise.so" >/dev/null 2>&1 || true
-    sleep 1
-    asterisk -rx "module load chan_dongle.so" >/dev/null 2>&1 || {
-        echo "  ERROR: chan_dongle.so failed to load" >&2
-        exit 1
-    }
-    dongle_module_ensure_func_rnnoise asterisk || true
-fi
-dongle_module_wait_running 20 || {
-    echo "  ERROR: chan_dongle.so is not running after the reload" >&2
-    exit 1
-}
+# 6. Drain/restart Asterisk & Refresh Sokrat Daemons
+echo "[6/7] Activating Asterisk binaries and refreshing Sokrat services..."
+bash "$(dirname "$DONGLE_HELPER")/enable-dongle-logging.sh" --no-reload
+dongle_module_restart_verified 20 asterisk "$MODULES_DIR" || exit 1
+systemctl daemon-reload
+systemctl start sokrat-asterisk-logrotate.timer
 
 # The media helper scripts are part of the code that was just updated. Restart
 # only the Sokrat-managed media units so an already paired PBX runs the new
@@ -1991,6 +1968,16 @@ if systemctl is-active --quiet webmin 2>/dev/null || systemctl is-enabled --quie
     systemctl disable webmin 2>/dev/null || true
 fi
 rm -f /etc/systemd/system/webmin.service /usr/lib/systemd/system/webmin.service 2>/dev/null || true
+
+# Retire the removed Python dongle-autoconfig timer. Its slot map is still used
+# by the application runtime, but the script and units are gone in this release.
+if [ -f /etc/systemd/system/sokrat-dongle-autoconfig.timer ] || [ -f /etc/systemd/system/sokrat-dongle-autoconfig.service ]; then
+    systemctl disable --now sokrat-dongle-autoconfig.timer 2>/dev/null || true
+    systemctl stop sokrat-dongle-autoconfig.service 2>/dev/null || true
+    rm -f /etc/systemd/system/sokrat-dongle-autoconfig.service /etc/systemd/system/sokrat-dongle-autoconfig.timer
+    systemctl daemon-reload 2>/dev/null || true
+    echo "  Retired legacy dongle autoconfig timer (slot map preserved)"
+fi
 rm -f /etc/yum.repos.d/webmin.repo /etc/yum.repos.d/sokrat-webmin.repo 2>/dev/null || true
 
 systemctl daemon-reload 2>/dev/null || true
@@ -2011,26 +1998,7 @@ if command -v httpd >/dev/null 2>&1; then
     httpd -t >/dev/null 2>&1 && systemctl reload httpd 2>/dev/null || true
 fi
 
-# Refresh dongle autoconfiguration units and keep the timer only when a slot map exists.
-if [ -f "$INSTALL_DIR/scripts/dongle-autoconfig.py" ]; then
-    install -d -m 0755 /etc/sokrat /var/lib/sokrat/dongle-autoconfig/backups
-    chmod 0755 "$INSTALL_DIR/scripts/dongle-autoconfig.py" 2>/dev/null || true
-    find "$INSTALL_DIR/scripts/dongle_autoconfig" -maxdepth 1 -name '*.py' -exec chmod 0755 {} + 2>/dev/null || true
-    if [ -f "$INSTALL_DIR/scripts/systemd/sokrat-dongle-autoconfig.service" ] && \
-       [ -f "$INSTALL_DIR/scripts/systemd/sokrat-dongle-autoconfig.timer" ]; then
-        install -m 0644 "$INSTALL_DIR/scripts/systemd/sokrat-dongle-autoconfig.service" /etc/systemd/system/sokrat-dongle-autoconfig.service
-        install -m 0644 "$INSTALL_DIR/scripts/systemd/sokrat-dongle-autoconfig.timer" /etc/systemd/system/sokrat-dongle-autoconfig.timer
-        systemctl daemon-reload
-        if [ -f /etc/sokrat/dongle-slots.json ]; then
-            systemctl enable --now sokrat-dongle-autoconfig.timer 2>/dev/null || true
-        else
-            echo "  dongle autoconfig units refreshed; slot map absent, timer not enabled"
-        fi
-    fi
-fi
-
 systemctl restart sokrat-voip.service 2>/dev/null || true
-systemctl restart sokrat-watchdog.service 2>/dev/null || true
 systemctl restart sokrat-stt.service 2>/dev/null || true
 
 # Provision/refresh the recording-only loudness normalizer.
@@ -2053,7 +2021,7 @@ if command -v asterisk >/dev/null 2>&1; then
     done
 fi
 
-# Provision/Restart Sokrat Laya GSM Maintenance Agent Daemon
+# Provision/refresh Laya without changing the operator's enablement/activity policy.
 if [ -f "$INSTALL_DIR/laya/engine.py" ]; then
     chmod +x "$INSTALL_DIR/laya/cli.py" 2>/dev/null || true
     ln -sf "$INSTALL_DIR/laya/cli.py" /usr/local/bin/laya 2>/dev/null || true
@@ -2083,19 +2051,10 @@ Environment=LC_ALL=en_US.UTF-8
 WantedBy=multi-user.target
 UNIT
         systemctl daemon-reload 2>/dev/null || true
+        systemctl disable --now sokrat-laya.service
     fi
 
-    # Sokrat Laya is disabled by default unless explicitly activated by operator
-    LAYA_KILL_ACTIVE=$(mysql "${MYSQL_AUTH[@]}" asterisk -N -e "SELECT setting_value FROM dashboard_settings WHERE setting_key='laya_kill_switch_active' LIMIT 1" 2>/dev/null || echo "true")
-    if [ "$LAYA_KILL_ACTIVE" = "false" ]; then
-        systemctl enable sokrat-laya.service 2>/dev/null || true
-        systemctl restart sokrat-laya.service 2>/dev/null || true
-        echo "  Sokrat Laya GSM maintenance daemon restarted (active)"
-    else
-        systemctl stop sokrat-laya.service 2>/dev/null || true
-        systemctl disable sokrat-laya.service 2>/dev/null || true
-        echo "  Sokrat Laya GSM maintenance daemon is disabled (kill switch active)"
-    fi
+    dongle_deployment_refresh_laya
 fi
 
 # 7. Post-Upgrade Verification

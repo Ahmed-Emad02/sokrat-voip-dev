@@ -1362,29 +1362,9 @@ function can(tab) {
         background: rgba(220, 38, 38, 0.7);
     }
 
-    /* Terminal panes intentionally stay dark in both themes. */
-    .light-theme .terminal-screen,
-    .light-theme .log-screen {
-        color: #e5e7eb !important;
-    }
-    .light-theme .terminal-screen .text-zinc-400,
-    .light-theme .terminal-screen .text-zinc-500,
-    .light-theme .log-screen .text-zinc-400,
-    .light-theme .log-screen .text-zinc-500 {
-        color: #a1a1aa !important;
-    }
-    .light-theme .terminal-screen .text-emerald-400,
-    .light-theme .terminal-screen .text-green-400,
-    .light-theme .log-screen .text-emerald-400,
-    .light-theme .log-screen .text-green-400 {
-        color: #34d399 !important;
-    }
-    .light-theme .terminal-screen .text-red-400,
-    .light-theme .terminal-screen .text-rose-400,
-    .light-theme .log-screen .text-red-400,
-    .light-theme .log-screen .text-rose-400 {
-        color: #f87171 !important;
-    }
+    /* Terminal and log panes follow the theme (their surfaces are themed in
+       gsm-dongles.ejs), so their text uses the semantic light-mode mappings
+       above instead of a hardcoded dark-pane palette. */
     .ext-card, button, input, select, textarea {
         border-radius: 0.5rem !important;
     }
@@ -2983,6 +2963,25 @@ function can(tab) {
         border: 0 !important;
         box-shadow: none !important;
     }
+
+    /* Component fills painted from their own stylesheet rule rather than a
+       utility (these buttons are matched by element by the black-label rules
+       above). Their labels and icons stay white in light mode. */
+    html.light-theme .dongle-action-primary,
+    html.light-theme .dongle-action-primary *,
+    html.light-theme .dongle-action-primary svg,
+    html.light-theme .dongle-action-primary svg *,
+    html.light-theme .audio-play-btn,
+    html.light-theme .audio-play-btn *,
+    html.light-theme .audio-play-btn svg,
+    html.light-theme .audio-play-btn svg *,
+    html.light-theme .icon-tool-btn .tool-btn-badge,
+    html.light-theme .icon-tool-btn .tool-btn-badge *,
+    html.light-theme .config-dropdown-option.is-selected,
+    html.light-theme .config-dropdown-option.is-selected * {
+        color: #ffffff !important;
+        stroke: #ffffff !important;
+    }
 </style>
 
 <!-- Theme Handler Script -->
@@ -3446,20 +3445,6 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
                <%= curPage === '/customers' ? 'bg-[var(--accent-color)] text-white border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
                 <span class="sidebar-png-icon shrink-0" aria-hidden="true" style="display:inline-block;width:18px;height:18px;margin-inline-end:10px;background-color:currentColor;-webkit-mask:url('/24-7.png') center/contain no-repeat;mask:url('/24-7.png') center/contain no-repeat;"></span>
                 <span class="sidebar-text">E-HotLine</span>
-            </a>
-            <% } %>
-
-            <!-- 6. Voice Mail -->
-            <% if (can('voicemails')) { %>
-            <a href="/voicemails?lang=<%= currentLang %>" title="<%= sbT.vmLink %>"
-               class="nav-item flex items-center px-4 py-3 rounded-lg transition-all duration-150 text-sm font-semibold relative
-               <%= curPage === '/voicemails' ? 'bg-[var(--accent-color)] text-white border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
-                <svg class="w-4 h-4 me-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M12 2a3 3 0 0 0-3 3v4a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
-                    <path d="M19 10v1a7 7 0 0 1-14 0v-1"/>
-                    <line x1="12" y1="18" x2="12" y2="22"/>
-                </svg>
-                <span class="sidebar-text"><%= sbT.vmLink %></span>
             </a>
             <% } %>
 

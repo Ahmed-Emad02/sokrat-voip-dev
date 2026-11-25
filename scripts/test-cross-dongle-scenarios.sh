@@ -6,6 +6,11 @@
 
 set -uo pipefail
 
+if [ "${SOKRAT_LIVE_TESTS:-0}" != 1 ]; then
+    echo "Refusing cellular traffic: set SOKRAT_LIVE_TESTS=1 explicitly to authorize real calls/SMS/USSD." >&2
+    exit 2
+fi
+
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 YELLOW='\033[1;33m'

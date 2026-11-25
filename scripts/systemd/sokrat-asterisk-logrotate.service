@@ -1,0 +1,12 @@
+[Unit]
+Description=Check log rotation thresholds using the global logrotate state and lock
+Documentation=man:logrotate(8)
+
+[Service]
+Type=oneshot
+# No -s: share the distribution cron job's default state file and lock.
+ExecStart=/usr/bin/timeout --kill-after=5s 55s /usr/sbin/logrotate /etc/logrotate.conf
+SuccessExitStatus=3
+TimeoutStartSec=65s
+Nice=19
+IOSchedulingClass=idle

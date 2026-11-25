@@ -413,24 +413,17 @@ index 1832dae..711c65a 100644
  				break;
  			case CMD_AT_QPCMV:
  				ast_debug (1, "[%s] Dongle has Quectel voice support\n", PVT_ID(pvt));
-@@ -200,6 +214,16 @@ static int at_response_ok (struct pvt* pvt, at_res_t res)
+@@ -200,6 +214,9 @@ static int at_response_ok (struct pvt* pvt, at_res_t res)
  			case CMD_AT_CHLD_1x:
  				CPVT_RESET_FLAGS(task->cpvt, CALL_FLAG_NEED_HANGUP);
  				ast_debug (1, "[%s] Successful hangup for call idx %d\n", PVT_ID(pvt), task->cpvt->call_idx);
-+				{
-+					struct cpvt * c;
-+					AST_LIST_TRAVERSE_SAFE_BEGIN(&pvt->chans, c, entry) {
-+						if (c->channel == NULL) {
-+							change_channel_state(c, CALL_STATE_RELEASED, 0);
-+						}
-+					}
-+					AST_LIST_TRAVERSE_SAFE_END;
-+					pvt->dialing = 0;
++				if (task->cpvt != &pvt->sys_chan && task->cpvt->channel == NULL) {
++					change_channel_state(task->cpvt, CALL_STATE_RELEASED, 0);
 +				}
  				break;
  
  			case CMD_AT_CMGS:
-@@ -259,7 +283,7 @@ static int at_response_ok (struct pvt* pvt, at_res_t res)
+@@ -259,7 +276,7 @@ static int at_response_ok (struct pvt* pvt, at_res_t res)
  	}
  	else
  	{
@@ -439,7 +432,7 @@ index 1832dae..711c65a 100644
  	}
  
  	return 0;
-@@ -315,9 +339,13 @@ static int at_response_error (struct pvt* pvt, at_res_t res)
+@@ -315,9 +332,13 @@ static int at_response_error (struct pvt* pvt, at_res_t res)
  
  			/* not critical errors */
  			case CMD_AT_U2DIAG:
@@ -453,7 +446,7 @@ index 1832dae..711c65a 100644
  				log_cmd_response_error(pvt, ecmd, "[%s] Command '%s' failed\n", PVT_ID(pvt), at_cmd2str (ecmd->cmd));
  				/* mean ignore error */
  				break;
-@@ -427,6 +455,10 @@ static int at_response_error (struct pvt* pvt, at_res_t res)
+@@ -427,6 +448,10 @@ static int at_response_error (struct pvt* pvt, at_res_t res)
  				log_cmd_response_error(pvt, ecmd, "[%s] Setting CLIR failed\n", PVT_ID(pvt));
  				break;
  
@@ -464,7 +457,7 @@ index 1832dae..711c65a 100644
  			case CMD_AT_CHLD_2:
  				if (!CPVT_TEST_FLAG(task->cpvt, CALL_FLAG_HOLD_OTHER) ||
  						task->cpvt->state != CALL_STATE_INIT) {
-@@ -440,11 +472,26 @@ static int at_response_error (struct pvt* pvt, at_res_t res)
+@@ -440,11 +465,16 @@ static int at_response_error (struct pvt* pvt, at_res_t res)
  
  			case CMD_AT_DDSETEX:
  				log_cmd_response_error(pvt, ecmd, "[%s] %s (setup voice) failed\n", PVT_ID(pvt), at_cmd2str(ecmd->cmd));
@@ -478,20 +471,10 @@ index 1832dae..711c65a 100644
  			case CMD_AT_CHUP:
  			case CMD_AT_CHLD_1x:
  				log_cmd_response_error(pvt, ecmd, "[%s] Error sending hangup for call idx %d\n", PVT_ID(pvt), task->cpvt->call_idx);
-+				{
-+					struct cpvt * c;
-+					AST_LIST_TRAVERSE_SAFE_BEGIN(&pvt->chans, c, entry) {
-+						if (c->channel == NULL) {
-+							change_channel_state(c, CALL_STATE_RELEASED, 0);
-+						}
-+					}
-+					AST_LIST_TRAVERSE_SAFE_END;
-+					pvt->dialing = 0;
-+				}
  				break;
  
  			case CMD_AT_CMGR:
-@@ -523,7 +570,7 @@ static int at_response_error (struct pvt* pvt, at_res_t res)
+@@ -523,7 +553,7 @@ static int at_response_error (struct pvt* pvt, at_res_t res)
  	}
  	else
  	{
@@ -500,7 +483,7 @@ index 1832dae..711c65a 100644
  	}
  
  	return 0;
-@@ -805,6 +852,31 @@ static int at_response_conn (struct pvt* pvt, const char* str)
+@@ -805,6 +835,31 @@ static int at_response_conn (struct pvt* pvt, const char* str)
  	if (call_type == CLCC_CALL_TYPE_VOICE)
  	{
  		cpvt = pvt_find_cpvt(pvt, call_index);
@@ -532,7 +515,7 @@ index 1832dae..711c65a 100644
  		if(cpvt)
  		{
  /* FIXME: delay until CLCC handle?
-@@ -863,8 +935,10 @@ static int start_pbx(struct pvt* pvt, const char * number, int call_idx, call_st
+@@ -863,8 +918,10 @@ static int start_pbx(struct pvt* pvt, const char * number, int call_idx, call_st
  	 * set too low, try drop buffer cache
  	 * sync && echo 3 >/proc/sys/vm/drop_caches
  	 */
@@ -543,7 +526,7 @@ index 1832dae..711c65a 100644
  		ast_channel_tech_pvt_set(channel, NULL);
  		cpvt_free(cpvt);
  
-@@ -873,6 +947,7 @@ static int start_pbx(struct pvt* pvt, const char * number, int call_idx, call_st
+@@ -873,6 +930,7 @@ static int start_pbx(struct pvt* pvt, const char * number, int call_idx, call_st
  		// TODO: count fails and reset incoming when count reach limit ?
  		return -1;
  	}
@@ -551,7 +534,7 @@ index 1832dae..711c65a 100644
  
  	return 0;
  }
-@@ -945,6 +1020,12 @@ static int at_response_clcc (struct pvt* pvt, char* str)
+@@ -945,6 +1003,12 @@ static int at_response_clcc (struct pvt* pvt, char* str)
  					}
  					else if(dir == CALL_DIR_INCOMING && (state == CALL_STATE_INCOMING || state == CALL_STATE_WAITING))
  					{
@@ -564,7 +547,7 @@ index 1832dae..711c65a 100644
  						if(state == CALL_STATE_INCOMING)
  							PVT_STAT(pvt, in_calls) ++;
  						else
-@@ -1027,7 +1108,24 @@ static int at_response_clcc (struct pvt* pvt, char* str)
+@@ -1027,7 +1091,24 @@ static int at_response_clcc (struct pvt* pvt, char* str)
  		AST_LIST_TRAVERSE(&pvt->chans, cpvt, entry)
  		{
  			if(!CPVT_TEST_FLAG(cpvt, CALL_FLAG_ALIVE))
@@ -590,7 +573,7 @@ index 1832dae..711c65a 100644
  		}
  	}
  	return 0;
-@@ -1080,9 +1178,14 @@ static int at_response_ccwa(struct pvt* pvt, char* str)
+@@ -1080,9 +1161,14 @@ static int at_response_ccwa(struct pvt* pvt, char* str)
  //		if (sscanf (str, "+CCWA: \"%*[+0-9*#ABCabc]\",%*d,%d", &class) == 1)
  		if (at_parse_ccwa(str, &class) == 0)
  		{
@@ -606,7 +589,7 @@ index 1832dae..711c65a 100644
  				pvt->rings++;
  				pvt->cwaiting = 1;
  				request_clcc(pvt);
-@@ -1113,16 +1216,7 @@ static int at_response_ring (struct pvt* pvt)
+@@ -1113,16 +1199,7 @@ static int at_response_ring (struct pvt* pvt)
  
  		request_clcc(pvt);
  
@@ -624,12 +607,13 @@ index 1832dae..711c65a 100644
  	}
  
  	return 0;
-@@ -1256,13 +1350,19 @@ static int at_response_cmgr(struct pvt* pvt, char * str, size_t len)
+@@ -1256,13 +1333,20 @@ static int at_response_cmgr(struct pvt* pvt, char * str, size_t len)
  	int mr, st;
  	char		msg[4096];
  	int		res;
 -	char		text_base64[40800];
-+	char		*text_base64 = ast_calloc(1, 40800);
++	size_t		b64_max = 4 * (((160 * 255) + 2) / 3) + 1;
++	char		*text_base64 = ast_calloc(1, b64_max);
 +	char		*fullmsg = ast_calloc(1, 160 * 255);
  	size_t msg_len = sizeof(msg);
  	int tpdu_type;
@@ -646,7 +630,7 @@ index 1832dae..711c65a 100644
  	int csms_cnt;
  	char buf[512];
  	char payload[SMSDB_PAYLOAD_MAX_LEN];
-@@ -1315,7 +1415,7 @@ static int at_response_cmgr(struct pvt* pvt, char * str, size_t len)
+@@ -1315,7 +1398,7 @@ static int at_response_cmgr(struct pvt* pvt, char * str, size_t len)
  			case PDUTYPE_MTI_SMS_DELIVER:
  				ast_debug (1, "[%s] Successfully read SM\n", PVT_ID(pvt));
  				if (udh.parts > 1) {
@@ -655,16 +639,17 @@ index 1832dae..711c65a 100644
  					csms_cnt = smsdb_put(pvt->imsi, oa, udh.ref, udh.parts, udh.order, msg, fullmsg);
  					if (csms_cnt <= 0) {
  						ast_log(LOG_ERROR, "[%s] Error putting SMS to SMSDB\n", PVT_ID(pvt));
-@@ -1334,7 +1434,7 @@ receive_as_is:
+@@ -1334,7 +1417,7 @@ receive_as_is:
  					fullmsg_len = msg_len;
  				}
  
 -				ast_verb (1, "[%s] Got full SMS from %s: '%s'\n", PVT_ID(pvt), oa, fullmsg);
 +				ast_verb (1, "[%s] Got full SMS from %s: '%s'; [ref=%d, index=%u]\n", PVT_ID(pvt), oa, fullmsg, udh.ref, pvt->incoming_sms_index);
- 				ast_base64encode (text_base64, (unsigned char*)fullmsg, fullmsg_len, sizeof(text_base64));
+-				ast_base64encode (text_base64, (unsigned char*)fullmsg, fullmsg_len, sizeof(text_base64));
++				ast_base64encode (text_base64, (unsigned char*)fullmsg, fullmsg_len, b64_max);
  
  				manager_event_new_sms(PVT_ID(pvt), oa, fullmsg);
-@@ -1370,6 +1470,8 @@ receive_next_no_delete:
+@@ -1370,6 +1453,8 @@ receive_next_no_delete:
  		ast_log (LOG_WARNING, "[%s] Received unexpected '+CMGR'\n", PVT_ID(pvt));
  	}
  
@@ -673,7 +658,7 @@ index 1832dae..711c65a 100644
  	return 0;
  }
  
-@@ -1630,9 +1732,12 @@ static int at_response_creg (struct pvt* pvt, char* str, size_t len)
+@@ -1630,9 +1715,12 @@ static int at_response_creg (struct pvt* pvt, char* str, size_t len)
  	char*	lac;
  	char*	ci;
  
@@ -688,7 +673,7 @@ index 1832dae..711c65a 100644
  	}
  
  	if (at_parse_creg (str, len, &d, &pvt->gsm_reg_status, &lac, &ci))
-@@ -1643,11 +1748,9 @@ static int at_response_creg (struct pvt* pvt, char* str, size_t len)
+@@ -1643,11 +1731,9 @@ static int at_response_creg (struct pvt* pvt, char* str, size_t len)
  
  	if (d)
  	{
@@ -700,7 +685,7 @@ index 1832dae..711c65a 100644
  		pvt->gsm_registered = 1;
  		manager_event_device_status(PVT_ID(pvt), "Register");
  	}
-@@ -1754,16 +1857,21 @@ static int at_response_cimi (struct pvt* pvt, const char* str)
+@@ -1754,16 +1840,21 @@ static int at_response_cimi (struct pvt* pvt, const char* str)
  static void at_response_busy(struct pvt* pvt, enum ast_control_frame_type control)
  {
  	const struct at_queue_task * task = at_queue_head_task (pvt);
@@ -724,7 +709,7 @@ index 1832dae..711c65a 100644
  }
  
  /*!
-@@ -1880,6 +1988,7 @@ int at_response (struct pvt* pvt, const struct iovec iov[2], int iovcnt, at_res_
+@@ -1880,6 +1971,7 @@ int at_response (struct pvt* pvt, const struct iovec iov[2], int iovcnt, at_res_
  				at_response_csq (pvt, str);
  				break;
  
@@ -732,7 +717,7 @@ index 1832dae..711c65a 100644
  			case RES_CMS_ERROR:
  			case RES_ERROR:
  				return at_response_error (pvt, at_res);
-@@ -1917,15 +2026,18 @@ int at_response (struct pvt* pvt, const struct iovec iov[2], int iovcnt, at_res_
+@@ -1917,15 +2009,18 @@ int at_response (struct pvt* pvt, const struct iovec iov[2], int iovcnt, at_res_
  			case RES_BUSY:
  				ast_log (LOG_ERROR, "[%s] Receive BUSY\n", PVT_ID(pvt));
  				at_response_busy(pvt, AST_CONTROL_BUSY);
@@ -1017,7 +1002,7 @@ index 3cb2815..f20b8d9 100644
  		ast_debug (6, "[%s] call idx %d was master\n", PVT_ID(pvt), cpvt->call_idx);
  	}
  }
-@@ -404,8 +437,35 @@ static int channel_hangup (struct ast_channel* channel)
+@@ -404,8 +437,23 @@ static int channel_hangup (struct ast_channel* channel)
  
  		disactivate_call (cpvt);
  
@@ -1035,25 +1020,13 @@ index 3cb2815..f20b8d9 100644
 +			}
 +		}
 +
-+		/* If call is still in initiating or dialing state when local hangup occurs, force released state */
-+		if (cpvt->dir == CALL_DIR_OUTGOING && (cpvt->state == CALL_STATE_INIT || cpvt->state == CALL_STATE_DIALING || cpvt->state == CALL_STATE_ALERTING)) {
-+			pvt->dialing = 0;
-+			cpvt->channel = NULL;
-+			ast_channel_tech_pvt_set(channel, NULL);
-+			change_channel_state(cpvt, CALL_STATE_RELEASED, 0);
-+			ast_mutex_unlock (&pvt->lock);
-+			ast_module_unref (self_module());
-+			ast_setstate (channel, AST_STATE_DOWN);
-+			return 0;
-+		}
-+
  		/* drop cpvt->channel reference */
  		cpvt->channel = NULL;
 +		pvt->last_hangup_time = ast_tvnow();
  		ast_mutex_unlock (&pvt->lock);
  	}
  
-@@ -423,11 +483,12 @@ static int channel_answer (struct ast_channel* channel)
+@@ -423,11 +460,12 @@ static int channel_answer (struct ast_channel* channel)
  {
  	struct cpvt* cpvt = ast_channel_tech_pvt(channel);
  	struct pvt* pvt;
@@ -1067,7 +1040,7 @@ index 3cb2815..f20b8d9 100644
  	}
  	pvt = cpvt->pvt;
  
-@@ -435,7 +496,8 @@ static int channel_answer (struct ast_channel* channel)
+@@ -435,7 +473,8 @@ static int channel_answer (struct ast_channel* channel)
  
  	if (cpvt->dir == CALL_DIR_INCOMING)
  	{
@@ -1077,7 +1050,7 @@ index 3cb2815..f20b8d9 100644
  		{
  			ast_log (LOG_ERROR, "[%s] Error sending answer commands\n", PVT_ID(pvt));
  		}
-@@ -443,8 +505,7 @@ static int channel_answer (struct ast_channel* channel)
+@@ -443,8 +482,7 @@ static int channel_answer (struct ast_channel* channel)
  
  	ast_mutex_unlock (&pvt->lock);
  
@@ -1087,7 +1060,7 @@ index 3cb2815..f20b8d9 100644
  }
  
  #/* */
-@@ -463,6 +524,14 @@ static int channel_digit_begin (struct ast_channel* channel, char digit)
+@@ -463,6 +501,14 @@ static int channel_digit_begin (struct ast_channel* channel, char digit)
  
  	ast_mutex_lock (&pvt->lock);
  
@@ -1102,7 +1075,7 @@ index 3cb2815..f20b8d9 100644
  	rv = at_enqueue_dtmf(cpvt, digit);
  	if (rv)
  	{
-@@ -505,6 +574,9 @@ again:
+@@ -505,6 +551,9 @@ again:
  			{
  				--count;
  				if(count != 0) {
@@ -1112,7 +1085,7 @@ index 3cb2815..f20b8d9 100644
  					goto again;
  				}
  				ast_debug (1, "[%s] Deadlock avoided for write!\n", PVT_ID(pvt));
-@@ -525,7 +597,9 @@ again:
+@@ -525,7 +574,9 @@ again:
  				}
  				else
  				{
@@ -1122,7 +1095,7 @@ index 3cb2815..f20b8d9 100644
  					goto again;
  				}
  			} while(written > 0);
-@@ -574,7 +648,6 @@ static void timing_write(struct pvt* pvt)
+@@ -574,7 +625,6 @@ static void timing_write(struct pvt* pvt)
  		if (used >= FRAME_SIZE)
  		{
  			iovcnt = mixb_read_n_iov (&pvt->a_write_mixb, iov, FRAME_SIZE);
@@ -1130,7 +1103,7 @@ index 3cb2815..f20b8d9 100644
  			mixb_read_upd (&pvt->a_write_mixb, FRAME_SIZE);
  			change_audio_endianness_to_le(iov, iovcnt);
  		}
-@@ -584,7 +657,6 @@ static void timing_write(struct pvt* pvt)
+@@ -584,7 +634,6 @@ static void timing_write(struct pvt* pvt)
  			msg = "[%s] write truncated frame\n";
  
  			iovcnt = mixb_read_all_iov (&pvt->a_write_mixb, iov);
@@ -1138,7 +1111,7 @@ index 3cb2815..f20b8d9 100644
  			mixb_read_upd (&pvt->a_write_mixb, used);
  
  			iov[iovcnt].iov_base	= silence_frame;
-@@ -668,6 +740,12 @@ static struct ast_frame* channel_read (struct ast_channel* channel)
+@@ -668,6 +717,12 @@ static struct ast_frame* channel_read (struct ast_channel* channel)
  		CHANNEL_DEADLOCK_AVOIDANCE (channel);
  	}
  
@@ -1151,7 +1124,7 @@ index 3cb2815..f20b8d9 100644
  	ast_debug (7, "[%s] read call idx %d state %d audio_fd %d\n", PVT_ID(pvt), cpvt->call_idx, cpvt->state, pvt->audio_fd);
  
  	/* FIXME: move down for enable timing_write() to device ? */
-@@ -685,6 +763,9 @@ static struct ast_frame* channel_read (struct ast_channel* channel)
+@@ -685,6 +740,9 @@ static struct ast_frame* channel_read (struct ast_channel* channel)
  
  	else
  	{
@@ -1161,7 +1134,7 @@ index 3cb2815..f20b8d9 100644
  		memset (&cpvt->a_read_frame, 0, sizeof (cpvt->a_read_frame));
  
  		cpvt->a_read_frame.frametype = AST_FRAME_VOICE;
-@@ -695,24 +776,50 @@ static struct ast_frame* channel_read (struct ast_channel* channel)
+@@ -695,24 +753,50 @@ static struct ast_frame* channel_read (struct ast_channel* channel)
  #else /* 10- */
  		cpvt->a_read_frame.subclass_codec = AST_FORMAT_SLINEAR;
  #endif /* ^10- */
@@ -1220,7 +1193,7 @@ index 3cb2815..f20b8d9 100644
  
  		if(CPVT_IS_MASTER(cpvt))
  		{
-@@ -785,6 +892,14 @@ static struct ast_frame* channel_read (struct ast_channel* channel)
+@@ -785,6 +869,14 @@ static struct ast_frame* channel_read (struct ast_channel* channel)
  			}
  		}
  
@@ -1235,7 +1208,7 @@ index 3cb2815..f20b8d9 100644
  		if (CONF_SHARED(pvt, rxgain) && f->frametype == AST_FRAME_VOICE)
  		{
  			if (ast_frame_adjust_volume (f, CONF_SHARED(pvt, rxgain)) == -1)
-@@ -829,10 +944,24 @@ static int channel_write (struct ast_channel* channel, struct ast_frame* f)
+@@ -829,10 +921,24 @@ static int channel_write (struct ast_channel* channel, struct ast_frame* f)
  	}
  
  	/* TODO: write silence better ? */
@@ -1262,7 +1235,7 @@ index 3cb2815..f20b8d9 100644
  
  	pvt = cpvt->pvt;
  
-@@ -843,6 +972,12 @@ static int channel_write (struct ast_channel* channel, struct ast_frame* f)
+@@ -843,6 +949,12 @@ static int channel_write (struct ast_channel* channel, struct ast_frame* f)
  		CHANNEL_DEADLOCK_AVOIDANCE (channel);
  	}
  
@@ -1275,7 +1248,7 @@ index 3cb2815..f20b8d9 100644
  	if(!CPVT_IS_ACTIVE(cpvt))
  		goto e_return;
  
-@@ -998,6 +1133,18 @@ static int channel_fixup (struct ast_channel* oldchannel, struct ast_channel* ne
+@@ -998,6 +1110,18 @@ static int channel_fixup (struct ast_channel* oldchannel, struct ast_channel* newchannel)
  	if (cpvt->channel == oldchannel)
  	{
  		cpvt->channel = newchannel;
@@ -1294,7 +1267,7 @@ index 3cb2815..f20b8d9 100644
  	}
  	ast_mutex_unlock (&pvt->lock);
  
-@@ -1042,6 +1189,8 @@ static int channel_devicestate (void* data)
+@@ -1042,6 +1166,8 @@ static int channel_devicestate (void* data)
  #/* */
  static int channel_indicate (struct ast_channel* channel, int condition, const void* data, attribute_unused size_t datalen)
  {
@@ -1303,7 +1276,7 @@ index 3cb2815..f20b8d9 100644
  	int res = 0;
  
  	ast_debug (1, "[%s] Requested indication %d\n", ast_channel_name(channel), condition);
-@@ -1065,10 +1214,23 @@ static int channel_indicate (struct ast_channel* channel, int condition, const v
+@@ -1065,10 +1191,23 @@ static int channel_indicate (struct ast_channel* channel, int condition, const void* data, attribute_unused size_t datalen)
  #if ASTERISK_VERSION_NUM >= 110000 /* 11+ */
  		case AST_CONTROL_PVT_CAUSE_CODE:
  #endif /* ^11+ */
@@ -1327,7 +1300,7 @@ index 3cb2815..f20b8d9 100644
  			break;
  
  		case AST_CONTROL_UNHOLD:
-@@ -1076,8 +1238,8 @@ static int channel_indicate (struct ast_channel* channel, int condition, const v
+@@ -1076,8 +1215,8 @@ static int channel_indicate (struct ast_channel* channel, int condition, const void* data, attribute_unused size_t datalen)
  			break;
  
  		default:
@@ -1338,7 +1311,7 @@ index 3cb2815..f20b8d9 100644
  			break;
  	}
  
-@@ -1186,6 +1348,19 @@ EXPORT_DEF void change_channel_state(struct cpvt * cpvt, unsigned newstate, int
+@@ -1186,6 +1325,19 @@ EXPORT_DEF void change_channel_state(struct cpvt * cpvt, unsigned newstate, int cause)
  					disactivate_call(cpvt);
  					/* from +CEND, restart or disconnect */
  
@@ -1358,7 +1331,7 @@ index 3cb2815..f20b8d9 100644
  
  					/* drop channel -> cpvt reference */
  					ast_channel_tech_pvt_set(channel, NULL);
-@@ -1449,6 +1624,11 @@ static int channel_func_read(struct ast_channel* channel, attribute_unused const
+@@ -1449,6 +1601,11 @@ static int channel_func_read(struct ast_channel* channel, attribute_unused const char* function, char* data, char* buf, size_t len)
  		{
  			CHANNEL_DEADLOCK_AVOIDANCE (channel);
  		}
@@ -1370,7 +1343,7 @@ index 3cb2815..f20b8d9 100644
  		call_state_t state = cpvt->state;
  		ast_mutex_unlock(&pvt->lock);
  
-@@ -1491,7 +1671,7 @@ static int channel_func_read(struct ast_channel* channel, attribute_unused const
+@@ -1491,7 +1648,7 @@ static int channel_func_read(struct ast_channel* channel, attribute_unused const char* function, char* data, char* buf, size_t len)
  static int channel_func_write(struct ast_channel* channel, const char* function, char* data, const char* value)
  {
  	struct cpvt* cpvt = ast_channel_tech_pvt(channel);
@@ -1379,7 +1352,7 @@ index 3cb2815..f20b8d9 100644
  	call_state_t newstate, oldstate;
  	int ret = 0;
  
-@@ -1500,6 +1680,7 @@ static int channel_func_write(struct ast_channel* channel, const char* function,
+@@ -1500,6 +1657,7 @@ static int channel_func_write(struct ast_channel* channel, const char* function, char* data, const char* value)
  		ast_log (LOG_WARNING, "call on unreferenced %s\n", ast_channel_name(channel));
  		return -1;
  	}

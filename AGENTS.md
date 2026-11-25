@@ -27,11 +27,13 @@ Guidance and operational gotchas for AI agents working in `/opt/sokrat-voip`.
   ```bash
   node --test test/system-upgrade-and-restore.test.js
   ```
-* **Test live cellular dongles (real voice, SMS, USSD):**
+
+* **Test live cellular dongles (real voice, SMS, USSD; explicit opt-in):**
   ```bash
-  ./scripts/test-cross-dongle-scenarios.sh
+  SOKRAT_LIVE_TESTS=1 ./scripts/test-cross-dongle-scenarios.sh
   ```
-  *(Note: This initiates real outbound/inbound calls between `dongle0` and `dongle1` over the cellular network. Do not run in rapid automated loops).*
+  This consumes cellular service and may incur charges. Ordinary tests must
+  not initiate calls, SMS, USSD, resets, or service restarts.
 * **Syntax check shell scripts:**
   ```bash
   bash -n scripts/<script-name>.sh
@@ -41,18 +43,47 @@ Guidance and operational gotchas for AI agents working in `/opt/sokrat-voip`.
 
 ## 3. Critical Driver & Asterisk Gotchas
 
-* **Reloading `chan_dongle.so` requires a daemon restart:**
-  * `asterisk -rx 'module reload chan_dongle.so'` only reloads `dongle.conf` parameters. It **does not** reload the binary from disk.
-  * In Linux, Asterisk retains the deleted/overwritten `.so` inode in RAM (`/usr/lib64/asterisk/modules/chan_dongle.so (deleted)`).
-  * You **must** run `systemctl restart asterisk` whenever replacing the compiled module.
-* **Inbound Call Termination Bug in `chan_dongle`:**
-  * In `at_response.c` (`at_response_clcc()`), line 1008 **must remain `return 0;`**.
-  * Never replace `return 0;` with `break;` or add broad channel release sweeps in `CLCC`. Newly created incoming channels (`start_pbx()`) do not yet have `CALL_FLAG_ALIVE` set and will be immediately destroyed by cleanup sweeps during setup, terminating inbound calls before extensions ring.
+* **Activating a new `chan_dongle.so` requires a daemon restart:**
+  * `module reload chan_dongle.so` only reads configuration; it does not replace executable code.
+  * Replace the module atomically, never overwrite a mapped ELF in place.
+  * Use `dongle_module_restart_verified` from `scripts/dongle-module.sh`.
+    It checks call/AT queues, requests a graceful daemon restart, and verifies
+    the new daemon generation and mapped inode. Asterisk may re-exec without changing PID.
+* **Incoming-call tracking:**
+  * Do not add broad CLCC release sweeps. Newly created incoming channels need
+    their own tracked state; absence from one poll is not proof of release.
 * **DTMF State Constraint:**
   * `AT^DTMF` cannot be processed by Huawei modems during dialing or ringing states. Sending it before answer causes a modem timeout and drops the USB connection.
   * The driver must drop or ignore DTMF until `cpvt->state == CALL_STATE_ACTIVE`.
-* **Sync Driver Patch and Precompiled Binary:**
-  * When updating `chan_dongle`, update both `asterisk/chan_dongle.patch` AND `installer-bundle/binaries/chan_dongle.so` (`strip` the binary before committing).
+* **Canceled Outgoing Calls Must Retain Modem Tracking Until Teardown Response:**
+  * `channel_hangup()` already queues `AT+CHUP`/`AT+CHLD=1x` when `CALL_FLAG_NEED_HANGUP` is set, clearing the flag on successful enqueue before `disactivate_call()`. Do not enqueue a duplicate hangup or force outgoing `INIT`/`DIALING`/`ALERTING` calls to `RELEASED` during local cleanup.
+  * Drop the Asterisk channel references normally, but retain modem call tracking and busy state until a successful hangup acknowledgement or modem-reported release. The `CHUP`/`CHLD_1x` OK handler may release only its own acknowledged `task->cpvt` when it is not `sys_chan` and has no channel; it must not sweep other detached calls or independently clear `pvt->dialing`. `change_channel_state()` handles dialing cleanup for the released call. A hangup ERROR is not success or proof that the radio call ended: preserve tracking and busy state until modem-reported release/disconnect. Local hangup alone is not a modem teardown acknowledgement.
+  * The exact trigger of the unresponsive dongle incident is unproven. Continuing `^BOOT` URCs do not prove dead hardware or a responsive AT command interface. The observed USB hub has no port power switching: USB reset/rebind is not a true power cycle, and software reset recovery must not be promised.
+* **AT timeout and queue discipline:**
+  * A timeout alone does not prove firmware failure; parser/framing bugs can lose valid replies.
+  * Compact `+CLCC`/`+CMGR` framing must preserve final payload fields and terminal replies.
+  * A lost CLCC poll must not immediately transmit the next queued SMS command.
+    The bounded CSQ recovery barrier waits for a distinctive response and its
+    terminal result; late CLCC replies cannot complete unrelated work.
+  * Failed recovery is bounded and disconnects rather than indefinitely
+    suppressing liveness probes behind repeated CLCC polling.
+  * BUSY/NO CARRIER must retain the original task's call context before dequeue.
+  * Every accepted multipart/queued SMS part keeps restart deferral active until
+    its task is removed; do not clear a single busy bit on the first part.
+  * Serial discovery must not probe any interface of a USB modem already owned
+    by another process. Lockfile checks alone do not establish exclusive
+    ownership; preserve termios when probing a genuinely unowned endpoint.
+  * Probe ownership regressions use
+    `python3 -m unittest discover -s test -p 'test_probe_dongle_serial.py'`.
+    Do not invoke `probe-dongle-serial.py --help`: it starts a real scan.
+* **Driver release provenance:**
+  * `asterisk/chan_dongle-series` is the complete, mandatory patch order.
+    The source builder checks real patch hunks, not grep-based markers.
+  * Rebuild and strip `installer-bundle/binaries/chan_dongle.so`, then update
+    `SOKRAT_CHAN_DONGLE_BUNDLE_SHA256` in the shared helper. The digest there,
+    not an old hash in documentation, is authoritative.
+  * Use isolated compiled queue/response regressions plus the real source-build
+    helper. String-presence tests do not prove modem behavior or installer safety.
 
 ---
 

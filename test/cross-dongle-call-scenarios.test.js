@@ -1,4 +1,8 @@
-const test = require('node:test');
+const { test: nodeTest } = require('node:test');
+const test = (name, fn) => nodeTest(name, {
+    skip: process.env.SOKRAT_LIVE_TESTS === '1' ? false :
+        'Set SOKRAT_LIVE_TESTS=1 explicitly: this suite places real calls and sends SMS/USSD.',
+}, fn);
 const assert = require('node:assert/strict');
 const { execSync, exec } = require('child_process');
 
@@ -139,7 +143,7 @@ test('Scenario 3: Early Cancel before Answer (dongle0 -> dongle1)', async (t) =>
 
 test('Scenario 4: SMS Transmission & Carrier Delivery', async (t) => {
     const devices = getDongleDevices();
-    const targetNum = devices.dongle1.number.replace(/^\+2/, '').replace(/^\+/, '');
+    const targetNum = devices.dongle0.number.replace(/^\+2/, '').replace(/^\+/, '');
     const marker = `node-test-${Date.now()}`;
 
     const sendRes = execAsterisk(`dongle sms dongle1 ${targetNum} "${marker}"`);
@@ -159,7 +163,7 @@ test('Scenario 4: SMS Transmission & Carrier Delivery', async (t) => {
             // grep non-zero exit when not found yet
         }
     }
-    assert.ok(received, 'dongle1 must receive and parse the SMS over the cellular network');
+    assert.ok(received, 'dongle0 must receive and parse the SMS sent by dongle1');
     await waitForFree(10000);
 });
 
