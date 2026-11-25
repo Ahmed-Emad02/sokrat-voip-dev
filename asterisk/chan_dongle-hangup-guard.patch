@@ -1,0 +1,20 @@
+--- a/at_command.c
++++ b/at_command.c
+@@ -1069,10 +1069,13 @@
+  */
+ EXPORT_DEF void at_hangup_immediality(struct cpvt* cpvt)
+ {
+-	char buf[20];
+-	int length = snprintf(buf, sizeof(buf), cmd_chld1x, cpvt->call_idx);
++	/* Session teardown can run while an outgoing ATD is still unacknowledged.
++	 * Writing AT+CHLD=1x before ^ORIG/^CONF is Huawei HW BUG 1: the modem stops
++	 * answering every later AT command. AT+CHUP is the abort form for an
++	 * unconfirmed call and is safe for this final, best-effort teardown. */
++	static const char cmd_chup[] = "AT+CHUP\r";
+ 
+-	if(length > 0)
+-		at_write(cpvt->pvt, buf, length);
++	if (cpvt && cpvt->pvt)
++		at_write(cpvt->pvt, cmd_chup, STRLEN(cmd_chup));
+ }
+ 

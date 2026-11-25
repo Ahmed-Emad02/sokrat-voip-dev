@@ -16,7 +16,7 @@ SOKRAT_CHAN_DONGLE_COMMIT="${SOKRAT_CHAN_DONGLE_COMMIT:-7db8e75bc2b7c81b173e1bb4
 # Release-pinned module shipped in installer-bundle/binaries/chan_dongle.so.
 # This digest is mandatory for bundle installs only: compiler output from a
 # source build is not byte-identical and is never compared with it.
-SOKRAT_CHAN_DONGLE_BUNDLE_SHA256="892a33a9159519633e5a99f0602ce759af75a04f397dc45502f33d0fcf58d40d"
+SOKRAT_CHAN_DONGLE_BUNDLE_SHA256="00d41fa536bcd8ab9ab46ce7d68c279a1328c67a0f8532581999b8b6f104bac7"
 
 # Strip URL userinfo (user:password@) from any line passed on stdin. Used for
 # every origin string that reaches installer output, including git's own
