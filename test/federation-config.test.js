@@ -340,3 +340,64 @@ test('Federation Bootstrap: remote cleanup is scoped to one site, never destruct
     assert.match(src, /WHERE site_code='\$\{safeSite\}'/, 'cleanup must target only the departing site');
     assert.match(src, /syncPeerInventoryFromApi/, 'signed-API inventory sync must be exported');
 });
+
+test('Dialplan Engine: federated legs carry a shared call id for history dedup', () => {
+    const peers = [{ id: 1, node_name: 'Branch', host: '10.0.0.20', site_code: '20', iax_peer_outbound: 'fed_out_site20', allow_internal_dialing: 1, allow_outbound_egress: 1 }];
+    const dialplan = generateDialplanConfig(peers, { local_site_code: '10' }, []);
+
+    assert.ok(dialplan.includes('Set(FED_GID=${IF($["${IAXVAR(FED_GID)}" = ""]?${UNIQUEID}:${IAXVAR(FED_GID)})})'), 'Dispatch must derive the id locally or adopt the peer id');
+    assert.ok(dialplan.includes('Set(CDR(userfield)=SOKRAT_FED:${FED_GID})'), 'Originating leg must persist the shared id');
+    assert.ok(dialplan.includes('Set(CDR(userfield)=SOKRAT_FED:${FED_GID}:leg)'), 'Receiving leg must mark itself as the mirrored leg');
+    assert.ok(dialplan.includes('Set(IAXVAR(FED_GID)=${FED_GID})'), 'Id must travel with the IAX2 call');
+});
+
+test('Federation CDR: union view exposes the shared id and leg marker', () => {
+    const engine = fs.readFileSync(path.join(__dirname, '..', 'lib', 'federation-engine.js'), 'utf8');
+    assert.match(engine, /AS \\`global_call_id\\`/, 'Union view must expose global_call_id');
+    assert.match(engine, /AS \\`fed_leg\\`/, 'Union view must expose fed_leg');
+    assert.ok(engine.includes('SUBSTRING_INDEX(SUBSTRING_INDEX(SUBSTRING_INDEX'), 'View must strip the appended Q.850 cause before parsing the id');
+    assert.ok(engine.includes("'|', 1)"), 'View must strip the appended Q.850 cause before parsing the id');
+});
+
+test('Federation CDR: fleet-wide history drops the mirrored leg when the origin leg exists', () => {
+    const src = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+    assert.ok(src.includes('dedupFederationLegs'), 'Union source must enable leg dedup');
+    assert.ok(src.includes('c.fed_leg = 1'), 'Dedup must target the mirrored leg');
+    assert.ok(src.includes('v.global_call_id = c.global_call_id'), 'Dedup must match on the shared call id');
+    assert.ok(src.includes('AND v.fed_leg = 0'), 'Dedup must keep the originating leg');
+});
+
+test('Federation presence: a single failed poll does not mark a PBX offline', async () => {
+    const aggregator = require('../lib/federation-aggregator');
+    const makePool = (lastSeenAt) => {
+        const calls = [];
+        return {
+            calls,
+            async query(sql, params) {
+                calls.push({ sql, params });
+                if (/SELECT status, last_seen_at/.test(sql)) {
+                    return [[{ status: 'online', last_seen_at: lastSeenAt }]];
+                }
+                return [{ affectedRows: 1 }];
+            }
+        };
+    };
+
+    const fresh = makePool(new Date());
+    await aggregator.markPeerOffline(fresh, { id: 7 }, 'timeout');
+    assert.equal(fresh.calls.some(c => /sokrat_federation_peers` SET status = 'offline'/.test(c.sql)), false,
+        'A fresh last_seen must keep the peer online');
+    assert.ok(fresh.calls.some(c => /SET last_error/.test(c.sql)), 'The failure is still recorded');
+
+    const stale = makePool(new Date(Date.now() - 5 * 60 * 1000));
+    await aggregator.markPeerOffline(stale, { id: 7 }, 'timeout');
+    assert.ok(stale.calls.some(c => /sokrat_federation_peers` SET status = 'offline'/.test(c.sql)),
+        'A stale peer must be marked offline');
+});
+
+test('Live panel: remote cards render call details and never borrow a local extension', () => {
+    const operator = fs.readFileSync(path.join(__dirname, '..', 'views', 'operator.ejs'), 'utf8');
+    assert.ok(operator.includes('activeCalls[emp.cardId] || null'), 'Remote cards must read their site-scoped key');
+    assert.ok(operator.includes('applyCardCallState(cardKey, ext.activeCall'), 'Federation feed must render partner/status/timer, not only the class');
+    assert.ok(operator.includes('card.dataset.siteCode !== FED_LOCAL_SITE'), 'Local initial state must skip remote cards');
+});

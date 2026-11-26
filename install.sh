@@ -2140,7 +2140,9 @@ append_context '[cdr-cause-capture]' '[cdr-cause-capture]' << 'CAUSECAP'
 [cdr-cause-capture]
 ; Persist the Q.850 hangup cause on monitored channels so Call History can
 ; distinguish busy / no-answer / congestion instead of relying on driver defaults.
-exten => s,1,Set(CDR(userfield)=${HANGUPCAUSE})
+exten => s,1,Set(FED_UF=${CDR(userfield)})
+same => n,ExecIf($["${FED_UF:0:10}" != "SOKRAT_FED"]?Set(CDR(userfield)=${HANGUPCAUSE}))
+same => n,ExecIf($["${FED_UF:0:10}" = "SOKRAT_FED"]?Set(CDR(userfield)=${FED_UF}|${HANGUPCAUSE}))
 same => n,ExecIf($["${CDR(recordingfile)}"="" & "${CALLFILENAME}"!=""]?Set(CDR(recordingfile)=${CALLFILENAME}.wav))
 same => n,ExecIf($["${CDR(recordingfile)}"="" & "${SOKRAT_REC_FILE}"!=""]?Set(CDR(recordingfile)=${SOKRAT_REC_FILE}))
 same => n,Return()

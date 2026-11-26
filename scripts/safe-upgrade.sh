@@ -1624,6 +1624,22 @@ same => n(done),Hangup()
             content
         )
 
+    # Preserve the federation call id in the CDR userfield while appending the
+    # Q.850 cause. Calls that cross the federation carry SOKRAT_FED:<id>[:leg]
+    # and the union view dedups the mirrored leg by that id.
+    if 'FED_UF' not in content:
+        def _fed_cause(match):
+            return (match.group(1)
+                    + 'Set(FED_UF=${CDR(userfield)})\n'
+                    + 'same => n,ExecIf($["${FED_UF:0:10}" != "SOKRAT_FED"]?Set(CDR(userfield)=${HANGUPCAUSE}))\n'
+                    + 'same => n,ExecIf($["${FED_UF:0:10}" = "SOKRAT_FED"]?Set(CDR(userfield)=${FED_UF}|${HANGUPCAUSE}))')
+        content = re.sub(
+            r'(\[cdr-cause-capture\][\s\S]*?exten => s,1,)Set\(CDR\(userfield\)=\$\{HANGUPCAUSE\}\)',
+            _fed_cause,
+            content,
+            count=1
+        )
+
     # Ensure ChanSpy volume boost for supervisor listening (qv(2))
     content = re.sub(r'ChanSpy\(([^,)]+),q\)', r'ChanSpy(\1,qv(2))', content)
     content = re.sub(r'ChanSpy\(([^,)]+),qw\)', r'ChanSpy(\1,qwv(2))', content)

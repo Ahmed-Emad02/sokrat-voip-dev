@@ -1124,7 +1124,12 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
                         </div>
                         <div class="extension-group-grid grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-2">
                             <% groupMembers.forEach(function(emp) {
-                                const live = activeCalls[emp.extension] || activeCalls[emp.cardId];
+                                // Remote cards are keyed by site_extension: a bare
+                                // extension would collide with the same number on
+                                // this PBX and show the wrong call.
+                                const live = emp.isRemote
+                                    ? (activeCalls[emp.cardId] || null)
+                                    : (activeCalls[emp.extension] || activeCalls[emp.cardId]);
                                 let callState = 'idle';
                                 let partnerNum = '';
                                 let startTimeStamp = '';
@@ -1527,6 +1532,10 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
 
             socket.on('initialState', (calls) => {
                 document.querySelectorAll('[id^="card-"]').forEach(card => {
+                    // Remote cards are driven by operator:federation_state. The
+                    // local snapshot has no key for them, and resetting them here
+                    // made every remote card flash offline on page load.
+                    if (card.dataset.siteCode && card.dataset.siteCode !== FED_LOCAL_SITE) return;
                     const ext = card.id.replace('card-', '');
                     const callData = (calls && calls[ext]) ? calls[ext] : null;
                     localCallStatus[ext] = callData;
@@ -1731,19 +1740,17 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
                 activeDialerPopData = null;
             };
 
-            function handleCallUpdate(data) {
-                const { extension, callData } = data;
-                localCallStatus[extension] = callData;
-                if (window.refreshIntercomRosterIfOpen) window.refreshIntercomRosterIfOpen();
-                if (window.refreshTransferRosterIfOpen) window.refreshTransferRosterIfOpen();
+            // Draw one card from a call/state pair. Shared by local AMI updates and
+            // the federation state feed so a remote card gets the same partner,
+            // duration and status text as a local one.
+            function applyCardCallState(extension, callData, isOnline) {
                 const card = document.getElementById('card-' + extension);
                 const badge = document.getElementById('badge-' + extension);
                 const status = document.getElementById('status-' + extension);
                 const partner = document.getElementById('partner-' + extension);
                 const timer = document.getElementById('timer-' + extension);
-                if (!card || !badge || !status || !partner || !timer) return;
+                if (!card || !badge || !status || !partner || !timer) return false;
 
-                const isOnline = !!localPeerStatus[extension];
                 const callState = callData?.state || 'Idle';
                 updateCardStateClass(extension, isOnline, callState);
 
@@ -1783,6 +1790,15 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
                     partner.classList.add('hidden');
                     timer.classList.add('hidden');
                 }
+                return true;
+            }
+
+            function handleCallUpdate(data) {
+                const { extension, callData } = data;
+                localCallStatus[extension] = callData;
+                if (window.refreshIntercomRosterIfOpen) window.refreshIntercomRosterIfOpen();
+                if (window.refreshTransferRosterIfOpen) window.refreshTransferRosterIfOpen();
+                applyCardCallState(extension, callData, !!localPeerStatus[extension]);
             }
 
             function launchSipUrl(url) {
@@ -2106,6 +2122,7 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
 
                     const isOnline = ext.status === 'online';
                     localPeerStatus[cardKey] = isOnline;
+                    localCallStatus[cardKey] = ext.activeCall || null;
 
                     const sipBadge = document.getElementById('sipBadge-' + cardKey);
                     const sipLabel = document.getElementById('sipLabel-' + cardKey);
@@ -2113,12 +2130,7 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
                         sipLabel.textContent = isOnline ? '<%= t.online %>' : '<%= t.offline %>';
                     }
 
-                    let callState = 'idle';
-                    if (ext.activeCall) {
-                        callState = ext.activeCall.state === 'In Call' ? 'incall' : 'ringing';
-                    }
-
-                    updateCardStateClass(cardKey, isOnline, callState);
+                    applyCardCallState(cardKey, ext.activeCall || null, isOnline);
                 });
             });
             <% } %>

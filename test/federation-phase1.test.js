@@ -169,10 +169,13 @@ test('Federation Aggregator: unreachable peer is marked offline without throwing
         }
     };
     await markPeerOffline(pool, { id: 9 }, 'connect ECONNREFUSED');
-    const status = calls.find(c => c.sql.includes('sokrat_federation_node_status'));
-    assert.ok(status);
+    // With no last_seen_at the peer is stale, so it is downgraded immediately.
+    const status = calls.find(c => c.sql.includes('INSERT INTO') && c.sql.includes('sokrat_federation_node_status'));
+    assert.ok(status, 'offline state must be persisted');
     assert.equal(status.params[0], 9);
     assert.match(status.params[1], /ECONNREFUSED/);
+    assert.ok(calls.some(c => c.sql.includes('sokrat_federation_peers') && c.params[0] === 9),
+        'peer status must follow the stale node offline');
 });
 
 test('Federation Client: repeated failures open the per-peer circuit breaker', async () => {
