@@ -13,3 +13,4 @@ chan_dongle-session-safety.patch
 chan_dongle-hangup-guard.patch
 chan_dongle-teardown-single-chup.patch
 chan_dongle-teardown-hardening.patch
+chan_dongle-lifecycle-hardening.patch

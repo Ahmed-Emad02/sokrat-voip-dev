@@ -75,7 +75,7 @@ engine = LayaEngine()
 eng_module.get_total_active_calls = lambda: 2
 eng_module.is_any_dongle_call_active = lambda: False
 
-res = engine.execute_scheduled_dongle_restarts(force=False, source="Test Guard")
+res = engine.execute_scheduled_dongle_restarts(force=False, source="Test Guard", explicit=True)
 assert res["success"] == False, "Should fail when active calls exist"
 assert res["aborted"] == True, "Should flag as aborted"
 assert "Active calls on PBX" in res["reason"]
@@ -85,7 +85,7 @@ assert len(res["restarted"]) == 0, "No dongles should be restarted"
 eng_module.get_total_active_calls = lambda: 0
 eng_module.is_any_dongle_call_active = lambda: True
 
-res2 = engine.execute_scheduled_dongle_restarts(force=False, source="Test Cellular Guard")
+res2 = engine.execute_scheduled_dongle_restarts(force=False, source="Test Cellular Guard", explicit=True)
 assert res2["success"] == False, "Should fail when cellular call active"
 assert res2["aborted"] == True, "Should flag as aborted"
 assert "Active cellular call in progress" in res2["reason"]

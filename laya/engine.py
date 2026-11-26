@@ -48,6 +48,10 @@ from laya.evaluator.state_machine import DongleStateManager
 from laya.evaluator.heuristics import evaluate_dongle_anomalies, ANOMALY_NONE
 from laya.healer.ladder import RecoveryLadder
 from laya.healer.actions import action_restart_dongle, action_cfun_restart, action_baseband_reboot, is_call_active_on_dongle
+from laya.lifecycle_policy import (
+    read_lifecycle_policy,
+    autonomous_recovery_allowed,
+)
 from datetime import datetime
 
 
@@ -127,6 +131,7 @@ class LayaEngine:
             elif cmd == "status":
                 resp["dongles"] = list(self.last_dongle_cache.values())
                 resp["uptime"] = int(time.time() - self.start_time)
+                resp["lifecycle"] = read_lifecycle_policy()
             elif cmd == "heal":
                 target = req.get("dongle", "")
                 if target and target.lower() in self.last_dongle_cache:
@@ -178,12 +183,12 @@ class LayaEngine:
                 elif run_async:
                     threading.Thread(
                         target=self.execute_scheduled_dongle_restarts,
-                        kwargs={"force": force, "source": "Operator CLI Trigger"},
+                        kwargs={"force": force, "source": "Operator CLI Trigger", "explicit": True},
                         daemon=True
                     ).start()
                     resp["message"] = "Sequential dongle restart sequence initiated in background"
                 else:
-                    result = self.execute_scheduled_dongle_restarts(force=force, source="Operator CLI Trigger")
+                    result = self.execute_scheduled_dongle_restarts(force=force, source="Operator CLI Trigger", explicit=True)
                     resp["result"] = result
             else:
                 resp["success"] = False
@@ -248,7 +253,14 @@ class LayaEngine:
                     self._anomaly_log_throttle[sig_key] = time.time()
                     logger.warning(f"Anomaly detected on {dongle_id}: [{anomaly_type}] {reason}")
 
-                if recommended_level == 0:
+                policy = read_lifecycle_policy()
+                if not autonomous_recovery_allowed(policy):
+                    # Manual/read-only lifecycle policy: keep observing and
+                    # reporting, but do not restart/reset/rebind a session.
+                    health_data["healing_level"] = 0
+                    health_data["last_heal_action"] = "Observation Only (manual lifecycle policy)"
+                    health_data["lifecycle_mode"] = policy.get("mode", "manual")
+                elif recommended_level == 0:
                     # Report-only anomalies (e.g. hardware physically absent)
                     # cannot be fixed by software. Do not burn recovery rungs.
                     health_data["healing_level"] = 0
@@ -303,7 +315,7 @@ class LayaEngine:
             logger.warning(f"Error parsing window times '{start_str}'-'{end_str}': {e}")
             return False
 
-    def execute_scheduled_dongle_restarts(self, force=False, source="Scheduled Maintenance Window"):
+    def execute_scheduled_dongle_restarts(self, force=False, source="Scheduled Maintenance Window", explicit=False):
         """
         Restarts connected GSM dongles sequentially one-by-one.
         Strict safety constraints:
@@ -311,7 +323,12 @@ class LayaEngine:
           2. Verifies 0 active calls on target dongle.
           3. Waits for cooldown period between dongles while ensuring dongle returns to Free.
           4. Aborts immediately if an active call is detected at any point in the cycle.
+        The autonomous maintenance-window path is disabled under the manual
+        lifecycle policy; an explicit authenticated operator trigger stays usable.
         """
+        if not explicit and not autonomous_recovery_allowed():
+            logger.info(f"[{source}] Skipped: manual lifecycle policy blocks autonomous restarts")
+            return {"success": False, "skipped": True, "reason": "manual lifecycle policy", "restarted": []}
         if self.is_restarting_sequence:
             return {"success": False, "error": "A scheduled restart sequence is already in progress"}
 
@@ -381,6 +398,10 @@ class LayaEngine:
 
                 logger.info(f"[{source}] [{idx+1}/{len(connected_dongles)}] Restarting {dongle_id}...")
 
+                if not explicit and not autonomous_recovery_allowed():
+                    skipped.append({"dongle": dongle_id, "reason": "manual lifecycle policy"})
+                    break
+
                 if hygiene_enabled:
                     # Layer 4-B: safe baseband hygiene.
                     # AT+CFUN=1 restarts only the radio/protocol stack, so the
@@ -446,6 +467,8 @@ class LayaEngine:
         Evaluates whether the current time is within the user-defined maintenance window,
         and executes sequential restarts if not already executed in this window cycle.
         """
+        if not autonomous_recovery_allowed():
+            return
         now = datetime.now()
         now_hm = now.strftime("%H:%M")
 

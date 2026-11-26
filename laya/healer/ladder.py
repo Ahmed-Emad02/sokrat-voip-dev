@@ -9,6 +9,7 @@ from laya.config import (
     USB_RESET_COOLDOWN_SEC,
     ALERT_THROTTLE_SEC
 )
+from laya.lifecycle_policy import read_lifecycle_policy, autonomous_recovery_allowed
 from laya.evaluator.heuristics import (
     ANOMALY_NONE,
     ANOMALY_ZOMBIE_CHANNEL,
@@ -56,7 +57,9 @@ class RecoveryLadder:
                 "last_level": 0,
                 "last_action_time": 0,
                 "attempts_at_level": 0,
-                "last_alert_time": 0
+                "last_alert_time": 0,
+                "total_attempts": 0,
+                "stopped_until": 0
             }
         return self._history[dongle_id]
 
@@ -66,6 +69,8 @@ class RecoveryLadder:
             prev_level = self._history[dongle_id].get("last_level", 0)
             self._history[dongle_id]["last_level"] = 0
             self._history[dongle_id]["attempts_at_level"] = 0
+            self._history[dongle_id]["total_attempts"] = 0
+            self._history[dongle_id]["stopped_until"] = 0
             return prev_level
         return 0
 
@@ -77,6 +82,17 @@ class RecoveryLadder:
         dongle_id = dongle_id.lower()
         now = time.time()
         rec = self.get_dongle_history(dongle_id)
+        policy = read_lifecycle_policy()
+        if anomaly_type not in ("MANUAL_REQUEST", "MANUAL_CLI") and not autonomous_recovery_allowed(policy):
+            return ("Observation Only (manual lifecycle policy)", 0, False,
+                    "Autonomous lifecycle mutations disabled")
+        max_attempts = max(1, int(policy.get("maxRecoveryAttempts", 3))) * 2
+
+        # Opt-in recovery is bounded and reaches an operator-visible stop state.
+        if rec.get("stopped_until", 0) > now:
+            remaining = int(rec["stopped_until"] - now)
+            return ("Stopped (Recovery Exhausted)", rec.get("last_level", 0), False,
+                    f"Recovery stopped; next manual check in {remaining}s")
 
         # Safety Check: Never heal if there's an active bridged customer voice call!
         if is_call_active_on_dongle(dongle_id):
@@ -87,6 +103,14 @@ class RecoveryLadder:
         cooldown = USB_RESET_COOLDOWN_SEC if rec["last_level"] >= 4 else HEALING_COOLDOWN_SEC
         if elapsed < cooldown:
             return "Cooldown In Effect", rec["last_level"], False, f"Waiting {int(cooldown - elapsed)}s for cooldown"
+
+        # Bound total recovery mutations per unhealthy episode unless the
+        # operator explicitly requested one action (manual CLI is separate).
+        if anomaly_type != "MANUAL_REQUEST" and anomaly_type != "MANUAL_CLI" and rec.get("total_attempts", 0) >= max_attempts:
+            pause = max(60, int(policy.get("recoveryPauseMs", 1800000) / 1000))
+            rec["stopped_until"] = now + pause
+            return ("Stopped (Recovery Exhausted)", rec.get("last_level", 0), False,
+                    f"Attempt limit reached ({max_attempts}); inspect hardware and driver logs")
 
         # Determine next level
         target_level = 1
@@ -160,6 +184,7 @@ class RecoveryLadder:
 
         # Update history
         rec["last_action_time"] = now
+        rec["total_attempts"] = rec.get("total_attempts", 0) + 1
         if rec["last_level"] == target_level:
             rec["attempts_at_level"] += 1
         else:

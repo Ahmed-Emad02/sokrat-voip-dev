@@ -14,6 +14,13 @@ const axios = require('axios');
 const mysql = require('mysql2/promise');
 const nodemailer = require('nodemailer');
 
+let lifecyclePolicy = null;
+try {
+    lifecyclePolicy = require('../lib/dongle-lifecycle-policy');
+} catch (_) {
+    lifecyclePolicy = null;
+}
+
 require('dotenv').config({ path: path.join(__dirname, '../.env'), quiet: true });
 
 // Encryption setup matching server.js
@@ -409,6 +416,23 @@ function checkHostResources(options = {}) {
 }
 
 async function attemptServiceRestart(unitName) {
+    /* Restarting Asterisk core drops every dongle session. Under the default
+     * manual/read-only dongle lifecycle policy this independent watchdog must
+     * not perform that autonomous mutation either. Restarting the dashboard,
+     * database or web server does not touch dongle sessions and stays allowed. */
+    if (unitName === 'asterisk.service') {
+        let allowed = false;
+        try {
+            allowed = Boolean(lifecyclePolicy && lifecyclePolicy.autonomousRecoveryAllowed(lifecyclePolicy.readLifecyclePolicy()));
+        } catch (_) { /* Fail closed if the shared authority is unavailable. */ }
+        if (!allowed) {
+            return {
+                success: false,
+                skipped: true,
+                message: 'Manual dongle lifecycle policy: autonomous Asterisk restart disabled; inspect and recover explicitly'
+            };
+        }
+    }
     return new Promise((resolve) => {
         exec(`systemctl restart ${unitName}`, { timeout: 15000 }, (err) => {
             if (err) {

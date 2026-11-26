@@ -12,6 +12,8 @@ const { readDongleSections, slotIntentionallyDisabled, recoveryEligible, createD
 const CONFIG = '[general]\ninterval=15\n[defaults]\ncontext=from-dongle-custom\n\n[dongle0]\nimei=123456789012345\nimsi=111111111111111\naudio=/dev/ttyUSB1\ndata=/dev/ttyUSB2\n\n[dongle1]\nimei=987654321098765\nimsi=222222222222222\naudio=/dev/ttyUSB4\ndata=/dev/ttyUSB5\n';
 const healthy = state => /^(free|ready|registered|idle)\b/i.test(String(state || ''));
 const inCall = state => /outgoing|incoming|active|dialing|ring|waiting|held|busy/i.test(String(state || ''));
+// Recovery-behaviour tests opt in explicitly; the production default is manual.
+const AUTONOMOUS_POLICY = { mode: 'autonomous', autonomousRecovery: true, maxRecoveryAttempts: 4, backoffBaseMs: 60000, backoffMaxMs: 1800000, recoveryPauseMs: 1800000 };
 
 function stateOutput(slot, state, overrides = {}) {
     return Object.entries({
@@ -71,7 +73,8 @@ function fixture(t, content = CONFIG) {
         isHealthy: healthy, isCallState: inCall, now: () => f.time,
         audit: entry => f.audit.push(entry),
         usbTarget: slot => ({ device: `/fake/usb/${slot}` }),
-        usbRebind: async device => { f.usb.push(device); return 'fake-rebind'; }
+        usbRebind: async device => { f.usb.push(device); return 'fake-rebind'; },
+        lifecyclePolicy: AUTONOMOUS_POLICY
     });
     return f;
 }

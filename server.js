@@ -37,6 +37,7 @@ const {
     validateRefreshRequest
 } = require('./lib/dongle-provisioning');
 const { readDongleSections, slotIntentionallyDisabled, recoveryEligible, createDongleRuntime } = require('./lib/dongle-recovery');
+const { readLifecyclePolicy, autonomousRecoveryAllowed } = require('./lib/dongle-lifecycle-policy');
 const DONGLE_CONF_PATH = '/etc/asterisk/dongle.conf';
 
 let XLSX = null;
@@ -4899,7 +4900,8 @@ const dongleRuntime = createDongleRuntime({
     audit: appendDongleRestartAudit,
     usbTarget: usbSysfsDeviceForDongle,
     usbRebind: usbPowerCycleDevice,
-    notifyFailure: event => io.emit('dongleRestartFailed', buildRestartFailedEvent(event))
+    notifyFailure: event => io.emit('dongleRestartFailed', buildRestartFailedEvent(event)),
+    lifecyclePolicy: () => readLifecyclePolicy()
 });
 let dongleRecoveryQueued = false;
 
@@ -4964,8 +4966,14 @@ function autoHealDongles() {
                 const section = sections.get(id);
                 if (!section) continue;
                 const liveImsi = String(dev.IMSI || '').trim();
+                const liveImei = String(dev.IMEI || '').trim();
                 const configuredImsi = String(section.imsi || '').trim();
+                const configuredImei = String(section.imei || '').trim();
                 if (!liveImsi || liveImsi === '-' || !/^\d{5,}$/.test(liveImsi)) continue;
+                // Some firmware reports the IMEI in the IMSI column, or the
+                // inventory parser exposes a configured IMEI as the live IMSI.
+                // Neither is a SIM change; adopting it causes a reload loop.
+                if (liveImsi === liveImei || liveImsi === configuredImei) continue;
                 if (liveImsi === configuredImsi) {
                     if (dongleImsiDrift.delete(id)) console.log(`DONGLE-IMSI: ${id} matches config again`);
                     continue;
@@ -11762,7 +11770,11 @@ function parseDevicesOutput(output, keepRaw = false, astDbMappings = {}) {
 
             // Fallback for transpositions where the firmware reports IMEI in the IMSI field
             if ((!row.IMEI || row.IMEI === '-' || row.IMEI === 'Unknown') && row.IMSI && (row.IMSI.startsWith('86') || row.IMSI.startsWith('35'))) {
+                // Firmware transposition: this value is an IMEI, not an IMSI.
+                // Leaving it in both fields makes the IMSI-drift watcher reload
+                // chan_dongle every few seconds.
                 row.IMEI = row.IMSI;
+                row.IMSI = '';
             }
             const parsedState = (row.State || '').toLowerCase();
             if (parsedState.includes('not init')) row.State = 'Not Initialized';
@@ -13258,8 +13270,12 @@ async function normalizeConfiguredSlots(sections, states) {
         // what cross-wired two sections onto one modem after a socket shuffle.
         // IMSI is safe to sync only when the same modem answers on the ports.
         const sameModem = !liveId.imei || !section.imei || liveId.imei === section.imei;
-        if (sameModem && liveId.imsi && liveId.imsi !== section.imsi) {
-            next.imsi = liveId.imsi;
+        const liveImsi = String(liveId.imsi || '').trim();
+        const liveImei = String(liveId.imei || '').trim();
+        const configuredImei = String(section.imei || '').trim();
+        const isImeiTransposition = liveImsi && (liveImsi === liveImei || liveImsi === configuredImei);
+        if (sameModem && liveImsi && !isImeiTransposition && liveImsi !== section.imsi) {
+            next.imsi = liveImsi;
             previous.imsi = section.imsi || null;
         }
 
@@ -13566,6 +13582,9 @@ async function runAdoptionPass(trigger) {
  * add — both append sections to dongle.conf and then reload the module.
  */
 async function adoptDiscoveredDongles(trigger = 'manual') {
+	if (trigger !== 'manual' && !autonomousRecoveryAllowed(readLifecyclePolicy())) {
+		return { success: false, skipped: true, reason: 'manual lifecycle policy' };
+	}
     if (adoptInFlight) return { success: false, reason: 'adoption already running', adopted: [], skipped: [] };
     adoptInFlight = true;
     try {
@@ -13590,6 +13609,16 @@ const AUTO_ADOPT_QUIET_MS = 1200;
  * enumerating the run is deferred instead of wasted.
  */
 function scheduleAutoAdopt(trigger, options = {}) {
+    /* The lifecycle policy is the authority over every autonomous trigger.
+     * A manual/read-only policy keeps presence discovery and observation,
+     * but an automatic hotplug/SIM/config pass may not rewrite dongle.conf,
+     * reload the driver or restart a session. Explicit authenticated
+     * provisioning endpoints call adoptDiscoveredDongles('manual') directly
+     * and remain available. */
+    if (!autonomousRecoveryAllowed(readLifecyclePolicy())) {
+        console.log('DONGLE-AUTO-ADOPT: manual lifecycle policy; autonomous adoption disabled');
+        return null;
+    }
     const config = readAutoAdoptConfig();
     if (!config.enabled) return null;
     const settleMs = Math.max(0, Number(options.settleMs) || Math.max(5000, Number(config.settleSeconds || 10) * 1000));
@@ -13607,7 +13636,7 @@ function scheduleAutoAdopt(trigger, options = {}) {
     autoAdoptTimer = setTimeout(() => {
         autoAdoptTimer = null;
         autoAdoptFireAt = 0;
-        if (!readAutoAdoptConfig().enabled) {
+        if (!readAutoAdoptConfig().enabled || !autonomousRecoveryAllowed(readLifecyclePolicy())) {
             console.log('DONGLE-AUTO-ADOPT: disabled while waiting; run cancelled');
             return;
         }

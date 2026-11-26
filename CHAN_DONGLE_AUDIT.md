@@ -2,8 +2,8 @@
 
 **Target:** `chan_dongle` (Huawei 3G GSM Channel Driver for Asterisk 18.19.0)  
 **Source Path:** `/tmp/opencode/asterisk-chan-dongle/`  
-**Active Production Patch:** `asterisk/chan_dongle-series` (15 ordered patches)  
-**Precompiled Driver Binary:** `installer-bundle/binaries/chan_dongle.so` (SHA-256: `c80580b56a5f10d602619fc609ad67acb3c8674f89f11d0b1070e0489cfc9d72`)  
+**Active Production Patch:** `asterisk/chan_dongle-series` (16 ordered patches)
+**Precompiled Driver Binary:** `installer-bundle/binaries/chan_dongle.so` (SHA-256: `88252aca0935baa0ad099db9e72a96e4723fd8e574da75e0d18c850ee7d71ab9`)
 **Deployment Nodes:** Central `.50`, Spoke `.92`, Spoke `.57`  
 **Audit & Patch Rebase Date:** October 31, 2026 (Exhaustive 4-Round Audit & Patch Rebase Completed)  
 **Status:** Audit & Patch Rebase Completed; production driver synchronized and verified.
@@ -116,7 +116,7 @@ The Sokrat VoIP platform requires strict adherence to four fundamental architect
   1. `install.sh` (Fresh single-script online installer)
   2. `installer-bundle/install-sokrat.sh` (Offline bundle installer)
   3. `scripts/safe-upgrade.sh` (Non-destructive in-place upgrader)
-* **Integrity:** Driver binary SHA-256 (`c80580b56a5f10d602619fc609ad67acb3c8674f89f11d0b1070e0489cfc9d72`) must remain identical across all cluster nodes (`.50`, `.92`, `.57`).
+* **Integrity:** Driver binary SHA-256 (`88252aca0935baa0ad099db9e72a96e4723fd8e574da75e0d18c850ee7d71ab9`) must remain identical across all cluster nodes (`.50`, `.92`, `.57`).
 
 ### 4. Invariant: Daemon Restart vs Dynamic Module Reload
 * **Rule:** Replacing `/usr/lib64/asterisk/modules/chan_dongle.so` requires a full Asterisk daemon restart (`systemctl restart asterisk`).

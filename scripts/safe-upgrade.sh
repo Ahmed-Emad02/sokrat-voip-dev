@@ -74,6 +74,22 @@ dongle_module_require_idle || exit 1
 dongle_deployment_disable_watchdog
 
 install -d -m 0755 /etc/sokrat /etc/sokrat/firebase
+# Authoritative dongle lifecycle policy: manual/read-only by default. Never
+# overwrite an operator's explicit opt-in (autonomous recovery is opt-in).
+if [ ! -f /etc/sokrat/dongle-lifecycle-policy.json ]; then
+    cat > /etc/sokrat/dongle-lifecycle-policy.json <<'SOKRAT_DONGLE_POLICY'
+{
+  "version": 1,
+  "mode": "manual",
+  "autonomousRecovery": false,
+  "maxRecoveryAttempts": 3,
+  "backoffBaseMs": 60000,
+  "backoffMaxMs": 1800000,
+  "recoveryPauseMs": 1800000
+}
+SOKRAT_DONGLE_POLICY
+    chmod 0644 /etc/sokrat/dongle-lifecycle-policy.json
+fi
 if [ -f "$FCM_SOURCE" ] && [ "$FCM_SOURCE" != /etc/sokrat/firebase/service-account.json ]; then
     install -m 0644 "$FCM_SOURCE" /etc/sokrat/firebase/service-account.json
 fi

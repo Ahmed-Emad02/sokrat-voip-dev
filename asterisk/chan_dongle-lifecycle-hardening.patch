@@ -1,0 +1,1097 @@
+--- a/at_queue.c
++++ b/at_queue.c
+@@ -11,11 +11,24 @@
+ */
+ #include "ast_config.h"
+ 
++#include <errno.h>
++#include <poll.h>
++#include <time.h>
++#include <unistd.h>
++
+ #include <asterisk/utils.h>		/* ast_free() */
+ 
+ #include "at_queue.h"
+ #include "chan_dongle.h"		/* struct pvt */
+ 
++/* Bound a single command write. It is long enough to ride out ordinary tty
++ * back-pressure and short enough that a wedged endpoint is reported without
++ * stalling the monitor thread indefinitely. */
++#define AT_WRITE_BUDGET_MS	1000
++#define AT_WRITE_SHORT_MS	100
++#define AT_WRITE_RETRY_MS	100
++#define AT_WRITE_MAX_STALLS	8
++
+ /*!
+  * \brief Free an item data
+  * \param cmd - struct at_queue_cmd
+@@ -56,16 +69,45 @@
+  * \param pvt -- pvt structure
+  */
+ #/* */
++static void at_queue_remove_task (struct pvt * pvt, at_queue_task_t * task)
++{
++	unsigned remaining;
++
++	if (!task)
++		return;
++
++	if (task == AST_LIST_FIRST (&pvt->at_queue))
++		pvt->at_write_stalls = 0;
++	AST_LIST_REMOVE (&pvt->at_queue, task, entry);
++	remaining = task->cmdsno > task->cindex ? task->cmdsno - task->cindex : 0;
++	PVT_STATE(pvt, at_tasks)--;
++	if (task->sms)
++		pvt->outgoing_sms--;
++	PVT_STATE(pvt, at_cmds) -= remaining;
++	ast_debug (4, "[%s] remove task with %u command(s) begin with '%s' expected response '%s' from queue\n",
++			PVT_ID(pvt), task->cmdsno, at_cmd2str (task->cmds[0].cmd),
++			at_res2str (task->cmds[0].res));
++
++	at_queue_free(task);
++}
++
++/*!
++ * \brief Remove an job item from the front of the queue, and free it
++ * \param pvt -- pvt structure
++ */
++#/* */
+ static void at_queue_remove (struct pvt * pvt)
+ {
+ 	at_queue_task_t * task = AST_LIST_REMOVE_HEAD (&pvt->at_queue, entry);
+ 
+ 	if (task)
+ 	{
++		unsigned remaining = task->cmdsno > task->cindex ? task->cmdsno - task->cindex : 0;
++		pvt->at_write_stalls = 0;
+ 		PVT_STATE(pvt, at_tasks)--;
+ 		if (task->sms)
+ 			pvt->outgoing_sms--;
+-		PVT_STATE(pvt, at_cmds) -= task->cmdsno - task->cindex;
++		PVT_STATE(pvt, at_cmds) -= remaining;
+ 		ast_debug (4, "[%s] remove task with %u command(s) begin with '%s' expected response '%s' from queue\n",
+ 				PVT_ID(pvt), task->cmdsno, at_cmd2str (task->cmds[0].cmd),
+ 				at_res2str (task->cmds[0].res));
+@@ -73,16 +115,6 @@
+ 		at_queue_free(task);
+ 	}
+ }
+-
+-#/* */
+-static at_queue_cmd_t* at_queue_head_cmd_nc (const struct pvt * pvt)
+-{
+-	at_queue_task_t * e = AST_LIST_FIRST (&pvt->at_queue);
+-	if(e)
+-		return &e->cmds[e->cindex];
+-	return NULL;
+-}
+-
+ 
+ /*!
+  * \brief Add an list of commands (task) to the back of the queue
+@@ -107,9 +139,11 @@
+ 			e->cmdsno = cmdsno;
+ 			e->cindex = 0;
+ 			e->cpvt = cpvt;
++			e->uid = 0;
+ 
+ 			memcpy(&e->cmds[0], cmds, cmdsno * sizeof(*cmds));
+ 			e->sms = 0;
++			e->sms_result_seen = 0;
+ 			for (unsigned i = 0; i < cmdsno; ++i)
+ 				if (cmds[i].cmd == CMD_AT_CMGS || cmds[i].cmd == CMD_AT_SMSTEXT)
+ 					e->sms = 1;
+@@ -149,43 +183,153 @@
+ 
+ 
+ /*!
+- * \brief Write to fd
+- * \param fd -- file descriptor
++ * \brief Write to fd with readiness-driven, monotonic bounds
++ * \param fd -- file descriptor (non-blocking)
+  * \param buf -- buffer to write
+  * \param count -- number of bytes to write
++ * \param budget_ms -- total monotonic budget for this transfer
++ * \param result -- AT_WRITE_RESULT_* classification
+  *
+- * This function will write count characters from buf. It will always write
+- * count chars unless it encounters an error.
+- *
+- * \retval number of bytes wrote
+- */
++ * Partial progress is never replayed from the beginning. EINTR retries
++ * immediately; EAGAIN/EWOULDBLOCK waits for POLLOUT and recomputes the
++ * remaining monotonic budget. A zero-progress stall inside the budget is
++ * reported as AT_WRITE_RESULT_TEMP_ZERO so the caller can keep ownership and
++ * retry later. Any progress followed by exhaustion is a framing failure and
++ * is reported as AT_WRITE_RESULT_ERROR: call/SMS data must not be replayed.
++ */
++#/* */
++static long at_write_remaining_ms(const struct timespec * deadline)
++{
++	struct timespec now;
++	long ms;
++
++	if (clock_gettime(CLOCK_MONOTONIC, &now))
++		return -1;
++	ms = (deadline->tv_sec - now.tv_sec) * 1000L +
++		(deadline->tv_nsec - now.tv_nsec) / 1000000L;
++	return ms > 0 ? ms : 0;
++}
++
++#/* */
++EXPORT_DEF size_t write_all_ex (int fd, const char* buf, size_t count, int budget_ms, int * result)
++{
++	size_t total = 0;
++	int temp_zero = 0;
++	int hard = 0;
++	struct timespec deadline;
++
++	if (result)
++		*result = AT_WRITE_RESULT_OK;
++
++	if (budget_ms < 0)
++		budget_ms = AT_WRITE_BUDGET_MS;
++	if (clock_gettime(CLOCK_MONOTONIC, &deadline))
++	{
++		if (result)
++			*result = AT_WRITE_RESULT_ERROR;
++		return 0;
++	}
++	deadline.tv_sec += budget_ms / 1000;
++	deadline.tv_nsec += (long)(budget_ms % 1000) * 1000000L;
++	if (deadline.tv_nsec >= 1000000000L)
++	{
++		deadline.tv_sec++;
++		deadline.tv_nsec -= 1000000000L;
++	}
++
++	while (count > 0)
++	{
++		/* Check every iteration, including EINTR and partial progress.
++		 * Neither a signal storm nor a slow trickle can renew this budget. */
++		long remaining = at_write_remaining_ms(&deadline);
++		if (remaining <= 0)
++		{
++			if (remaining < 0)
++				hard = 1;
++			else
++			{
++				temp_zero = total == 0;
++				hard = total != 0;
++				errno = ETIMEDOUT;
++			}
++			break;
++		}
++		ssize_t out_count = write (fd, buf, count);
++
++		if (out_count > 0)
++		{
++			count -= (size_t) out_count;
++			buf += out_count;
++			total += (size_t) out_count;
++			continue;
++		}
++		if (out_count < 0 && errno == EINTR)
++			continue;
++		if (out_count < 0 && errno != EAGAIN && errno != EWOULDBLOCK)
++		{
++			hard = 1;
++			break;
++		}
++
++		/* EAGAIN, or a zero-length write: wait for the endpoint to become
++		 * writable instead of burning a fixed retry budget immediately. */
++		{
++			long left = at_write_remaining_ms(&deadline);
++			struct pollfd pfd;
++			int pr;
++
++			if (left <= 0)
++			{
++				if (left < 0)
++					hard = 1;
++				else if (total == 0)
++					temp_zero = 1;
++				else
++					hard = 1;
++				break;
++			}
++			pfd.fd = fd;
++			pfd.events = POLLOUT;
++			pfd.revents = 0;
++			/* Slice the wait so a poisoned clock/deadline cannot pin us. */
++			pr = poll(&pfd, 1, left > 50 ? 50 : (int) left);
++			if (pr < 0 && errno != EINTR)
++			{
++				hard = 1;
++				break;
++			}
++			if (pr > 0 && !(pfd.revents & (POLLOUT | POLLERR | POLLHUP | POLLNVAL)))
++			{
++				hard = 1;
++				break;
++			}
++			if (pr > 0 && (pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) && !(pfd.revents & POLLOUT))
++			{
++				/* Preserve errno from write() only for clarity; the endpoint
++				 * itself reported the failure through poll(). */
++				errno = EIO;
++				hard = 1;
++				break;
++			}
++		}
++	}
++
++	if (result)
++	{
++		if (total == 0 && temp_zero)
++			*result = AT_WRITE_RESULT_TEMP_ZERO;
++		else if (hard || count != 0)
++			*result = AT_WRITE_RESULT_ERROR;
++		else
++			*result = AT_WRITE_RESULT_OK;
++	}
++	return total;
++}
+ 
+ #/* */
+ EXPORT_DEF size_t write_all (int fd, const char* buf, size_t count)
+ {
+-	ssize_t out_count;
+-	size_t total = 0;
+-	unsigned errs = 10;
+-
+-	while (count > 0)
+-	{
+-		out_count = write (fd, buf, count);
+-		if (out_count <= 0)
+-		{
+-			if(errno == EINTR || errno == EAGAIN)
+-			{
+-				errs--;
+-				if(errs != 0)
+-					continue;
+-			}
+-			break;
+-		}
+-		errs = 10;
+-		count -= out_count;
+-		buf += out_count;
+-		total += out_count;
+-	}
+-	return total;
++	return write_all_ex(fd, buf, count, AT_WRITE_SHORT_MS, NULL);
+ }
+ 
+ /*!
+@@ -193,29 +337,36 @@
+  * \param pvt -- pvt structure
+  * \param buf -- buffer to write
+  * \param count -- number of bytes to write
+- *
+- * This function will write count characters from buf. It will always write
+- * count chars unless it encounters an error.
++ * \param result -- AT_WRITE_RESULT_* classification
+  *
+  * \retval !0 on error
+  * \retval  0 success
+  */
+ 
+ #/* */
+-EXPORT_DEF int at_write (struct pvt* pvt, const char* buf, size_t count)
++EXPORT_DEF int at_write_ex (struct pvt* pvt, const char* buf, size_t count, int * result)
+ {
+ 	size_t wrote;
++	int status = AT_WRITE_RESULT_OK;
+ 
+ 	ast_debug (5, "[%s] [%.*s]\n", PVT_ID(pvt), (int) count, buf);
+ 
+-	wrote = write_all(pvt->data_fd, buf, count);
++	wrote = write_all_ex(pvt->data_fd, buf, count, AT_WRITE_BUDGET_MS, &status);
+ 	PVT_STAT(pvt, d_write_bytes) += wrote;
+ 	if(wrote != count)
+ 	{
+-		ast_debug (1, "[%s] write() error: %d\n", PVT_ID(pvt), errno);
+-	}
++		ast_debug (1, "[%s] write() error: %d (%zu/%zu bytes)\n", PVT_ID(pvt), errno, wrote, count);
++	}
++	if (result)
++		*result = status;
+ 
+ 	return wrote != count;
++}
++
++#/* */
++EXPORT_DEF int at_write (struct pvt* pvt, const char* buf, size_t count)
++{
++	return at_write_ex(pvt, buf, count, NULL);
+ }
+ 
+ /*!
+@@ -232,6 +383,7 @@
+ 		unsigned index = task->cindex;
+ 		unsigned sms = task->sms;
+ 
++		pvt->at_write_stalls = 0;
+ 		task->cindex++;
+ 		PVT_STATE(pvt, at_cmds)--;
+ 		ast_debug (4, "[%s] remove command '%s' expected response '%s' real '%s' cmd %u/%u flags 0x%02x from queue\n",
+@@ -251,6 +403,74 @@
+ }
+ 
+ /*!
++ * \brief Cancel unsent call-owned DTMF, preserving in-flight/teardown work
++ *
++ * A call can end while its DTMF tasks are still behind another command. They
++ * must not reach the device afterwards: the call index may already belong to
++ * a different call. Commands that were already transmitted keep their response
++ * boundary and are merely relinked to sys_chan so the freed cpvt is never
++ * dereferenced. Non-DTMF teardown tasks (CHUP/CHLD) are likewise retained.
++ */
++#/* */
++EXPORT_DEF unsigned at_queue_cancel_unsent_dtmf (struct pvt * pvt, struct cpvt * cpvt)
++{
++	at_queue_task_t * task, * next;
++	unsigned cancelled = 0;
++
++	for (task = AST_LIST_FIRST (&pvt->at_queue); task; task = next)
++	{
++		at_queue_cmd_t * cmd;
++
++		next = AST_LIST_NEXT (task, entry);
++		if (task->cpvt != cpvt)
++			continue;
++
++		cmd = &task->cmds[task->cindex];
++		if (cmd->cmd == CMD_AT_DTMF && cmd->length > 0)
++		{
++			ast_debug (3, "[%s] cancel unsent DTMF for ended call idx %d\n",
++					PVT_ID(pvt), cpvt->call_idx);
++			at_queue_remove_task (pvt, task);
++			cancelled++;
++			continue;
++		}
++		/* In-flight DTMF and legitimate hangup commands stay ordered. */
++		task->cpvt = &pvt->sys_chan;
++	}
++	return cancelled;
++}
++
++#/* */
++EXPORT_DEF int at_queue_claim_sms_result (struct pvt * pvt)
++{
++	at_queue_task_t *task = AST_LIST_FIRST (&pvt->at_queue);
++	const at_queue_cmd_t *cmd = task ? &task->cmds[task->cindex] : NULL;
++	if (!task || !cmd || !task->sms || task->uid <= 0 ||
++	    task->sms_result_seen || cmd->cmd != CMD_AT_SMSTEXT || cmd->length != 0)
++		return -1;
++	task->sms_result_seen = 1;
++	return task->uid;
++}
++
++static int at_queue_dtmf_eligible (struct pvt * pvt, const at_queue_task_t * task, const at_queue_cmd_t * cmd)
++{
++	struct cpvt * cpvt;
++	int call_idx = -1;
++
++	if (!task || !task->cpvt || task->cpvt == &pvt->sys_chan)
++		return 0;
++	if (sscanf(cmd->data, "AT^DTMF=%d,", &call_idx) != 1)
++		return 0;
++
++	AST_LIST_TRAVERSE(&pvt->chans, cpvt, entry)
++	{
++		if (cpvt == task->cpvt)
++			return cpvt->state == CALL_STATE_ACTIVE && cpvt->call_idx == call_idx;
++	}
++	return 0;
++}
++
++/*!
+  * \brief Try real write first command on queue
+  * \param pvt -- pvt structure
+  * \return 0 on success, non-0 on error
+@@ -259,26 +479,71 @@
+ EXPORT_DEF int at_queue_run (struct pvt * pvt)
+ {
+ 	int fail = 0;
+-	at_queue_cmd_t * cmd = at_queue_head_cmd_nc(pvt);
+-
++	at_queue_task_t * task;
++	at_queue_cmd_t * cmd;
++
++	if (pvt->at_write_failed)
++		return -1;
+ 	if (pvt->at_recovery)
+ 		return 0;
+ 
++	/* Call-owned DTMF is only valid while its original call is ACTIVE and
++	 * still owns the same radio call index. Drop anything else before it can
++	 * reach a reused index. */
++	for (;;)
++	{
++		task = AST_LIST_FIRST (&pvt->at_queue);
++		cmd = task ? &task->cmds[task->cindex] : NULL;
++		if (!cmd || cmd->length == 0)
++			break;
++		if (cmd->cmd == CMD_AT_DTMF && !at_queue_dtmf_eligible(pvt, task, cmd))
++		{
++			/* Do not dereference task->cpvt here: an ineligible task may be
++			 * the last reference to an ended call. at_queue_cancel_unsent_dtmf
++			 * removes these at release time; this is the dispatch backstop. */
++			ast_log (LOG_WARNING, "[%s] Dropping queued DTMF for inactive or ended call\n",
++					PVT_ID(pvt));
++			at_queue_remove_task(pvt, task);
++			continue;
++		}
++		break;
++	}
++
+ 	if(cmd)
+ 	{
+ 		if(cmd->length > 0)
+ 		{
++			int result = AT_WRITE_RESULT_OK;
++
+ 			ast_debug (4, "[%s] write command '%s' expected response '%s' length %u\n",
+ 					PVT_ID(pvt), at_cmd2str (cmd->cmd), at_res2str (cmd->res), cmd->length);
+ 
+-			fail = at_write(pvt, cmd->data, cmd->length);
++			fail = at_write_ex(pvt, cmd->data, cmd->length, &result);
+ 			if(fail)
+ 			{
+-				ast_log (LOG_ERROR, "[%s] Error write command '%s' expected response '%s' length %u, cancel\n", PVT_ID(pvt), at_cmd2str (cmd->cmd), at_res2str (cmd->res), cmd->length);
++				if (result == AT_WRITE_RESULT_TEMP_ZERO &&
++				    ++pvt->at_write_stalls < AT_WRITE_MAX_STALLS)
++				{
++					/* Nothing was transmitted: keep the task and its
++					 * counters intact and retry after a short poll. */
++					ast_log (LOG_WARNING, "[%s] Temporary write back-pressure for '%s' (%u/%u), keeping command queued\n",
++							PVT_ID(pvt), at_cmd2str (cmd->cmd),
++							pvt->at_write_stalls, AT_WRITE_MAX_STALLS);
++					return 0;
++				}
++				ast_log (LOG_ERROR, "[%s] Error write command '%s' expected response '%s' length %u (%s), cancel\n",
++						PVT_ID(pvt), at_cmd2str (cmd->cmd), at_res2str (cmd->res), cmd->length,
++						result == AT_WRITE_RESULT_TEMP_ZERO ? "persistent back-pressure" : "endpoint error");
+ 				at_queue_remove_cmd(pvt, cmd->res + 1);
++				/* Callbacks can enqueue from outside the monitor. Latch
++				 * the framing/endpoint failure so they cannot transmit a
++				 * successor on this stream before monitor cleanup. */
++				pvt->at_write_failed = 1;
++				fail = 1;
+ 			}
+ 			else
+ 			{
++				pvt->at_write_stalls = 0;
+ 				/* set expire time */
+ 				cmd->timeout = ast_tvadd (ast_tvnow(), cmd->timeout);
+ 
+@@ -365,6 +630,8 @@
+ 	struct at_queue_task* task;
+ 
+ 	pvt->at_recovery = 0;
++	pvt->at_recovery_drop_head = 0;
++	pvt->at_write_stalls = 0;
+ 
+ 	while ((task = AST_LIST_FIRST (&pvt->at_queue)))
+ 	{
+@@ -414,15 +681,38 @@
+ 
+ 	if(cmd)
+ 	{
+-		if(cmd->length == 0)
+-		{
+-			ms_timeout = ast_tvdiff_ms(cmd->timeout, ast_tvnow());
+-			if (ms_timeout < 0)
+-				ms_timeout = 0;
+-		}
++		if(cmd->length > 0)
++		{
++			/* Never transmitted: this is a write retry, not a response
++			 * timeout. Wake the monitor soon so back-pressure cannot turn
++			 * into a silent multi-second stall. */
++			return AT_WRITE_RETRY_MS;
++		}
++		ms_timeout = ast_tvdiff_ms(cmd->timeout, ast_tvnow());
++		if (ms_timeout < 0)
++			ms_timeout = 0;
+ 	}
+ 
+ 	return ms_timeout;
++}
++
++/* Begin the bounded, distinctive read-only resync barrier. The queue stays
++ * frozen until a valid +CSQ marker is followed by its own terminal reply. */
++#/* */
++static int at_queue_recovery_begin(struct pvt * pvt, int drop_head, const char * what)
++{
++	static const char probe[] = "AT+CSQ\r";
++
++	if (pvt->at_recovery)
++		return -1;
++	if (clock_gettime(CLOCK_MONOTONIC, &pvt->at_recovery_deadline))
++		return -1;
++	pvt->at_recovery_deadline.tv_sec += ATQ_CMD_TIMEOUT_MEDIUM;
++	pvt->at_recovery = 1;
++	pvt->at_recovery_drop_head = drop_head;
++	ast_log(LOG_WARNING, "[%s] %s: quarantining queue for bounded CSQ resync\n",
++		PVT_ID(pvt), what ? what : "command timeout");
++	return at_write_ex(pvt, probe, sizeof(probe) - 1, NULL) ? -1 : 0;
+ }
+ 
+ /* Quarantine the CLCC head until a distinctive read-only reply establishes
+@@ -430,16 +720,21 @@
+ EXPORT_DEF int at_queue_recover(struct pvt *pvt)
+ {
+ 	const at_queue_cmd_t *cmd = at_queue_head_cmd(pvt);
+-	static const char probe[] = "AT+CSQ\r";
+ 
+ 	if (pvt->at_recovery || !cmd || cmd->cmd != CMD_AT_CLCC)
+ 		return -1;
+-	if (clock_gettime(CLOCK_MONOTONIC, &pvt->at_recovery_deadline))
+-		return -1;
+-	pvt->at_recovery_deadline.tv_sec += ATQ_CMD_TIMEOUT_MEDIUM;
+-	pvt->at_recovery = 1;
+-	ast_log(LOG_WARNING, "[%s] CLCC timeout: quarantining queue for CSQ resync\n", PVT_ID(pvt));
+-	return at_write(pvt, probe, sizeof(probe) - 1) ? -1 : 0;
++	return at_queue_recovery_begin(pvt, 1, "CLCC timeout");
++}
++
++/* A command that is intentionally skipped (DTMF/COPS/CCWA) must not let its
++ * late terminal reply complete the next transaction. Remove it, then hold the
++ * queue behind the same distinctive CSQ boundary the CLCC path uses. */
++EXPORT_DEF int at_queue_skip_recover(struct pvt *pvt, at_res_t res, const char *what)
++{
++	if (pvt->at_recovery)
++		return -1;
++	at_queue_handle_result(pvt, res);
++	return at_queue_recovery_begin(pvt, 0, what);
+ }
+ 
+ EXPORT_DEF int at_queue_recovery_response(struct pvt *pvt, at_res_t res, int valid_csq)
+@@ -458,8 +753,13 @@
+ 		case RES_OK:
+ 			if (pvt->at_recovery == 2)
+ 			{
++				int drop_head = pvt->at_recovery_drop_head;
+ 				pvt->at_recovery = 0;
+-				at_queue_handle_result(pvt, RES_PARSE_ERROR);
++				pvt->at_recovery_drop_head = 0;
++				/* CLCC is still heading the queue and must be discarded;
++				 * a skipped command was already removed before the probe. */
++				if (drop_head)
++					at_queue_handle_result(pvt, RES_PARSE_ERROR);
+ 			}
+ 			return 0;
+ 		case RES_ERROR:
+@@ -468,7 +768,7 @@
+ 		case RES_BUSY:
+ 		case RES_NO_CARRIER:
+ 		case RES_NO_DIALTONE:
+-			/* Before the marker these belong to the timed-out CLCC. */
++			/* Before the marker these belong to the timed-out command. */
+ 			return pvt->at_recovery == 2 ? -1 : 0;
+ 		case RES_CLCC:
+ 		case RES_CMGR:
+--- a/at_queue.h
++++ b/at_queue.h
+@@ -82,6 +82,7 @@
+ 
+ 	int uid;
+ 	unsigned int sms:1;	/* one accepted CMGS/SMSTEXT part owned by this task */
++	unsigned int sms_result_seen:1;	/* suppress duplicate +CMGS for this part */
+ 
+ 	at_queue_cmd_t	cmds[0];	/* this field must be last */
+ } at_queue_task_t;
+@@ -97,8 +98,24 @@
+ EXPORT_DECL int at_queue_timeout(const struct pvt * pvt);
+ EXPORT_DECL int at_queue_run (struct pvt * pvt);
+ EXPORT_DECL int at_queue_recover (struct pvt * pvt);
++/* Skip a timed-out command without letting a late terminal reply acknowledge
++ * the next queued transaction. The queue stays frozen behind a distinctive,
++ * bounded +CSQ resync even when the skipped command is already gone. */
++EXPORT_DECL int at_queue_skip_recover (struct pvt * pvt, at_res_t res, const char * what);
++/* Cancel call-owned DTMF that has never reached the device. In-flight replies
++ * and teardown commands are retained with their ordering boundary. */
++EXPORT_DECL unsigned at_queue_cancel_unsent_dtmf (struct pvt * pvt, struct cpvt * cpvt);
++/* Claim at most one +CMGS for the written PDU at the head; -1 if orphan. */
++EXPORT_DECL int at_queue_claim_sms_result (struct pvt * pvt);
+ /* -1 fatal, 0 consumed by quarantine, 1 ordinary unsolicited response */
+ EXPORT_DECL int at_queue_recovery_response (struct pvt * pvt, at_res_t res, int valid_csq);
++
++/* Result of a bounded command write. Only AT_WRITE_TEMP_ZERO may be retried
++ * with the same buffer: nothing was transmitted. A partial transfer is a hard
++ * framing failure and must never be replayed. */
++#define AT_WRITE_RESULT_OK		0
++#define AT_WRITE_RESULT_TEMP_ZERO	1
++#define AT_WRITE_RESULT_ERROR		2
+ 
+ INLINE_DECL at_cmd_suppress_error_t at_cmd_suppress_error_mode(int flags)
+ {
+@@ -113,5 +130,7 @@
+ /* direct device write, dangerouse */
+ /* TODO: move */
+ EXPORT_DECL int at_write (struct pvt * pvt, const char * buf, size_t count);
++EXPORT_DECL int at_write_ex (struct pvt * pvt, const char * buf, size_t count, int * result);
+ EXPORT_DECL size_t write_all (int fd, const char * buf, size_t count);
++EXPORT_DECL size_t write_all_ex (int fd, const char * buf, size_t count, int budget_ms, int * result);
+ #endif /* CHAN_DONGLE_AT_CMD_QUEUE_H_INCLUDED */
+--- a/cpvt.c
++++ b/cpvt.c
+@@ -83,7 +83,6 @@
+ {
+ 	pvt_t * pvt = cpvt->pvt;
+ 	struct cpvt * found;
+-	struct at_queue_task * task;
+ 
+ 	close(cpvt->rd_pipe[1]);
+ 	close(cpvt->rd_pipe[0]);
+@@ -100,13 +99,11 @@
+ 	}
+ 	AST_LIST_TRAVERSE_SAFE_END;
+ 
+-	/* relink task to sys_chan */
+-	AST_LIST_TRAVERSE(&pvt->at_queue, task, entry) {
+-		if(task->cpvt == cpvt)
+-		{
+-			task->cpvt = &pvt->sys_chan;
+-		}
+-	}
++	/* Cancel DTMF that has not reached the device. The call index is about to
++	 * become reusable, so queued digits must not be written for it later.
++	 * In-flight responses and legitimate hangup tasks keep their ordering but
++	 * are relinked to sys_chan so this cpvt is never dereferenced again. */
++	at_queue_cancel_unsent_dtmf(pvt, cpvt);
+ 	/* drop last_dialed_cpvt if need */
+ 	if(pvt->last_dialed_cpvt == cpvt)
+ 		pvt->last_dialed_cpvt = NULL;
+--- a/at_command.c
++++ b/at_command.c
+@@ -172,12 +172,15 @@
+ 		/* SMS Storage Selection */
+ 		ATQ_CMD_DECLARE_ST(CMD_AT_CPMS, "AT+CPMS=\"ME\",\"ME\",\"ME\"\r"),
+ 		/* New SMS Notification Setting +CNMI=[<mode>[,<mt>[,<bm>[,<ds>[,<bfr>]]]]] */
+-		/* pvt->initialized = 1 after successful of CMD_AT_CNMI */
++		/* SMS capability only; readiness waits for read-only reconciliation. */
+ 		ATQ_CMD_DECLARE_ST(CMD_AT_CNMI, "AT+CNMI=2,1,0,2,0\r"),
+ 		/* Query Signal quality */
+ 		ATQ_CMD_DECLARE_ST(CMD_AT_CSQ, "AT+CSQ\r"),
+-		/* Abort any call left active by a previous driver generation. */
+-		ATQ_CMD_DECLARE_ST(CMD_AT_CHUP, "AT+CHUP\r"),
++		/* Read-only reconciliation poll. Never blind-hangup here: a call
++		 * that arrived while the modem was initializing is valid, and
++		 * readiness waits for this read-only terminal boundary. Its payload
++		 * tracks inherited calls without destructive startup cleanup. */
++		ATQ_CMD_DECLARE_ST(CMD_AT_CLCC, "AT+CLCC\r"),
+ 	};
+ 
+ 	unsigned in, out;
+@@ -440,6 +443,10 @@
+ 
+ EXPORT_DEF int at_enqueue_dtmf(struct cpvt *cpvt, char digit)
+ {
++	/* Defensive: the channel layer already drops pre-answer digits, but a
++	 * queued/async caller must never arm AT^DTMF for a non-ACTIVE call. */
++	if (cpvt->state != CALL_STATE_ACTIVE)
++		return -1;
+ 	switch (digit)
+ 	{
+ /* unsupported, but AT^DTMF=1,22 OK and "2" sent
+@@ -1140,4 +1147,3 @@
+ 	if (at_write_teardown(pvt, cmd_chup, STRLEN(cmd_chup)) != 0)
+ 		ast_log(LOG_WARNING, "[%s] could not send teardown AT+CHUP\n", PVT_ID(pvt));
+ }
+-
+--- a/at_response.c
++++ b/at_response.c
+@@ -38,6 +38,8 @@
+ /* E173 firmware 21.x can report voice support while its PCM path is disabled. */
+ #define E173_VOICE_MAX_ATTEMPTS 3
+ 
++static void request_clcc(struct pvt* pvt);
++
+ static void maybe_enable_e173_voice(struct pvt* pvt)
+ {
+ 	if (pvt->e173_voice_attempts >= E173_VOICE_MAX_ATTEMPTS)
+@@ -49,6 +51,33 @@
+ 	ast_debug (1, "[%s] Enabling voice with AT^CVOICE=0 (attempt %u/%u)\n", PVT_ID(pvt), pvt->e173_voice_attempts, E173_VOICE_MAX_ATTEMPTS);
+ 	if (at_enqueue_cvoice_enable(&pvt->sys_chan))
+ 		ast_log (LOG_WARNING, "[%s] Could not enqueue voice enable\n", PVT_ID(pvt));
++}
++
++/* Publish readiness only after the initialization CLCC terminal boundary.
++ * Its payload is accepted before readiness, so existing radio calls are
++ * tracked before a new outgoing dial can claim the device. */
++static void at_init_complete(struct pvt *pvt)
++{
++	if (pvt->initialized)
++		return;
++	pvt->timeout = DATA_READ_TIMEOUT;
++	pvt->initialized = 1;
++	pvt->init_reconciling = 0;
++	ast_verb (3, "[%s] Dongle initialized and ready\n", PVT_ID(pvt));
++	ast_log (LOG_NOTICE, "[%s] initialization complete: read-only call reconciliation finished; no blanket CHUP\n", PVT_ID(pvt));
++	manager_event_device_status(PVT_ID(pvt), "Initialize");
++	maybe_enable_e173_voice(pvt);
++
++	/* SMS support is confirmed: now it is safe to read the inbox. Polling
++	 * before CMGF/CNMI succeeded queued CMGR commands that could never work
++	 * on SMS-less modems. */
++	if (pvt->has_sms)
++	{
++		if (at_poll_sms(pvt) == 0)
++			ast_debug (1, "[%s] Polling first SMS message\n", PVT_ID(pvt));
++		else
++			ast_debug (1, "[%s] SMS polling disabled or failed\n", PVT_ID(pvt));
++	}
+ }
+ 
+ static const at_response_t at_responses_list[] = {
+@@ -122,9 +151,14 @@
+ 			case CMD_AT_CHLD_2:
+ 			case CMD_AT_CHLD_3:
+ 			case CMD_AT_CSCA:
+-			case CMD_AT_CLCC:
+ 			case CMD_AT_CLIR:
+ 				ast_debug (3, "[%s] %s sent successfully\n", PVT_ID(pvt), at_cmd2str (ecmd->cmd));
++				break;
++
++			case CMD_AT_CLCC:
++				ast_debug (3, "[%s] %s sent successfully\n", PVT_ID(pvt), at_cmd2str (ecmd->cmd));
++				if (pvt->init_reconciling)
++					at_init_complete(pvt);
+ 				break;
+ 
+ 			case CMD_AT_COPS_INIT:
+@@ -190,22 +224,9 @@
+ 
+ 				pvt->has_sms = 1;
+ 
+-				if (!pvt->initialized)
+-				{
+-					pvt->timeout = DATA_READ_TIMEOUT;
+-					pvt->initialized = 1;
+-					ast_verb (3, "[%s] Dongle initialized and ready\n", PVT_ID(pvt));
+-					manager_event_device_status(PVT_ID(pvt), "Initialize");
+-					maybe_enable_e173_voice(pvt);
+-
+-					/* SMS support is confirmed: now it is safe to read the
+-					 * inbox. Polling before CMGF/CNMI succeeded queued CMGR
+-					 * commands that could never work on SMS-less modems. */
+-					if (at_poll_sms(pvt) == 0)
+-						ast_debug (1, "[%s] Polling first SMS message\n", PVT_ID(pvt));
+-					else
+-						ast_debug (1, "[%s] SMS polling disabled or failed\n", PVT_ID(pvt));
+-				}
++				/* Readiness is published after the last mandatory
++				 * command (CSQ), not here: SMS setup success alone is not
++				 * the end of initialization. */
+ 				break;
+ 
+ 			case CMD_AT_D:
+@@ -232,13 +253,6 @@
+ 				break;
+ 			case CMD_AT_DDSETEX:
+ 				ast_debug (1, "[%s] %s sent successfully\n", PVT_ID(pvt), at_cmd2str (ecmd->cmd));
+-				if (!pvt->initialized)
+-				{
+-					pvt->timeout = DATA_READ_TIMEOUT;
+-					pvt->initialized = 1;
+-					ast_verb (3, "[%s] Dongle initialized and ready\n", PVT_ID(pvt));
+-					manager_event_device_status(PVT_ID(pvt), "Initialize");
+-				}
+ 				break;
+ 			case CMD_AT_CHUP:
+ 			case CMD_AT_CHLD_1x:
+@@ -283,6 +297,8 @@
+ 
+ 			case CMD_AT_CSQ:
+ 				ast_debug (1, "[%s] Got signal strength result\n", PVT_ID(pvt));
++				if (!pvt->initialized)
++					pvt->init_reconciling = 1;
+ 				break;
+ 
+ 			case CMD_AT_CLVL:
+@@ -418,6 +434,13 @@
+ 				ast_debug (1, "[%s] Error getting registration info\n", PVT_ID(pvt));
+ 				break;
+ 
++			case CMD_AT_CSQ:
++				/* Read-only signal query cannot block readiness. */
++				ast_debug (1, "[%s] Error getting signal strength; continuing\n", PVT_ID(pvt));
++				if (!pvt->initialized)
++					pvt->init_reconciling = 1;
++				break;
++
+ 			/* These two are expected to be called in order */
+ 			case CMD_AT_CVOICE:
+ 				ast_debug(1, "[%s] Dongle has NO (CVOICE) voice support\n", PVT_ID(pvt));
+@@ -464,18 +487,15 @@
+ 				{
+ 					if (pvt->has_voice)
+ 					{
+-						/* continue initialization in other job at cmd CMD_AT_CSQ */
++						/* Continue initialization in another job at CSQ.
++						 * Readiness is published only after that read-only
++						 * CSQ+CLCC sequence completes, never here. */
+ 						if (at_enqueue_initialization(task->cpvt, CMD_AT_CSQ))
+ 						{
+ 							log_cmd_response_error(pvt, ecmd, "[%s] Error querying signal strength\n", PVT_ID(pvt));
+ 							goto e_return;
+ 						}
+ 
+-						pvt->timeout = DATA_READ_TIMEOUT;
+-						pvt->initialized = 1;
+-						ast_verb (3, "[%s] Dongle initialized and ready (voice only)\n", PVT_ID(pvt));
+-						manager_event_device_status(PVT_ID(pvt), "Initialize");
+-						maybe_enable_e173_voice(pvt);
+ 						/* keep the AT session: SMS capability is optional */
+ 						break;
+ 					}
+@@ -921,8 +941,10 @@
+ 		}
+ 		else
+ 		{
+-			at_enqueue_hangup(&pvt->sys_chan, call_index);
+-			ast_log (LOG_ERROR, "[%s] answered incoming call with not exists call idx %d, hanging up!\n", PVT_ID(pvt), call_index);
++			/* An unsolicited connection can belong to a call that arrived
++			 * during initialization. Reconcile it read-only, never blind
++			 * hangup a call merely because its channel is not known yet. */
++			ast_log(LOG_NOTICE, "[%s] Untracked CONN for idx %d; awaiting CLCC reconciliation\n", PVT_ID(pvt), call_index);
+ 		}
+ 	}
+ 	else
+@@ -1003,7 +1025,7 @@
+ 	char * number;
+ 	char *p;
+ 
+-	if (pvt->initialized)
++	if (pvt->initialized || pvt->init_reconciling)
+ 	{
+ 		/* I think man is good until he proves the reverse */
+ 		AST_LIST_TRAVERSE(&pvt->chans, cpvt, entry)
+@@ -1088,6 +1110,21 @@
+ 						}
+ 					}
+ 
++					/* Startup may inherit an active/outgoing/held radio
++					 * call without an Asterisk channel. Retain exact-index
++					 * tracking (no automatic hangup) instead of claiming Free.
++					 * Do not duplicate a current unindexed outgoing dial. */
++					if (!pvt_find_cpvt(pvt, call_idx) &&
++					    !(dir == CALL_DIR_INCOMING && (state == CALL_STATE_INCOMING || state == CALL_STATE_WAITING)) &&
++					    pvt->init_reconciling)
++					{
++						cpvt = cpvt_alloc(pvt, call_idx, dir, state);
++						if (!cpvt)
++							return -1;
++						CPVT_SET_FLAGS(cpvt, CALL_FLAG_ALIVE);
++						ast_log(LOG_WARNING, "[%s] Tracking unowned radio call idx %u without automatic hangup\n", PVT_ID(pvt), call_idx);
++					}
++
+ 					all++;
+ 					switch(state)
+ 					{
+@@ -1990,11 +2027,32 @@
+ 
+ 			case RES_CMGS:
+ 				{
+-					int res = at_parse_cmgs(str);
+-
++					int res;
++					int uid;
+ 					char payload[SMSDB_PAYLOAD_MAX_LEN];
+ 					char dst[SMSDB_DST_MAX_LEN];
+-					ssize_t payload_len = smsdb_outgoing_part_put(task->uid, res, dst, payload);
++					ssize_t payload_len;
++
++					/* +CMGS belongs to the SMS task whose PDU command was
++					 * actually written and is awaiting its terminal OK. A
++					 * late/orphan completion must never dereference a missing
++					 * task, consume an unrelated queued command, or attach the
++					 * message reference to another SMS transaction. */
++					if (!task || !ecmd || !task->sms || task->uid <= 0 ||
++					    ecmd->cmd != CMD_AT_SMSTEXT || ecmd->length != 0)
++					{
++						ast_log (LOG_WARNING,
++							"[%s] Ignoring orphan or mismatched +CMGS (task %p, cmd %s, uid %d)\n",
++							PVT_ID(pvt), (const void *) task,
++							ecmd ? at_cmd2str(ecmd->cmd) : "none",
++							task ? task->uid : -1);
++						return 0;
++					}
++
++					res = at_parse_cmgs(str);
++					if (res < 0 || (uid = at_queue_claim_sms_result(pvt)) <= 0)
++						return 0;
++					payload_len = smsdb_outgoing_part_put(uid, res, dst, payload);
+ 					if (payload_len >= 0) {
+ 						ast_verb (3, "[%s] Error payload: %.*s\n", PVT_ID(pvt), (int) payload_len, payload);
+ 						channel_var_t vars[] =
+--- a/chan_dongle.c
++++ b/chan_dongle.c
+@@ -390,6 +390,8 @@
+ 
+ 	pvt->connected		= 0;
+ 	pvt->initialized	= 0;
++	pvt->init_reconciling = 0;
++	pvt->at_write_failed = 0;
+ 	pvt->has_call_waiting	= 0;
+ 
+ 	/* FIXME: LOST real device state */
+@@ -585,6 +587,9 @@
+ 			last_clcc_check = now;
+ 		}
+ 
++		if (pvt->at_write_failed)
++			goto e_cleanup;
++
+ 		{
+ 			/* Report the failing endpoint and the kernel error: "Lost
+ 			   connection" alone cannot tell a USB removal from a port
+@@ -623,21 +628,33 @@
+ 		{
+ 			ast_mutex_lock (&pvt->lock);
+ command_timeout:
++			if (pvt->at_write_failed)
++				goto e_cleanup;
+ 			if (pvt->at_recovery)
+ 			{
+ 				ast_log(LOG_ERROR, "[%s] CSQ resync timed out\n", dev);
+ 				goto e_cleanup;
+ 			}
+ 			ecmd = at_queue_head_cmd (pvt);
++			if(ecmd && ecmd->length > 0)
++			{
++				/* The command was never (fully) transmitted. This is a
++				 * write retry, not a response timeout: do not skip the
++				 * command or tear the session down for temporary tty
++				 * back-pressure. at_queue_run keeps ownership and bounds
++				 * the number of zero-progress attempts. */
++				if (at_queue_run (pvt))
++					goto e_cleanup;
++				ast_mutex_unlock (&pvt->lock);
++				continue;
++			}
+ 			if(ecmd)
+ 			{
+ 				if (ecmd->cmd == CMD_AT_DTMF)
+ 				{
+-					ast_log (LOG_WARNING, "[%s] Timed out waiting response to AT^DTMF, skipping DTMF command\n", dev);
+-					at_queue_handle_result (pvt, RES_PARSE_ERROR);
+-					/* send the next queued command now: a skipped command
+-					 * would otherwise stall the queue until an unrelated URC */
+-					at_queue_run (pvt);
++					ast_log (LOG_WARNING, "[%s] Timed out waiting response to AT^DTMF, skipping with bounded resync\n", dev);
++					if (at_queue_skip_recover (pvt, RES_PARSE_ERROR, "DTMF timeout"))
++						goto e_cleanup;
+ 					ast_mutex_unlock (&pvt->lock);
+ 					continue;
+ 				}
+@@ -650,21 +667,17 @@
+ 				}
+ 				if (ecmd->cmd == CMD_AT_COPS_INIT || ecmd->cmd == CMD_AT_COPS)
+ 				{
+-					ast_log (LOG_WARNING, "[%s] Timed out waiting response to %s, skipping command to prevent disconnect\n", dev, at_cmd2str(ecmd->cmd));
+-					at_queue_handle_result (pvt, RES_PARSE_ERROR);
+-					/* send the next queued command now: a skipped command
+-					 * would otherwise stall the queue until an unrelated URC */
+-					at_queue_run (pvt);
++					ast_log (LOG_WARNING, "[%s] Timed out waiting response to %s, skipping with bounded resync\n", dev, at_cmd2str(ecmd->cmd));
++					if (at_queue_skip_recover (pvt, RES_PARSE_ERROR, "COPS timeout"))
++						goto e_cleanup;
+ 					ast_mutex_unlock (&pvt->lock);
+ 					continue;
+ 				}
+ 				if (ecmd->cmd == CMD_AT_CCWA_SET || ecmd->cmd == CMD_AT_CCWA_STATUS)
+ 				{
+-					ast_log (LOG_WARNING, "[%s] Timed out waiting response to %s, skipping CCWA command to prevent disconnect\n", dev, at_cmd2str(ecmd->cmd));
+-					at_queue_handle_result (pvt, RES_PARSE_ERROR);
+-					/* send the next queued command now: a skipped command
+-					 * would otherwise stall the queue until an unrelated URC */
+-					at_queue_run (pvt);
++					ast_log (LOG_WARNING, "[%s] Timed out waiting response to %s, skipping CCWA command to prevent disconnect (bounded resync)\n", dev, at_cmd2str(ecmd->cmd));
++					if (at_queue_skip_recover (pvt, RES_PARSE_ERROR, "CCWA timeout"))
++						goto e_cleanup;
+ 					ast_mutex_unlock (&pvt->lock);
+ 					continue;
+ 				}
+@@ -977,10 +990,17 @@
+ #/* */
+ static int discovery_restart(public_state_t * state)
+ {
+-	if(state->discovery_thread == AST_PTHREADT_STOP)
++	/* Shutdown owns the thread lifetime. Never wake or recreate discovery
++	 * once unloading has begun, including from pvt_try_restate() running in
++	 * a monitor thread that discovery is currently joining. */
++	if (state->unloading_flag)
+ 		return 0;
+ 
+ 	ast_mutex_lock(&state->discovery_lock);
++	if (state->unloading_flag || state->discovery_thread == AST_PTHREADT_STOP) {
++		ast_mutex_unlock(&state->discovery_lock);
++		return 0;
++	}
+ 	if (state->discovery_thread == pthread_self()) {
+ 		ast_mutex_unlock(&state->discovery_lock);
+ 		ast_log(LOG_WARNING, "Cannot kill myself\n");
+@@ -1004,18 +1024,29 @@
+ #/* */
+ static void discovery_stop(public_state_t * state)
+ {
+-	/* signal for discovery unloading */
++	pthread_t id;
++
++	/* Closing the gate first makes pvt_try_restate()/discovery_restart()
++	 * no-ops before any join can block. */
+ 	state->unloading_flag = 1;
+ 
+ 	ast_mutex_lock(&state->discovery_lock);
+-	if (state->discovery_thread && (state->discovery_thread != AST_PTHREADT_STOP) && (state->discovery_thread != AST_PTHREADT_NULL)) {
+-//		pthread_cancel(state->discovery_thread);
+-		pthread_kill(state->discovery_thread, SIGURG);
+-		pthread_join(state->discovery_thread, NULL);
+-	}
+-
++	id = state->discovery_thread;
++	/* Prevent new wakes and recreation while the join is in progress. */
+ 	state->discovery_thread = AST_PTHREADT_STOP;
+ 	ast_mutex_unlock(&state->discovery_lock);
++
++	/* Join without discovery_lock: the discovery thread may be joining a
++	 * monitor in pvt_stop(), and that monitor's cleanup path can call
++	 * pvt_try_restate() -> discovery_restart(). Holding the lock here was
++	 * the shutdown/discovery/monitor deadlock. A blocking join (not a timed
++	 * join followed by freeing still-running state) preserves lifetime. */
++	if (id && id != AST_PTHREADT_STOP && id != AST_PTHREADT_NULL &&
++	    !pthread_equal(id, pthread_self()))
++	{
++		pthread_kill(id, SIGURG);
++		pthread_join(id, NULL);
++	}
+ }
+ 
+ #/* */
+--- a/chan_dongle.h
++++ b/chan_dongle.h
+@@ -115,7 +115,10 @@
+ 	ast_mutex_t		lock;				/*!< pvt lock */
+ 	AST_LIST_HEAD_NOLOCK (, at_queue_task) at_queue;	/*!< queue for commands to modem */
+ 	unsigned int		at_recovery;			/*!< 0 normal, 1 awaiting +CSQ, 2 awaiting probe terminal */
++	unsigned int		at_recovery_drop_head;		/*!< discard the head task when the resync boundary closes */
+ 	struct timespec		at_recovery_deadline;		/*!< monotonic, never renewed by URCs */
++	unsigned int		at_write_stalls;		/*!< consecutive zero-progress temporary writes */
++	unsigned int		at_write_failed;		/*!< fatal/partial write: do not send another command this session */
+ 
+ 	AST_LIST_HEAD_NOLOCK (, cpvt)		chans;		/*!< list of channels */
+ 	struct cpvt		sys_chan;			/*!< system channel */
+@@ -173,6 +176,7 @@
+ 
+ 	volatile unsigned int	connected:1;			/*!< do we have an connection to a device */
+ 	unsigned int		initialized:1;			/*!< whether a service level connection exists or not */
++	unsigned int		init_reconciling:1;		/*!< init CSQ complete, accepting read-only CLCC before readiness */
+ 	unsigned int		gsm_registered:1;		/*!< do we have an registration to a GSM */
+ 	unsigned int		dialing;			/*!< HW state; true from ATD response OK until CEND or CONN for this call idx */
+ 	unsigned int		ring:1;				/*!< HW state; true if has incoming call from first RING until CEND or CONN */

@@ -159,7 +159,7 @@ static void sms_ownership(void) {
  init(&p); part(&p); part(&p); p.desired_state=DEV_STATE_RESTARTED; complete(&p,RES_ERROR); assert(p.outgoing_sms==1 && wakeups==0); finish_part(&p,RES_OK); assert(p.outgoing_sms==0 && wakeups==1);
  init(&p); part(&p); fail_alloc=2; assert(at_enqueue_pdu(&p.sys_chan,"0011",4,1,17)<0); assert(p.outgoing_sms==1 && p.state.at_tasks==1); fail_alloc=-1; p.desired_state=DEV_STATE_RESTARTED; finish_part(&p,RES_OK); assert(p.outgoing_sms==0 && wakeups==1);
  init(&p); fail_write=1; assert(at_enqueue_pdu(&p.sys_chan,"0011",4,1,17)<0); assert(p.outgoing_sms==0 && p.state.at_tasks==0); fail_write=0;
- init(&p); part(&p); part(&p); p.desired_state=DEV_STATE_RESTARTED; at_queue_handle_result(&p,RES_SMS_PROMPT); fail_write=1; assert(at_queue_run(&p)!=0); assert(p.outgoing_sms==1 && wakeups==0); fail_write=0; assert(at_queue_run(&p)==0); finish_part(&p,RES_OK); assert(p.outgoing_sms==0 && wakeups==1);
+ init(&p); part(&p); part(&p); p.desired_state=DEV_STATE_RESTARTED; at_queue_handle_result(&p,RES_SMS_PROMPT); fail_write=1; assert(at_queue_run(&p)!=0); assert(p.outgoing_sms==1 && wakeups==0); fail_write=0; assert(p.at_write_failed && at_queue_run(&p)!=0); assert(p.outgoing_sms==1); at_queue_flush(&p); assert(p.outgoing_sms==0 && p.state.at_tasks==0); pvt_try_restate(&p); assert(wakeups==1);
  init(&p); part(&p); complete(&p,RES_SMS_PROMPT); complete(&p,RES_ERROR); assert(!p.outgoing_sms && !p.state.at_tasks);
  init(&p); assert(at_enqueue_clcc(&p.sys_chan)==0); part(&p); part(&p); assert(at_queue_recover(&p)==0); at_queue_flush(&p); assert(p.outgoing_sms==0 && p.state.at_tasks==0 && p.state.at_cmds==0 && p.at_recovery==0);
 }

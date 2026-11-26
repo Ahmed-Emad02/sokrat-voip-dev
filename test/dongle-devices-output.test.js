@@ -29,6 +29,7 @@ function parseDevicesOutput(output, keepRaw = false, astDbMappings = {}) {
         if (row.ID && row.ID.startsWith("dongle")) {
             if ((!row.IMEI || row.IMEI === '-' || row.IMEI === 'Unknown') && row.IMSI && (row.IMSI.startsWith('86') || row.IMSI.startsWith('35'))) {
                 row.IMEI = row.IMSI;
+                row.IMSI = '';
             }
             const parsedState = (row.State || '').toLowerCase();
             if (parsedState.includes('not init')) row.State = 'Not Initialized';
@@ -77,4 +78,22 @@ test('parseDevicesOutput sets Number to Unknown for disconnected dongles even if
     assert.equal(parsed[1].ID, 'dongle1');
     assert.equal(parsed[1].State, 'Not Connected');
     assert.equal(parsed[1].Number, 'Unknown');
+});
+
+test('parseDevicesOutput treats an IMEI in the IMSI column as IMEI only', () => {
+    const header = "ID           Group State      RSSI Mode Submode Provider Name  Model      Firmware          IMEI             IMSI             Number        ";
+    const colNames = ["ID", "Group", "State", "RSSI", "Mode", "Submode", "Provider Name", "Model", "Firmware", "IMEI", "IMSI", "Number"];
+    const values = {
+        ID: 'dongle9', Group: '0', State: 'Free', RSSI: '7', Mode: '0', Submode: '0',
+        'Provider Name': 'etisalat egypt', Model: 'E173', Firmware: '21.157.71.00.135',
+        IMEI: '', IMSI: '868402000740315', Number: '+201100351333'
+    };
+    let line = '';
+    for (const name of colNames) {
+        line = line.padEnd(header.indexOf(name), ' ') + values[name];
+    }
+    const parsed = parseDevicesOutput([header, line].join('\n'));
+    assert.equal(parsed.length, 1);
+    assert.equal(parsed[0].IMEI, '868402000740315');
+    assert.equal(parsed[0].IMSI, '', 'transposed IMEI must not remain a live IMSI');
 });
