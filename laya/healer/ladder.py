@@ -83,13 +83,14 @@ class RecoveryLadder:
         now = time.time()
         rec = self.get_dongle_history(dongle_id)
         policy = read_lifecycle_policy()
-        if anomaly_type not in ("MANUAL_REQUEST", "MANUAL_CLI") and not autonomous_recovery_allowed(policy):
+        manual = anomaly_type in ("MANUAL_REQUEST", "MANUAL_CLI")
+        if not manual and not autonomous_recovery_allowed(policy):
             return ("Observation Only (manual lifecycle policy)", 0, False,
                     "Autonomous lifecycle mutations disabled")
-        max_attempts = max(1, int(policy.get("maxRecoveryAttempts", 3))) * 2
+        max_attempts = max(1, int(policy.get("maxRecoveryAttempts", 3)))
 
         # Opt-in recovery is bounded and reaches an operator-visible stop state.
-        if rec.get("stopped_until", 0) > now:
+        if not manual and rec.get("stopped_until", 0) > now:
             remaining = int(rec["stopped_until"] - now)
             return ("Stopped (Recovery Exhausted)", rec.get("last_level", 0), False,
                     f"Recovery stopped; next manual check in {remaining}s")
@@ -106,7 +107,7 @@ class RecoveryLadder:
 
         # Bound total recovery mutations per unhealthy episode unless the
         # operator explicitly requested one action (manual CLI is separate).
-        if anomaly_type != "MANUAL_REQUEST" and anomaly_type != "MANUAL_CLI" and rec.get("total_attempts", 0) >= max_attempts:
+        if not manual and rec.get("total_attempts", 0) >= max_attempts:
             pause = max(60, int(policy.get("recoveryPauseMs", 1800000) / 1000))
             rec["stopped_until"] = now + pause
             return ("Stopped (Recovery Exhausted)", rec.get("last_level", 0), False,
@@ -137,6 +138,13 @@ class RecoveryLadder:
         elif rec["last_level"] >= 4 and rec["attempts_at_level"] >= 2:
             target_level = 5
 
+        # Resolve the potentially slow settings read before the authority check.
+        use_cfun = target_level == 1 and anomaly_type == ANOMALY_CARRIER_DROP and self._cfun_allowed()
+        # Recheck persisted authority after potentially slow safety probes.
+        if not manual and not autonomous_recovery_allowed(read_lifecycle_policy()):
+            return ("Observation Only (manual lifecycle policy)", 0, False,
+                    "Autonomous lifecycle mutations disabled")
+
         # Execute recovery action based on target_level
         action_name = "None"
         success = False
@@ -146,7 +154,7 @@ class RecoveryLadder:
             if anomaly_type == ANOMALY_SMS_STORAGE_FULL:
                 action_name = f"Level 1: Flush SMS Storage ({dongle_id})"
                 success, details = action_flush_sms_storage(dongle_id, reason)
-            elif anomaly_type == ANOMALY_CARRIER_DROP and self._cfun_allowed():
+            elif use_cfun:
                 action_name = f"Level 1: Baseband Radio Re-attach AT+CFUN=1 ({dongle_id})"
                 success, details = action_cfun_restart(dongle_id, reason)
             else:
@@ -184,7 +192,8 @@ class RecoveryLadder:
 
         # Update history
         rec["last_action_time"] = now
-        rec["total_attempts"] = rec.get("total_attempts", 0) + 1
+        if not manual:
+            rec["total_attempts"] = rec.get("total_attempts", 0) + 1
         if rec["last_level"] == target_level:
             rec["attempts_at_level"] += 1
         else:

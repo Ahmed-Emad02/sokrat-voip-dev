@@ -300,11 +300,11 @@ The Sokrat VoIP platform requires strict adherence to four fundamental architect
 ### 2.4 Unsafe `AT+CHLD=1x` During Session Teardown
 * **File & Lines:** `at_command.c:1070` (`at_hangup_immediality`) and `chan_dongle.c:304` (`disconnect_dongle`)
 * **Patch Status:** `FIXED IN PATCH`
-* **Production Resolution:** `disconnect_dongle()` writes one `AT+CHUP\r` per port, not one per call, and `at_hangup_immediality()` never sends `AT+CHLD=1x`. The targeted form is reserved for normal channel hangups and keeps its `call_idx > 0` guard.
+* **Production Resolution:** On a healthy framed transport, `disconnect_dongle()` writes one `AT+CHUP\r` per port, not one per call; a poisoned/partial frame skips CHUP. `at_hangup_immediality()` never sends `AT+CHLD=1x`. The targeted form is reserved for normal channel hangups and keeps its `call_idx > 0` guard.
 * **Additional teardown hardening:**
-  * If an SMS task is pending or `outgoing_sms > 0`, teardown writes ESC (`0x1B`) once before CHUP. Without it, a modem waiting at the `AT+CMGS` prompt consumes CHUP as message text and never answers AT again.
+  * If an SMS task, outgoing SMS, or a dirty prompt from a failed PDU is pending, teardown writes ESC (`0x1B`) once before CHUP. Without it, a modem waiting at the `AT+CMGS` prompt consumes CHUP as message text and never answers AT again.
   * `disconnect_dongle()` detaches the ttys under `pvt->lock`; the caller closes them after releasing the lock. A CTS-stalled `close()` can otherwise block discovery for the driver’s closing-wait.
-  * The initialization list ends with `AT+CHUP`, aborting any call left active by a previous driver generation.
+  * The initialization list ends with read-only `AT+CLCC`, **never CHUP**. Inherited calls keep exact-index tracking. CSQ ERROR preserves the poll; failed startup CLCC has at most three transmitted attempts (timeout retries follow the distinctive CSQ barrier). Exhaustion leaves the session connected/not-ready for operator inspection, without restarting.
   * `pvt_start()` failure cleanup resets `data_fd`/`audio_fd` to `-1` after closing them.
 * **Code Reference:**
   ```c

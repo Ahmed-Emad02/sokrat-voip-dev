@@ -59,7 +59,7 @@ test('lifecycle hardening regressions from the compiled released functions', { t
     ['at_command.c', ['at_write_teardown', 'at_abort_pending_sms', 'at_hangup_immediality', 'at_enqueue_pdu', 'at_enqueue_clcc', 'at_fill_generic_cmd_va', 'at_fill_generic_cmd', 'at_enqueue_generic', 'at_enqueue_dtmf', 'at_enqueue_initialization']],
     ['cpvt.c', ['init_pipe', 'cpvt_alloc', 'cpvt_free', 'pvt_find_cpvt']],
     ['channel.c', ['queue_control_channel', 'queue_hangup', 'disactivate_call', 'activate_call', 'change_channel_state']],
-    ['at_response.c', ['request_clcc', 'at_response_busy', 'at_response_sms_prompt', 'at_response_clcc', 'at_response_conn', 'at_init_complete', 'at_response_ok', 'at_response']],
+    ['at_response.c', ['request_clcc', 'at_response_busy', 'at_response_sms_prompt', 'at_response_clcc', 'at_response_conn', 'at_init_complete', 'at_response_ok', 'log_cmd_response_error', 'at_response_error', 'at_response']],
     ['at_parse.c', ['mark_line', 'at_parse_csq', 'at_parse_clcc']],
   ];
   let code = ['ringbuffer.c', 'mixbuffer.c', 'at_queue.c'].map(file => withoutIncludes(read(file))).join('\n');

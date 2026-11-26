@@ -7,6 +7,7 @@ const os = require('os');
 const path = require('path');
 const vm = require('vm');
 const provisioning = require('../lib/dongle-provisioning');
+const { autonomousRecoveryAllowed } = require('../lib/dongle-lifecycle-policy');
 const { readDongleSections, slotIntentionallyDisabled, recoveryEligible, createDongleRuntime } = require('../lib/dongle-recovery');
 
 const CONFIG = '[general]\ninterval=15\n[defaults]\ncontext=from-dongle-custom\n\n[dongle0]\nimei=123456789012345\nimsi=111111111111111\naudio=/dev/ttyUSB1\ndata=/dev/ttyUSB2\n\n[dongle1]\nimei=987654321098765\nimsi=222222222222222\naudio=/dev/ttyUSB4\ndata=/dev/ttyUSB5\n';
@@ -31,7 +32,7 @@ function fixture(t, content = CONFIG) {
     const configPath = path.join(directory, 'dongle.conf');
     fs.writeFileSync(configPath, content);
     const f = {
-        configPath, commands: [], audit: [], usb: [], time: 0,
+        configPath, commands: [], audit: [], usb: [], time: 0, policy: AUTONOMOUS_POLICY,
         states: new Map([['dongle0', 'Not connected'], ['dongle1', 'Free']]),
         details: new Map(), channels: '0 active channels\n0 active calls\n',
         beforeCommand: null, commandResult: null, inventoryError: false,
@@ -74,7 +75,7 @@ function fixture(t, content = CONFIG) {
         audit: entry => f.audit.push(entry),
         usbTarget: slot => ({ device: `/fake/usb/${slot}` }),
         usbRebind: async device => { f.usb.push(device); return 'fake-rebind'; },
-        lifecyclePolicy: AUTONOMOUS_POLICY
+        lifecyclePolicy: () => f.policy
     });
     return f;
 }
@@ -240,7 +241,7 @@ test('a call appearing after the stop acknowledgement defers the actual config m
 
 // Execute the production adoption function in an isolated dependency context, not
 // the server entry point (which would connect to databases, timers and hardware).
-function adoptionPass(f, { normalize = false, reclaim = false, repair = false } = {}) {
+function adoptionPass(f, { normalize = false, reclaim = false, repair = false, overrides = {} } = {}) {
     const server = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
     const start = server.indexOf('async function runAdoptionPass(trigger) {');
     assert.ok(start >= 0, 'runAdoptionPass anchor must exist');
@@ -248,6 +249,8 @@ function adoptionPass(f, { normalize = false, reclaim = false, repair = false } 
     assert.ok(end > start, 'runAdoptionPass end anchor must exist');
     return vm.runInNewContext(`${server.slice(start, end)}\nrunAdoptionPass;`, {
         DONGLE_CONF_PATH: f.configPath,
+        readLifecyclePolicy: () => f.policy,
+        autonomousRecoveryAllowed,
         readDongleSections, slotIntentionallyDisabled, recoveryEligible,
         annotateCandidates: provisioning.annotateCandidates,
         planAdoption: provisioning.planAdoption,
@@ -267,10 +270,11 @@ function adoptionPass(f, { normalize = false, reclaim = false, repair = false } 
             provisioning.upsertSection(f.configPath, 'dongle0', { audio: '/dev/ttyUSB9' });
             return [{ slot: 'dongle0', previous: { audio: '/dev/ttyUSB1' } }];
         },
-        applyProvisionedSlots: async slots => {
-            const result = await f.runtime.reloadConfiguration(slots, 'test:apply');
+        applyProvisionedSlots: async (slots, source, authority) => {
+            const result = await f.runtime.reloadConfiguration(slots, 'test:apply', authority);
             return { reloaded: result.success, states: new Map(f.states), failed: [{ slot: 'dongle0', state: 'Not connected' }] };
-        }
+        },
+        ...overrides
     });
 }
 
@@ -481,5 +485,122 @@ test('a disabled unrelated slot is not restarted by a config-only rollback reloa
     f.states.set('dongle1', 'Stopped');
     const result = await f.runtime.reloadConfiguration(['dongle0'], 'test');
     assert.equal(result.pending, true);
+    assert.deepEqual(f.mutations(), []);
+});
+
+const MANUAL_POLICY = { mode: 'manual', autonomousRecovery: false };
+
+test('automatic reload loses authority during awaited safety checks; explicit reload still works', async t => {
+    const f = fixture(t);
+    f.beforeCommand = () => { f.policy = MANUAL_POLICY; };
+    const result = await f.runtime.reloadConfiguration(['dongle0'], 'auto:test', { autonomous: true });
+    assert.equal(result.pending, true);
+    assert.deepEqual(f.mutations(), []);
+    assert.equal((await f.runtime.reloadConfiguration(['dongle0'], 'operator')).success, true);
+    assert.deepEqual(f.mutations(), ['module reload chan_dongle.so']);
+});
+
+test('automatic pending rollback remains read-only after policy revocation', async t => {
+    const f = fixture(t);
+    f.details.set('dongle1', stateOutput('dongle1', 'Active', { Active: 1 }));
+    assert.equal((await f.runtime.rollbackSlot({ slot: 'dongle0', source: 'auto:test', autonomous: true })).pending, true);
+    f.details.clear();
+    f.policy = MANUAL_POLICY;
+    for (let i = 0; i < 3; i++) {
+        const [result] = await f.runtime.retryPendingRollbacks();
+        assert.equal(result.pending, true);
+        assert.equal(result.slot, 'dongle0');
+    }
+    assert.deepEqual(f.mutations(), []);
+    assert.equal(f.bytes(), CONFIG);
+    f.policy = AUTONOMOUS_POLICY;
+    const [result] = await f.runtime.retryPendingRollbacks();
+    assert.equal(result.success, true);
+    assert.deepEqual(f.mutations(), ['dongle stop gracefully dongle0', 'module reload chan_dongle.so']);
+});
+
+test('policy-deferred rollback snapshots before an intervening operator edit', async t => {
+    const f = fixture(t);
+    f.policy = MANUAL_POLICY;
+    assert.equal((await f.runtime.rollbackSlot({ slot: 'dongle0', source: 'auto:test', autonomous: true })).pending, true);
+    f.setConfig(CONFIG.replace('imei=123456789012345', 'imei=555555555555555'));
+    f.policy = AUTONOMOUS_POLICY;
+    const [result] = await f.runtime.retryPendingRollbacks();
+    assert.equal(result.skipped, true);
+    assert.match(result.reason, /changed/);
+    assert.match(f.bytes(), /imei=555555555555555/);
+    assert.deepEqual(f.mutations(), []);
+});
+
+test('explicit operator pending rollback remains allowed in manual mode', async t => {
+    const f = fixture(t);
+    f.policy = MANUAL_POLICY;
+    f.details.set('dongle1', stateOutput('dongle1', 'Active', { Active: 1 }));
+    assert.equal((await f.runtime.rollbackSlot({ slot: 'dongle0', source: 'operator' })).pending, true);
+    f.details.clear();
+    assert.equal((await f.runtime.retryPendingRollbacks())[0].success, true);
+    assert.deepEqual(f.mutations(), ['dongle stop gracefully dongle0', 'module reload chan_dongle.so']);
+});
+
+test('automatic rollback rechecks authority after safety and after targeted stop', async t => {
+    for (const revokeAt of ['safety', 'stop']) {
+        const f = fixture(t);
+        f.beforeCommand = command => {
+            if ((revokeAt === 'safety' && command.startsWith('dongle show')) ||
+                (revokeAt === 'stop' && command.startsWith('dongle stop'))) f.policy = MANUAL_POLICY;
+        };
+        const result = await f.runtime.rollbackSlot({ slot: 'dongle0', source: 'auto:test', autonomous: true });
+        assert.equal(result.pending, true);
+        assert.equal(f.bytes(), CONFIG);
+        assert.deepEqual(f.mutations(), revokeAt === 'stop' ? ['dongle stop gracefully dongle0'] : []);
+    }
+});
+
+test('automatic adoption rechecks authority after modem probe and idle awaits', async t => {
+    for (const revokeAt of ['probe', 'idle']) {
+        const f = fixture(t);
+        let idleQueries = 0;
+        if (revokeAt === 'idle') f.beforeCommand = command => {
+            if (command === 'core show channels' && ++idleQueries === 2) f.policy = MANUAL_POLICY;
+        };
+        const overrides = revokeAt === 'probe' ? { probeUnconfiguredModems: async () => {
+            f.policy = MANUAL_POLICY;
+            return [{ imei: '123456789012345', imsi: '444444444444444' }];
+        } } : {};
+        const result = await adoptionPass(f, { overrides })('hotplug');
+        assert.equal(result.policyRevoked, true);
+        assert.equal(f.bytes(), CONFIG);
+        assert.deepEqual(f.mutations(), []);
+        assert.equal(result.retryInMs, null);
+    }
+});
+
+test('production normalization retains completed metadata but never writes after revocation', async t => {
+    const f = fixture(t);
+    f.states.set('dongle0', 'Free');
+    const server = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+    const start = server.indexOf('async function normalizeConfiguredSlots(');
+    const end = server.indexOf('\nasync function dongleStates()', start);
+    const fn = vm.runInNewContext(`${server.slice(start, end)}\nnormalizeConfiguredSlots;`, {
+        DONGLE_CONF_PATH: f.configPath, recoveryEligible, readDongleSections,
+        isHealthyDongleState: healthy, upsertSection: provisioning.upsertSection,
+        liveSlotPorts: async () => ({ audio: '/dev/ttyUSB8', data: '/dev/ttyUSB9' }),
+        liveSlotIdentity: async () => ({}),
+        pinningFieldsFor: async () => ({ audioPort: '/dev/ttyUSB8', dataPort: '/dev/ttyUSB9' }),
+        dongleRuntime: f.runtime, appendDongleRestartAudit: () => {}
+    });
+    f.beforeCommand = () => { f.policy = MANUAL_POLICY; };
+    const result = await fn(readDongleSections(f.configPath), new Map(f.states), () => f.policy !== MANUAL_POLICY);
+    assert.equal(result.length, 0);
+    assert.equal(f.bytes(), CONFIG);
+    assert.deepEqual(f.mutations(), []);
+});
+
+test('unreadable rollback snapshot reports failure instead of escaping the scheduler', async t => {
+    const f = fixture(t);
+    fs.unlinkSync(f.configPath);
+    const result = await f.runtime.rollbackSlot({ slot: 'dongle0', source: 'auto:test', autonomous: true });
+    assert.equal(result.success, false);
+    assert.match(result.error, /ENOENT/);
     assert.deepEqual(f.mutations(), []);
 });

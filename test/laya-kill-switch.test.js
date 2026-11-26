@@ -35,7 +35,7 @@ test('UI Gating: Kill switch button in views/gsm-dongles.ejs is strictly wrapped
     assert.match(ejsContent, /toggleLayaKillSwitch/, 'Must contain toggleLayaKillSwitch function');
 });
 
-test('API Security: POST /api/laya/kill-switch rejects unauthenticated and non-root users', async () => {
+test('API Security: POST /api/laya/kill-switch rejects unauthenticated and non-root users', { skip: process.env.SOKRAT_LIVE_TESTS !== '1' && 'Live HTTP integration requires SOKRAT_LIVE_TESTS=1' }, async () => {
     // 1. Unauthenticated request -> 401
     const unauthRes = await makePostRequest('/api/laya/kill-switch', { action: 'kill' }, {});
     assert.strictEqual(unauthRes.statusCode, 401, 'Unauthenticated request must return 401');

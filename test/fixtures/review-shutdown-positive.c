@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <time.h>
 
 /* The shutdown functions below are extracted verbatim from the release-patched
  * chan_dongle.c. Only the Asterisk lock/wake/log ABI and the device structure
@@ -22,6 +23,8 @@
 typedef pthread_mutex_t ast_mutex_t;
 #define ast_mutex_lock pthread_mutex_lock
 #define ast_mutex_unlock pthread_mutex_unlock
+#define ast_cond_timedwait pthread_cond_timedwait
+#define SCONF_GLOBAL(state, name) 60
 
 typedef enum { DEV_STATE_STOPPED=0, DEV_STATE_RESTARTED, DEV_STATE_REMOVED, DEV_STATE_STARTED } dev_state_t;
 typedef enum { RESTATE_TIME_NOW=0, RESTATE_TIME_GRACEFULLY, RESTATE_TIME_CONVENIENT } restate_time_t;
@@ -39,6 +42,8 @@ struct pvt {
 };
 typedef struct public_state {
 	pthread_mutex_t discovery_lock;
+	pthread_cond_t discovery_cond;
+	unsigned discovery_wake;
 	pthread_t discovery_thread;
 	volatile int unloading_flag;
 } public_state_t;
@@ -74,6 +79,14 @@ static int fake_create(pthread_t *thread, const void *attr, void *(*fn)(void *),
 	atomic_fetch_add(&creations, 1);
 	return pthread_create(thread, NULL, fn, arg);
 }
+static int discovery_signal(pthread_cond_t *cond) {
+	if (gpublic && cond == &gpublic->discovery_cond) {
+		atomic_fetch_add(&discovery_wakes, 1);
+		sem_post(&discovery_gate);
+	}
+	return pthread_cond_signal(cond);
+}
+#define ast_cond_signal discovery_signal
 #define pthread_kill fake_wake
 #define pthread_join tracked_join
 #define ast_pthread_create_background fake_create
@@ -122,6 +135,7 @@ int main(void) {
 	memset(&state, 0, sizeof(state));
 	memset(&device, 0, sizeof(device));
 	pthread_mutex_init(&state.discovery_lock, NULL);
+	pthread_cond_init(&state.discovery_cond, NULL);
 	pthread_mutex_init(&device.lock, NULL);
 	sem_init(&ready, 0, 0);
 	sem_init(&discovery_gate, 0, 0);
@@ -155,10 +169,27 @@ int main(void) {
 		public_state_t unused;
 		memset(&unused, 0, sizeof(unused));
 		pthread_mutex_init(&unused.discovery_lock, NULL);
+		pthread_cond_init(&unused.discovery_cond, NULL);
 		discovery_stop(&unused);
 		assert(unused.discovery_thread == AST_PTHREADT_STOP);
 	}
 
+	/* Lost-wake regression: notification happened after the scan captured
+	 * generation 0, but before it entered its wait. No signal is pending. */
+	{
+		public_state_t early;
+		memset(&early, 0, sizeof(early));
+		pthread_mutex_init(&early.discovery_lock, NULL);
+		pthread_cond_init(&early.discovery_cond, NULL);
+		early.discovery_wake = 1;
+		alarm(2);
+		discovery_wait(&early, 0);
+		early.unloading_flag = 1;
+		discovery_wait(&early, 1);
+		alarm(0);
+		pthread_cond_destroy(&early.discovery_cond);
+		pthread_mutex_destroy(&early.discovery_lock);
+	}
 	pthread_join(monitor_tid, NULL);
 	pthread_join(discovery_tid, NULL);
 	puts("shutdown lock cycle: ok");

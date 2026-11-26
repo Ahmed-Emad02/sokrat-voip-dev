@@ -1,9 +1,9 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
-const { spawnSync } = require('child_process');
+const { spawnSync } = require('./fixtures/laya-offline');
 
-const REPO = '/opt/sokrat-voip';
+const REPO = require('path').resolve(__dirname, '..');
 const PY = (script) => {
     const res = spawnSync('python3', ['-c', script], { encoding: 'utf8', cwd: REPO });
     return res;
@@ -50,27 +50,15 @@ import sys
 sys.path.insert(0, '${REPO}')
 from laya.healer.actions import action_baseband_reboot
 
-# Gate 1: disabled by default
+from laya.sensors import db
+settings = {'reboot_enabled': False, 'reboot_confirmed': False}
+db.get_baseband_hygiene_settings = lambda: dict(settings)
+# No DB update: both independent gates run against in-memory settings.
 ok, details = action_baseband_reboot('dongle0')
-assert ok is False, details
-assert 'DISABLED' in details, details
-
-# Gate 2: enabled but not acknowledged
-from laya.sensors.db import get_connection
-conn = get_connection()
-with conn.cursor() as cur:
-    cur.execute("UPDATE dashboard_settings SET setting_value='true' WHERE setting_key='laya_baseband_reboot_enabled'")
-conn.commit(); conn.close()
-
+assert ok is False and 'DISABLED' in details, details
+settings['reboot_enabled'] = True
 ok, details = action_baseband_reboot('dongle0')
-assert ok is False, details
-assert 'acknowledgement' in details, details
-
-# Restore
-conn = get_connection()
-with conn.cursor() as cur:
-    cur.execute("UPDATE dashboard_settings SET setting_value='false' WHERE setting_key='laya_baseband_reboot_enabled'")
-conn.commit(); conn.close()
+assert ok is False and 'acknowledgement' in details, details
 print("OK")
 `;
     const res = PY(script);
@@ -102,14 +90,12 @@ test('Layer 4 Identity: modem identity verification detects a changed IMEI/IMSI'
     const script = `
 import sys
 sys.path.insert(0, '${REPO}')
-from laya.sensors.cli import parse_dongle_devices_summary
+from laya.sensors import cli
 from laya.healer.actions import verify_modem_identity, snapshot_modem_identity
+live_dongle = 'dongle0'
+cli.get_dongle_device_state = lambda d: {'imei':'123456789012345', 'imsi':'111111111111111', 'state':'Free'}
 
-devices = parse_dongle_devices_summary()
-connected = [d for d in devices if d.get('state', '').lower() in ('free', 'active', 'dialing', 'ringing')]
-live_dongle = connected[0]['id'] if connected else 'dongle0'
-
-# A snapshot of a real modem
+# A deterministic synthetic identity; never query live hardware
 snap = snapshot_modem_identity(live_dongle)
 assert snap is not None
 assert snap.get('imei'), f'{live_dongle} must expose an IMEI: {snap}'
@@ -136,6 +122,8 @@ test('Layer 4 AT Dispatch: a failed AT command is detected instead of silently s
     const script = `
 import sys
 sys.path.insert(0, '${REPO}')
+from laya.sensors import cli
+cli.exec_asterisk_cmd = lambda *a, **k: (True, '[dongleX-does-not-exist] Device not found', '')
 from laya.sensors.cli import send_dongle_at_command
 
 # A non-existent dongle must be reported as a FAILURE, not a success.

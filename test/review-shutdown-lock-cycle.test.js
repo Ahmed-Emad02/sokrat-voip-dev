@@ -47,7 +47,7 @@ test('shutdown joins discovery without holding discovery_lock and blocks new wak
     path.join(root, 'scripts/dongle-module.sh'), source,
     path.join(root, 'asterisk/chan_dongle.patch'), path.join(temp, 'patch.log')]);
   const driver = fs.readFileSync(path.join(source, 'chan_dongle.c'), 'utf8');
-  const code = ['discovery_restart', 'discovery_stop', 'pvt_stop', 'restate_name', 'pvt_time4restate', 'pvt_try_restate']
+  const code = ['discovery_wait', 'discovery_restart', 'discovery_stop', 'pvt_stop', 'restate_name', 'pvt_time4restate', 'pvt_try_restate']
     .map(name => definition(driver, name)).join('\n');
   fs.writeFileSync(path.join(temp, 'shutdown-code.inc'), code);
   const executable = path.join(temp, 'shutdown');

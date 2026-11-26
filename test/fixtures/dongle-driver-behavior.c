@@ -45,6 +45,7 @@
 #define AST_LIST_REMOVE_CURRENT(f) do { if (_prev) _prev->f.next=_cur->f.next; else _h->first=_cur->f.next; if (_h->last==_cur) _h->last=_prev; } while (0)
 #define AST_LIST_TRAVERSE_SAFE_END } }
 typedef int ast_mutex_t;
+typedef pthread_cond_t ast_cond_t;
 struct ast_frame { int unused; };
 struct ast_jb_conf { int unused; };
 struct ast_config;

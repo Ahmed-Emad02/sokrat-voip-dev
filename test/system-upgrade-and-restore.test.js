@@ -105,7 +105,7 @@ test('2. Sidebar UI: Update Sokrat and Restore Backup buttons are strictly root-
     );
 });
 
-test('3. API Security: POST /api/system/update and POST /api/system/restore-backup reject non-root users', async () => {
+test('3. API Security: POST /api/system/update and POST /api/system/restore-backup reject non-root users', { skip: process.env.SOKRAT_LIVE_TESTS !== '1' && 'Live HTTP integration requires SOKRAT_LIVE_TESTS=1' }, async () => {
     // 1. Unauthenticated request
     const unauthUpdateRes = await fetch(`${BASE_URL}/api/system/update`, {
         method: 'POST',

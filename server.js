@@ -13002,10 +13002,10 @@ app.get('/api/gsm-dongles/provision/candidates', requireAuth, requireDongleRoot,
 
 
 /** Apply freshly written dongle sections and settle device state. */
-async function applyProvisionedSlots(slots, source) {
+async function applyProvisionedSlots(slots, source, authority = {}) {
     if (!slots.length) return { reloaded: false, failed: [], states: new Map() };
 
-    const reload = await dongleRuntime.reloadConfiguration(slots, source);
+    const reload = await dongleRuntime.reloadConfiguration(slots, source, authority);
     if (!reload.success) {
         return {
             reloaded: false, deferred: Boolean(reload.pending), error: reload.error || reload.reason,
@@ -13236,9 +13236,10 @@ async function liveSlotIdentity(slot) {
  * /dev/serial/by-path links of the ports it is really using. Slots that are
  * already pinned are left untouched, so repeated passes are no-ops.
  */
-async function normalizeConfiguredSlots(sections, states) {
+async function normalizeConfiguredSlots(sections, states, authorized = () => true) {
     const normalized = [];
     for (const [slot, section] of sections) {
+        if (!authorized()) return normalized;
         if (!/^dongle\d+$/i.test(slot)) continue;
         if (!recoveryEligible(section)) continue;
         if (!isHealthyDongleState(states.get(slot))) continue;
@@ -13282,6 +13283,7 @@ async function normalizeConfiguredSlots(sections, states) {
         if (!Object.keys(next).length) continue;
         if (!(await dongleRuntime.safety([slot])).safe) break;
         if (!recoveryEligible(readDongleSections(DONGLE_CONF_PATH).get(slot))) continue;
+        if (!authorized()) return normalized;
         upsertSection(DONGLE_CONF_PATH, slot, next);
         appendDongleRestartAudit({
             type: 'provision', phase: 'slot_synced', dongleId: slot,
@@ -13408,12 +13410,21 @@ async function runAdoptionPass(trigger) {
     const applicationFailures = [];
     const skipped = [];
     const source = `auto:${trigger}`;
+    const autonomous = trigger !== 'manual';
+    const authorized = () => !autonomous || autonomousRecoveryAllowed(readLifecyclePolicy());
+    function assertAuthorized() {
+        if (!authorized()) {
+            const error = new Error('manual lifecycle policy blocks autonomous adoption');
+            error.policyRevoked = true;
+            throw error;
+        }
+    }
     const usable = state => isHealthyDongleState(state) || isCallStateValue(state);
     async function rollback(item, previous, details = {}) {
         if (previous) {
             previous = { ...previous, ...adopted.find(entry => entry.slot === item.slot)?.previous, ...refreshed.find(entry => entry.slot === item.slot)?.previous };
         }
-        const result = await dongleRuntime.rollbackSlot({ slot: item.slot, previous, source: `${source}:rollback` });
+        const result = await dongleRuntime.rollbackSlot({ slot: item.slot, previous, source: `${source}:rollback`, autonomous });
         if (result.pending) pendingRollback.push(result);
         else if (!result.success) rollbackFailures.push(result);
         else if (result.skipped) skipped.push({ slot: item.slot, reason: result.reason });
@@ -13421,11 +13432,13 @@ async function runAdoptionPass(trigger) {
     }
     const pending = slot => pendingRollback.some(item => item.slot === slot);
     async function apply(slots, suffix = '') {
-        const result = await applyProvisionedSlots(slots, `${source}${suffix}`);
+        assertAuthorized();
+        const result = await applyProvisionedSlots(slots, `${source}${suffix}`, { autonomous });
         if (result.error) applicationFailures.push(result.error);
         return result;
     }
     try {
+        assertAuthorized();
         const retried = await dongleRuntime.retryPendingRollbacks();
         pendingRollback.push(...retried.filter(item => item.pending));
         rollbackFailures.push(...retried.filter(item => !item.success && !item.pending));
@@ -13434,7 +13447,9 @@ async function runAdoptionPass(trigger) {
         }
         await dongleRuntime.requireIdle();
         let sections = readDongleSections(DONGLE_CONF_PATH);
+        assertAuthorized();
         const probed = await probeUnconfiguredModems();
+        assertAuthorized();
         const candidates = annotateCandidates(probed, sections);
         const seenSlots = new Set(candidates.filter(item => item.slot).map(item => item.slot));
         for (const [slot, section] of sections) {
@@ -13460,6 +13475,7 @@ async function runAdoptionPass(trigger) {
                 if (!validation.ok) { skipped.push({ imei: op.imei, reason: validation.error }); continue; }
                 if (!Object.keys(validation.fields).length) { skipped.push({ imei: op.imei, reason: 'already current' }); continue; }
                 await dongleRuntime.requireIdle([op.slot]);
+                assertAuthorized();
                 const result = upsertSection(DONGLE_CONF_PATH, validation.slot, validation.fields);
                 appendDongleRestartAudit({
                     type: 'provision', phase: 'auto_refreshed', dongleId: validation.slot,
@@ -13482,6 +13498,7 @@ async function runAdoptionPass(trigger) {
                     continue;
                 }
                 const previous = Object.fromEntries(['imei', 'imsi', 'audio', 'data'].map(key => [key, String(current[key] || '').trim() || null]));
+                assertAuthorized();
                 const result = upsertSection(DONGLE_CONF_PATH, op.slot, {
                     imei: op.imei, imsi: op.imsi || null, audio: pinned.audioPort || null, data: pinned.dataPort || null
                 });
@@ -13495,7 +13512,7 @@ async function runAdoptionPass(trigger) {
             if (op.kind === 'blocked') skipped.push({ imei: op.imei, reason: 'no empty slot (add one manually)' });
         }
         let states = await dongleStates();
-        normalized = await normalizeConfiguredSlots(readDongleSections(DONGLE_CONF_PATH), states);
+        normalized = await normalizeConfiguredSlots(readDongleSections(DONGLE_CONF_PATH), states, authorized);
         const touched = [...new Set([...adopted, ...refreshed, ...normalized].map(item => item.slot))];
         let applied = null;
         if (touched.length) {
@@ -13519,6 +13536,7 @@ async function runAdoptionPass(trigger) {
             if (section.audio === pinned.audioPort && section.data === pinned.dataPort) continue;
             await dongleRuntime.requireIdle([candidate.slot]);
             if (!recoveryEligible(readDongleSections(DONGLE_CONF_PATH).get(candidate.slot))) continue;
+            assertAuthorized();
             upsertSection(DONGLE_CONF_PATH, candidate.slot, { audio: pinned.audioPort, data: pinned.dataPort });
             appendDongleRestartAudit({
                 type: 'provision', phase: 'auto_repaired', dongleId: candidate.slot, imei: candidate.imei,
@@ -13540,6 +13558,7 @@ async function runAdoptionPass(trigger) {
             if (pinned.audioPort && pinned.dataPort) {
                 await dongleRuntime.requireIdle([item.slot]);
                 if (!recoveryEligible(readDongleSections(DONGLE_CONF_PATH).get(item.slot))) continue;
+                assertAuthorized();
                 upsertSection(DONGLE_CONF_PATH, item.slot, { audio: pinned.audioPort, data: pinned.dataPort });
                 repaired.push({ slot: item.slot, audioPort: pinned.audioPort, dataPort: pinned.dataPort });
                 const singleApplied = await apply([item.slot], ':repair');
@@ -13571,7 +13590,7 @@ async function runAdoptionPass(trigger) {
         }
         const retry = error.deferred ? scheduleAutoAdopt('deferred') : null;
         return {
-            success: false, deferred: Boolean(error.deferred), retryInMs: retry ? retry.scheduledInMs : null,
+            success: false, policyRevoked: Boolean(error.policyRevoked), deferred: Boolean(error.deferred), retryInMs: retry ? retry.scheduledInMs : null,
             adopted, refreshed, normalized, repaired, skipped, rolledBack, pendingRollback, rollbackFailures, error: error.message
         };
     }

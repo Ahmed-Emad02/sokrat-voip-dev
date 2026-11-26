@@ -8,6 +8,7 @@ opt-in through the same JSON file the Node service reads.
 """
 
 import json
+import math
 import os
 
 DEFAULT_PATH = "/etc/sokrat/dongle-lifecycle-policy.json"
@@ -28,21 +29,26 @@ def policy_path():
 
 
 def _clamp_int(value, fallback, minimum, maximum):
-    try:
-        number = int(value)
-    except (TypeError, ValueError):
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
         return fallback
+    try:
+        number = float(value)  # Match JavaScript JSON number range/precision.
+    except OverflowError:
+        return fallback
+    if not math.isfinite(number):
+        return fallback
+    number = int(number)
     return max(minimum, min(maximum, number))
 
 
 def normalize_policy(raw=None):
     raw = raw if isinstance(raw, dict) else {}
-    mode = str(raw.get("mode", DEFAULTS["mode"])).strip().lower()
+    mode = raw.get("mode", DEFAULTS["mode"])
+    mode = mode.strip().lower() if isinstance(mode, str) else DEFAULTS["mode"]
     return {
         "version": _clamp_int(raw.get("version"), DEFAULTS["version"], 1, 1000),
         "mode": "autonomous" if mode in ("autonomous", "auto") else "manual",
-        "autonomousRecovery": raw.get("autonomousRecovery") is True
-        or str(raw.get("autonomousRecovery", "")).lower() == "true",
+        "autonomousRecovery": raw.get("autonomousRecovery") is True,
         "maxRecoveryAttempts": _clamp_int(
             raw.get("maxRecoveryAttempts"), DEFAULTS["maxRecoveryAttempts"], 1, 10
         ),

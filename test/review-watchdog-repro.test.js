@@ -6,7 +6,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const vm = require('vm');
-const { spawnSync } = require('child_process');
+const { spawnSync } = require('./fixtures/laya-offline');
 const { readDongleSections, recoveryEligible, createDongleRuntime } = require('../lib/dongle-recovery');
 const { readLifecyclePolicy, autonomousRecoveryAllowed } = require('../lib/dongle-lifecycle-policy');
 
@@ -266,7 +266,12 @@ import laya.healer.ladder as L
 from laya.healer.ladder import RecoveryLadder
 from laya.evaluator.heuristics import ANOMALY_CARRIER_DROP
 L.is_call_active_on_dongle = lambda d: False
-L.action_soft_at_probe = lambda d, reason: (True, 'ok')
+calls = []
+def fake_action(*args, **kwargs):
+    calls.append(args)
+    return True, 'mocked'
+for name in vars(L).copy():
+    if name.startswith('action_'): setattr(L, name, fake_action)
 ladder = RecoveryLadder()
 ladder._cfun_allowed = lambda: False
 actions = []
@@ -276,6 +281,11 @@ for _ in range(8):
     name, level, ok, detail = ladder.attempt_recovery('dongle0', ANOMALY_CARRIER_DROP, 'test', {})
     actions.append(name)
 assert any('Stopped' in name for name in actions), actions
+assert len(calls) == 2, calls
+rec['last_action_time'] = time.time() - 10000
+name, level, ok, detail = ladder.attempt_recovery('dongle0', 'MANUAL_CLI', 'test', {})
+assert ok and len(calls) == 3, (name, detail, calls)
+assert rec['total_attempts'] == 2, rec
 print('ok')
 `;
     const res = spawnSync('python3', ['-c', python], {
@@ -304,4 +314,59 @@ assert 'Observation Only' in name and level == 0 and not ok
     const result = spawnSync('python3', ['-c', script], { encoding: 'utf8',
         env: { ...process.env, SOKRAT_DONGLE_LIFECYCLE_POLICY: path.join(dir, 'missing.json') } });
     assert.equal(result.status, 0, result.stderr);
+});
+
+test('JS and Python policy readers agree on typed authority and numeric limits', () => {
+    const { normalizePolicy } = require('../lib/dongle-lifecycle-policy');
+    const samples = [null, [], true, 'auto', { mode: ['auto'], autonomousRecovery: true },
+        ...[true, false, 'True', 'true', '1', 1, [], {}].map(flag => ({ mode: 'auto', autonomousRecovery: flag })),
+        ...[null, true, '2', '2.5', [], {}, 2.5, 0, 500].map(n => ({ mode: 'autonomous', autonomousRecovery: true, maxRecoveryAttempts: n }))];
+    const script = `
+import json
+from laya.lifecycle_policy import normalize_policy
+assert normalize_policy({'maxRecoveryAttempts':10**1000})['maxRecoveryAttempts'] == 3
+samples = json.loads(${JSON.stringify(JSON.stringify(samples))})
+print(json.dumps([normalize_policy(s) for s in samples]))
+`;
+    const result = spawnSync('python3', ['-c', script], { encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(JSON.parse(result.stdout), samples.map(normalizePolicy));
+});
+
+test('Laya rechecks automatic authority after a slow safety probe', () => {
+    const script = `
+import laya.healer.ladder as L
+from laya.evaluator.heuristics import ANOMALY_CARRIER_DROP
+p = {'mode':'autonomous','autonomousRecovery':True}
+L.read_lifecycle_policy = lambda: dict(p)
+def revoke(d):
+    p['mode'] = 'manual'
+    return False
+L.is_call_active_on_dongle = revoke
+for name in vars(L).copy():
+    if name.startswith('action_'): setattr(L, name, forbidden)
+r = L.RecoveryLadder().attempt_recovery('dongle0', ANOMALY_CARRIER_DROP, 'test', {})
+assert 'Observation Only' in r[0], r
+# The settings lookup is another slow boundary after the safety read.
+p['mode'] = 'autonomous'
+L.is_call_active_on_dongle = lambda d: False
+ladder = L.RecoveryLadder()
+def revoke_settings():
+    p['mode'] = 'manual'
+    return True
+ladder._cfun_allowed = revoke_settings
+r = ladder.attempt_recovery('dongle0', ANOMALY_CARRIER_DROP, 'test', {})
+assert 'Observation Only' in r[0], r
+`;
+    const result = spawnSync('python3', ['-c', script], { encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+});
+
+test('offline Laya harness rejects unmocked process, socket, device and DB writes', () => {
+    for (const script of ["subprocess.run(['true'])", "socket.socket().connect(('127.0.0.1', 9))",
+        "open('/dev/null','w')", "offline_db.get_connection().cursor().execute('UPDATE dashboard_settings SET setting_value=1')"]) {
+        const result = spawnSync('python3', ['-c', script], { encoding: 'utf8' });
+        assert.notEqual(result.status, 0);
+        assert.match(result.stderr, /OfflineViolation/);
+    }
 });

@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
-const { spawnSync } = require('child_process');
+const { spawnSync } = require('./fixtures/laya-offline');
 
 const rootDir = path.resolve(__dirname, '..');
 

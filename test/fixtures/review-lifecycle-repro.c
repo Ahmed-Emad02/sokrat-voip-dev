@@ -46,6 +46,7 @@
 #define AST_LIST_REMOVE_CURRENT(f) do { if (_prev) _prev->f.next=_cur->f.next; else _h->first=_cur->f.next; if (_h->last==_cur) _h->last=_prev; } while (0)
 #define AST_LIST_TRAVERSE_SAFE_END } }
 typedef int ast_mutex_t;
+typedef pthread_cond_t ast_cond_t;
 struct ast_frame { int unused; };
 struct ast_jb_conf { int unused; };
 struct ast_config;
@@ -160,7 +161,6 @@ static ssize_t smsdb_outgoing_part_put(int uid, int result, char *dst, char *pay
 #define at_response_creg(...) 0
 #define at_response_cops(...) 0
 #define at_response_csq(...) 0
-#define at_response_error(...) 0
 #define at_response_ring(...) 0
 #define at_response_smmemfull(...) 0
 #define at_response_cdsi(...) 0
@@ -193,6 +193,10 @@ static int start_pbx(struct pvt *p, const char *number, int idx, call_state_t st
 }
 
 
+#define DEBUG_ATLEAST(n) 0
+#define E173_VOICE_MAX_ATTEMPTS 3
+#define AST_LOG_DEBUG 0
+static ssize_t smsdb_outgoing_clear(int uid, char *dst, char *payload) { (void)uid; (void)dst; (void)payload; return -1; }
 #include "driver-code.inc"
 
 static void init(struct pvt *p) { memset(p,0,sizeof(*p)); wake_device=p; p->sys_chan.pvt=p; p->incoming_sms_index=-1U; p->data_fd=123; p->audio_fd=-1; p->current_state=DEV_STATE_STARTED; p->desired_state=DEV_STATE_STARTED; p->restart_time=RESTATE_TIME_CONVENIENT; p->settings.shared.initstate=DEV_STATE_STARTED; wire_len=0; wire[0]=0; wakeups=0; fail_alloc=-1; fail_write=0; eagain_budget=0; eintr_budget=0; stall_forever=0; partial_once=0; poll_ready=1; eintr_forever=0; slow_progress=0; wall_now=(struct timeval){100,0}; mono_now=(struct timespec){100,0}; last_sms_uid=-1; sms_put_calls=0; }
@@ -433,8 +437,7 @@ static void readiness_waits_for_completion_without_blind_chup(void) {
   assert(at_queue_run(&p)==0);
   expect_wire("AT+CSQ\r",1);
   expect_wire("AT+CHUP\r",0);
-  /* CSQ is the last mandatory initialization command. Readiness is published
-   * here; the queued read-only CLCC is observation only. */
+  /* CSQ opens reconciliation; only CLCC terminal OK publishes readiness. */
   assert(at_response_ok(&p,RES_OK)==0);
   assert(!p.initialized && p.init_reconciling);
   assert(at_queue_head_cmd(&p)->cmd==CMD_AT_CLCC);
@@ -530,7 +533,122 @@ static void reload_preserves_restart(void) {
   init(&p); assert(pvt_enabled(&p)); p.terminate_monitor=1; assert(!pvt_enabled(&p));
 }
 
+
+/* Opus F1: real ERROR handlers, not stubs, cover every readiness failure. */
+static void startup_readonly_retries_are_bounded(void) {
+  struct pvt p; init(&p); p.has_voice=1;
+  assert(at_enqueue_initialization(&p.sys_chan,CMD_AT_CSQ)==0);
+  assert(at_response_error(&p,RES_ERROR)==0);
+  assert(p.init_reconciling && !p.initialized);
+  assert(at_queue_head_cmd(&p)->cmd==CMD_AT_CLCC);
+  assert(at_queue_run(&p)==0);
+  assert(p.init_clcc_attempts==1);
+  assert(at_response_ok(&p,RES_OK)==0);
+  assert(p.initialized); expect_wire("AT+CHUP",0); at_queue_flush(&p);
+
+  init(&p); p.has_voice=1;
+  assert(at_enqueue_initialization(&p.sys_chan,CMD_AT_CSQ)==0);
+  assert(at_response_ok(&p,RES_OK)==0); assert(at_queue_run(&p)==0);
+  assert(at_response_error(&p,RES_ERROR)==0);
+  assert(at_queue_head_cmd(&p)->cmd==CMD_AT_CLCC && p.init_clcc_attempts==2);
+  assert(at_response_ok(&p,RES_OK)==0);
+  assert(p.initialized); expect_wire("AT+CHUP",0); at_queue_flush(&p);
+
+  init(&p); p.has_voice=1;
+  assert(at_enqueue_initialization(&p.sys_chan,CMD_AT_CSQ)==0);
+  assert(at_response_ok(&p,RES_OK)==0); assert(at_queue_run(&p)==0);
+  wall_now.tv_sec+=6; assert(at_queue_timeout(&p)==0);
+  assert(at_queue_recover(&p)==0);
+  assert(at_queue_recovery_response(&p,RES_OK,0)==0);
+  assert(p.init_clcc_attempts==1); /* Late poll OK cannot publish readiness. */
+  assert(at_queue_recovery_response(&p,RES_CSQ,1)==0);
+  assert(at_queue_recovery_response(&p,RES_OK,0)==0);
+  assert(p.init_clcc_attempts==2 && !p.initialized);
+  assert(at_response_ok(&p,RES_OK)==0); assert(p.initialized);
+  expect_wire("AT+CHUP",0); at_queue_flush(&p);
+
+  init(&p); p.has_voice=1;
+  assert(at_enqueue_initialization(&p.sys_chan,CMD_AT_CSQ)==0);
+  assert(at_response_ok(&p,RES_OK)==0); assert(at_queue_run(&p)==0);
+  for(unsigned i=0;i<3;i++) assert(at_response_error(&p,RES_ERROR)==0);
+  assert(!p.initialized && p.init_reconciling && p.init_clcc_attempts==3);
+  assert(!at_queue_head_cmd(&p) && !p.at_write_failed);
+  for(unsigned i=0;i<10;i++) assert(at_queue_run(&p)==0);
+  unsigned polls=0; for(char *q=wire;(q=strstr(q,"AT+CLCC\r"));q++) polls++;
+  assert(polls==3); expect_wire("AT+CHUP",0); assert(wakeups==0);
+  at_queue_flush(&p);
+}
+/* Opus F2: a stalled unsent command has no authority to consume a result. */
+static void unsent_head_cannot_consume_terminal_replies(void) {
+  struct pvt p; init(&p); struct cpvt *c=call(&p,NULL,1);
+  stall_forever=1; poll_ready=0;
+  enqueue(c,CMD_AT_CHUP,RES_OK,"AT+CHUP\r");
+  const at_queue_task_t *head=at_queue_head_task(&p);
+  assert(at_response_ok(&p,RES_OK)==0);
+  assert(at_response_error(&p,RES_ERROR)==0);
+  at_response_busy(&p,RES_NO_CARRIER,AST_CONTROL_CONGESTION);
+  assert(p.state.chansno==1 && at_queue_head_task(&p)==head && wire_len==0);
+  stall_forever=0; poll_ready=1; assert(at_queue_run(&p)==0);
+  assert(at_response_ok(&p,RES_OK)==0); assert(p.state.chansno==0);
+  at_queue_flush(&p);
+
+  init(&p); stall_forever=1; poll_ready=0;
+  part(&p); head=at_queue_head_task(&p);
+  assert(at_response_sms_prompt(&p)==0);
+  assert(at_queue_head_task(&p)==head && at_queue_head_cmd(&p)->cmd==CMD_AT_CMGS);
+  at_queue_flush(&p);
+}
+/* Opus F3: read-only reconciliation must also track post-init unknown calls. */
+static void unknown_conn_is_tracked_without_hangup(void) {
+  struct pvt p; init(&p); p.initialized=1;
+  assert(at_response_conn(&p,"^CONN:1,0")==0);
+  assert(p.reconcile_pending);
+  char active[]="+CLCC: 1,0,0,0,0,\"123\",129\r";
+  assert(at_response_clcc(&p,active)==0);
+  assert(pvt_find_cpvt(&p,1) && p.state.chansno==1);
+  assert(at_response_ok(&p,RES_OK)==0); assert(!p.reconcile_pending);
+  expect_wire("AT+CHUP",0);
+  cpvt_free(pvt_find_cpvt(&p,1)); at_queue_flush(&p);
+
+  init(&p); p.initialized=1; p.reconcile_pending=1;
+  struct cpvt *c=call(&p,NULL,0);
+  char dialing[]="+CLCC: 2,0,2,0,0,\"123\",129\r";
+  assert(at_response_clcc(&p,dialing)==0);
+  assert(p.state.chansno==1 && !pvt_find_cpvt(&p,2));
+  cpvt_free(c); at_queue_flush(&p);
+}
+/* Opus F4/F5: partial PDU cleanup stays framed; audio writes never POLLOUT-wait. */
+static void partial_pdu_cancel_and_nonblocking_audio(void) {
+  struct pvt p; init(&p); part(&p);
+  assert(at_response_sms_prompt(&p)==0);
+  partial_once=1; poll_ready=0;
+  assert(at_queue_run(&p)!=0);
+  assert(p.at_write_failed && p.sms_prompt_dirty && !p.outgoing_sms && !p.state.at_tasks);
+  stall_forever=0; poll_ready=1; wire_len=0; wire[0]=0;
+  at_abort_pending_sms(&p); assert(wire_len==1 && wire[0]=='\x1b');
+  at_hangup_immediality(&p); assert(wire_len==1); /* No CHUP appended to poisoned frame. */
+  at_queue_flush(&p);
+
+  init(&p); partial_once=1; poll_ready=0;
+  at_queue_cmd_t q=ATQ_CMD_DECLARE_ST(CMD_AT_D,"ATD123;\r");
+  assert(at_queue_insert_const(&p.sys_chan,&q,1,0)!=0);
+  stall_forever=0; poll_ready=1;
+  size_t prior=wire_len; at_hangup_immediality(&p); assert(wire_len==prior);
+  at_queue_flush(&p);
+
+  init(&p); stall_forever=1; poll_ready=0;
+  assert(write_all(1,"audio",5)==0);
+  assert(mono_now.tv_sec==100 && mono_now.tv_nsec==0); /* No polling under media lock. */
+  eintr_forever=1;
+  at_hangup_immediality(&p); /* Teardown EINTR is also monotonic bounded. */
+  assert(mono_now.tv_sec==100 && mono_now.tv_nsec==100000000);
+}
+
 int main(void) {
+  startup_readonly_retries_are_bounded();
+  unsent_head_cannot_consume_terminal_replies();
+  unknown_conn_is_tracked_without_hangup();
+  partial_pdu_cancel_and_nonblocking_audio();
   readiness_waits_for_completion_without_blind_chup();
   startup_reconciles_without_hangup();
   interrupted_and_slow_writes_obey_deadline();
