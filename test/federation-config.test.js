@@ -401,3 +401,11 @@ test('Live panel: remote cards render call details and never borrow a local exte
     assert.ok(operator.includes('applyCardCallState(cardKey, ext.activeCall'), 'Federation feed must render partner/status/timer, not only the class');
     assert.ok(operator.includes('card.dataset.siteCode !== FED_LOCAL_SITE'), 'Local initial state must skip remote cards');
 });
+
+test('Live panel: every connected PBX is rendered regardless of the report scope', () => {
+    const operator = fs.readFileSync(path.join(__dirname, '..', 'views', 'operator.ejs'), 'utf8');
+    assert.doesNotMatch(operator, /fedScopeSites/, 'The live panel must not filter its roster with the report scope cookie');
+    assert.match(operator, /The Live Panel has its own per-node filter buttons/, 'The decoupling must stay documented');
+    assert.match(operator, /var includeLocalSite = true;/, 'Local extensions always render');
+    assert.match(operator, /federationRemoteExtensions[^\n]*: \[\]/, 'Remote extensions always render on a central node');
+});

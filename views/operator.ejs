@@ -962,13 +962,13 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
                 var isCentralRole = (typeof federationCentral !== 'undefined' && federationCentral);
                 var localSiteCode = (typeof federationSettings !== 'undefined' && federationSettings.local_site_code) ? federationSettings.local_site_code : '10';
                 var localNodeName = (typeof federationSettings !== 'undefined' && federationSettings.local_node_name) ? federationSettings.local_node_name : 'Main PBX';
-                var fedScope = (typeof federationScope !== 'undefined' && federationScope) ? federationScope : null;
-                var fedScopeSites = (fedScope && Array.isArray(fedScope.sites) && fedScope.sites.length)
-                    ? fedScope.sites.map(String)
-                    : null;
-                var includeLocalSite = !fedScopeSites || fedScopeSites.indexOf(String(localSiteCode)) !== -1;
+                // The Live Panel has its own per-node filter buttons and must always
+                // render every connected PBX. The global report scope (fed_scope
+                // cookie) used to hide whole nodes here, so after a role switch an
+                // old "local only" selection made remote extensions silently vanish.
+                var includeLocalSite = true;
 
-                var allRoster = !includeLocalSite ? [] : (roster || []).map(function(emp) {
+                var allRoster = (roster || []).map(function(emp) {
                     return Object.assign({}, emp, {
                         siteCode: localSiteCode,
                         nodeName: localNodeName,
@@ -983,12 +983,6 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
                 fedPeersList.forEach(function(p) { peerMap[p.id] = p; });
 
                 var fedRemote = (isCentralRole && typeof federationRemoteExtensions !== 'undefined') ? federationRemoteExtensions : [];
-                if (fedScopeSites) {
-                    fedRemote = fedRemote.filter(function(re) {
-                        var p = peerMap[re.peer_id] || {};
-                        return fedScopeSites.indexOf(String(p.site_code || '20')) !== -1;
-                    });
-                }
 
                 if (isCentralRole) {
                     fedRemote.forEach(function(re) {
@@ -1056,7 +1050,6 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
                 if (isCentralRole) {
                     fedPeersList.forEach(function(p) {
                         var siteCode = String(p.site_code || '20');
-                        if (fedScopeSites && fedScopeSites.indexOf(siteCode) === -1) return;
                         if (!serversMap[siteCode]) {
                             serversMap[siteCode] = {
                                 siteCode: siteCode,
