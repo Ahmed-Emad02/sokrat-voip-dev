@@ -565,16 +565,11 @@ dongle_module_restart_verified() {
         before_map=$(awk '$NF ~ /\/chan_dongle\.so$/ {print $1 ":" $5; exit}' "$proc_root/$before_pid/maps") || return 1
         if ! output=$(_dongle_module_cli "$ast" "core restart gracefully") \
             || printf '%s\n' "$output" | grep -Eqi 'no such command|unable|failed|not found|already shutting'; then
-            # A failed graceful request usually means the CLI socket was not
-            # ready yet, or the daemon died while restarting. systemd already
-            # owns the process; force the restart instead of failing the whole
-            # install, then verify the new generation below.
-            detail=$(printf '%s' "$output" | head -1)
-            echo "  WARNING: graceful restart was not acknowledged${detail:+ (${detail})}; forcing a systemd restart" >&2
-            if ! systemctl restart asterisk; then
-                echo "  ERROR: Asterisk could not be restarted" >&2
-                return 1
-            fi
+            # A successful re-exec can close the CLI before acknowledging it.
+            # Observe generation + mapped inode below, never force a second
+            # restart merely because that acknowledgement was lost. A genuine
+            # refusal returns a bounded verification failure for the operator.
+            echo "  WARNING: graceful restart was not acknowledged; waiting for verified activation without a forced restart" >&2
         fi
     else
         systemctl start asterisk || return 1

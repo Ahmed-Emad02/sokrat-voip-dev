@@ -44,7 +44,8 @@ case "$2" in
   'core restart gracefully')
     { [ "$MODE" = refused ] || [ "$MODE" = refused-recover ]; } && { echo 'Unable to restart'; exit 0; }
     if [ "$MODE" != stale ]; then touch "$PHASE"; fi
-    if [ "$MODE" = normal ]; then cp "$REPLACEMENT" "$MAPS"; fi
+    if [ "$MODE" = normal ] || [ "$MODE" = unacknowledged ]; then cp "$REPLACEMENT" "$MAPS"; fi
+    if [ "$MODE" = unacknowledged ]; then echo 'Asterisk ending (0).'; exit 1; fi
     echo 'Asterisk will restart gracefully.' ;;
   *) exit 1 ;;
 esac
@@ -83,17 +84,17 @@ test('queued SMS/AT work prevents a graceful binary swap request', t => {
     assert.doesNotMatch(commands, /^core restart gracefully$/m);
 });
 
-test('a failed graceful request falls back to systemd and still refuses unverified state', t => {
+test('a failed graceful request refuses unverified state without a forced restart', t => {
     const { result, commands } = fixture(t, 'refused');
     assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /forcing a systemd restart/);
+    assert.match(result.stderr, /without a forced restart/);
     assert.match(result.stderr, /not activated/);
-    assert.match(commands, /^systemctl restart asterisk$/m);
+    assert.doesNotMatch(commands, /^systemctl restart asterisk$/m);
 });
 
-test('a failed graceful request succeeds when systemd activates the new generation', t => {
-    const { result, commands } = fixture(t, 'refused-recover');
+test('a successful re-exec with a lost CLI acknowledgement never triggers a second restart', t => {
+    const { result, commands } = fixture(t, 'unacknowledged');
     assert.equal(result.status, 0, result.stdout + result.stderr);
-    assert.match(result.stderr, /forcing a systemd restart/);
-    assert.match(commands, /^systemctl restart asterisk$/m);
+    assert.match(result.stderr, /without a forced restart/);
+    assert.doesNotMatch(commands, /^systemctl restart asterisk$/m);
 });
