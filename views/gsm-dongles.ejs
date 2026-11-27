@@ -2009,7 +2009,367 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
         button.dongle-action-tile[class*="text-emerald-"] {
             color: var(--text-secondary) !important;
         }
-    </style>
+    
+        .dongle-routing-trunk {
+            background: color-mix(in srgb, var(--bg-card) 82%, transparent);
+            border: 1px solid var(--border-primary);
+            border-radius: 0.58rem;
+            padding: 0.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.55rem;
+            text-decoration: none;
+            cursor: default;
+        }
+        .dongle-trunk-button {
+            display: flex;
+            flex-direction: column;
+            gap: 0.45rem;
+            padding: 0.6rem;
+            border: 1px solid var(--border-primary);
+            border-radius: 0.55rem;
+            background: var(--bg-primary);
+            text-decoration: none;
+            transition: border-color 150ms ease, background-color 150ms ease, box-shadow 150ms ease;
+        }
+        .dongle-trunk-button:hover {
+            border-color: rgba(239, 68, 68, 0.6);
+            background: var(--bg-hover);
+            box-shadow: 0 4px 14px rgba(239, 68, 68, 0.14);
+        }
+        .dongle-trunk-top {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            min-width: 0;
+        }
+        .dongle-trunk-icon {
+            flex: 0 0 auto;
+            width: 1.75rem;
+            height: 1.75rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 0.5rem;
+            background: rgba(239, 68, 68, 0.12);
+            color: #f87171;
+        }
+        .dongle-trunk-icon svg { width: 15px; height: 15px; }
+        .dongle-trunk-copy {
+            display: flex;
+            flex: 1 1 0;
+            min-width: 0;
+            flex-direction: column;
+            gap: 0.05rem;
+        }
+        .dongle-trunk-name {
+            color: var(--text-primary);
+            font-size: 0.72rem;
+            font-weight: 800;
+            line-height: 1.2;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .dongle-trunk-id {
+            color: var(--text-muted);
+            font-family: var(--font-mono, monospace);
+            font-size: 0.55rem;
+            font-weight: 600;
+        }
+        .dongle-trunk-status {
+            flex: 0 0 auto;
+            padding: 0.14rem 0.4rem;
+            border: 1px solid transparent;
+            border-radius: 9999px;
+            font-size: 0.52rem;
+            font-weight: 800;
+            line-height: 1.2;
+        }
+        .dongle-trunk-status.is-enabled {
+            color: #34d399;
+            background: rgba(16, 185, 129, 0.1);
+            border-color: rgba(16, 185, 129, 0.2);
+        }
+        .dongle-trunk-status.is-disabled {
+            color: #f87171;
+            background: rgba(239, 68, 68, 0.1);
+            border-color: rgba(239, 68, 68, 0.2);
+        }
+        .dongle-trunk-open {
+            width: 0.9rem;
+            height: 0.9rem;
+            flex-shrink: 0;
+            color: var(--text-muted);
+            transition: color 150ms ease, transform 150ms ease;
+        }
+        .dongle-trunk-button:hover .dongle-trunk-open {
+            color: #f87171;
+            transform: translateX(1px);
+        }
+        .dongle-dial-string {
+            background: color-mix(in srgb, var(--bg-primary) 58%, transparent);
+            border-radius: 0.38rem;
+            color: var(--text-secondary);
+            font-size: 0.58rem;
+            line-height: 1.35;
+            overflow-wrap: anywhere;
+            padding: 0.3rem 0.4rem;
+        }
+        .dongle-route-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.3rem;
+        }
+        .dongle-route-list-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem;
+            padding: 0 0.1rem;
+            color: var(--text-muted);
+            font-size: 0.52rem;
+            font-weight: 900;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+        .dongle-route-list-head span:last-child {
+            padding: 0.08rem 0.35rem;
+            border: 1px solid var(--border-primary);
+            border-radius: 9999px;
+            background: var(--bg-primary);
+            font-family: var(--font-mono, monospace);
+            letter-spacing: 0;
+        }
+        .dongle-route-button {
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+            min-height: 2.15rem;
+            padding: 0.42rem 0.5rem;
+            border: 1px solid var(--border-primary);
+            border-radius: 0.5rem;
+            background: var(--bg-primary);
+            color: var(--text-secondary);
+            text-decoration: none;
+            transition: border-color 150ms ease, background-color 150ms ease;
+        }
+        .dongle-route-button:hover {
+            border-color: var(--accent-color);
+            background: var(--bg-hover);
+        }
+        .dongle-route-button.is-static { cursor: default; opacity: 0.72; }
+        .dongle-route-icon {
+            flex: 0 0 auto;
+            width: 1.35rem;
+            height: 1.35rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 0.38rem;
+            background: rgba(56, 189, 248, 0.12);
+            color: #38bdf8;
+        }
+        .dongle-route-icon svg { width: 12px; height: 12px; }
+        .dongle-route-copy {
+            display: flex;
+            flex: 1 1 0;
+            min-width: 0;
+            flex-direction: column;
+            gap: 0.04rem;
+        }
+        .dongle-route-name {
+            color: var(--text-primary);
+            font-size: 0.64rem;
+            font-weight: 800;
+            line-height: 1.2;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .dongle-route-id {
+            color: var(--text-muted);
+            font-family: var(--font-mono, monospace);
+            font-size: 0.5rem;
+            font-weight: 600;
+        }
+        .dongle-route-open {
+            width: 0.8rem;
+            height: 0.8rem;
+            flex-shrink: 0;
+            color: var(--text-muted);
+            transition: color 150ms ease;
+        }
+        .dongle-route-button:hover .dongle-route-open { color: var(--accent-color); }
+        .dongle-route-empty {
+            padding: 0.1rem;
+            color: var(--text-muted);
+            font-size: 0.58rem;
+            font-style: italic;
+        }
+        .dongle-gain-panel {
+            margin-top: 0.38rem;
+            padding-top: 0.28rem;
+            border-top: 1px solid var(--border-primary);
+        }
+        .dongle-minimal-row .dongle-gain-panel {
+            grid-column: 1 / -1;
+            margin-top: 0;
+            padding-top: 0.26rem;
+        }
+        .dongle-gain-pair {
+            display: flex;
+            align-items: flex-end;
+            gap: 0.5rem;
+            min-width: 0;
+        }
+        .dongle-gain-control {
+            display: flex;
+            flex: 1 1 0;
+            min-width: 0;
+            flex-direction: column;
+            gap: 0.08rem;
+        }
+        .dongle-gain-head {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 0.2rem;
+            min-width: 0;
+        }
+        .dongle-gain-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.12rem;
+            min-width: 0;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            font-weight: 600;
+            line-height: 1.1;
+            white-space: nowrap;
+        }
+        .dongle-gain-label svg {
+            width: 10px;
+            height: 10px;
+            flex-shrink: 0;
+            opacity: 0.85;
+        }
+        .dongle-gain-label > span:last-child {
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .dongle-gain-value {
+            flex: 0 0 auto;
+            color: var(--text-secondary);
+            font-family: var(--font-mono, monospace);
+            font-size: 0.65rem;
+            font-weight: 800;
+        }
+        .dongle-gain-range {
+            --m3-slider: #22d3ee;
+            --m3-track: color-mix(in srgb, var(--m3-slider) 18%, var(--border-primary));
+            -webkit-appearance: none;
+            appearance: none;
+            direction: ltr;
+            width: 100%;
+            min-width: 0;
+            height: 0.875rem;
+            margin: 0;
+            padding: 0;
+            background: transparent;
+            cursor: pointer;
+        }
+        html.light-theme .dongle-gain-range {
+            --m3-slider: #0891b2;
+        }
+        .dongle-gain-range::-webkit-slider-runnable-track {
+            height: 4px;
+            border-radius: 9999px;
+            background: linear-gradient(90deg, var(--m3-slider) 0 var(--gain-pct, 50%), var(--m3-track) var(--gain-pct, 50%) 100%);
+        }
+        .dongle-gain-range::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 4px;
+            height: 14px;
+            margin-top: -5px;
+            border: 0;
+            border-radius: 2px;
+            background: var(--m3-slider);
+            box-shadow: 0 0 0 0 color-mix(in srgb, var(--m3-slider) 22%, transparent);
+            transition: box-shadow 120ms ease, transform 120ms ease;
+        }
+        .dongle-gain-range:hover::-webkit-slider-thumb {
+            box-shadow: 0 0 0 4px color-mix(in srgb, var(--m3-slider) 20%, transparent);
+        }
+        .dongle-gain-range:active::-webkit-slider-thumb { transform: scaleY(1.12); }
+        .dongle-gain-range:focus-visible { outline: none; }
+        .dongle-gain-range:focus-visible::-webkit-slider-thumb {
+            box-shadow: 0 0 0 5px color-mix(in srgb, var(--m3-slider) 24%, transparent);
+        }
+        .dongle-gain-range::-moz-range-track {
+            height: 4px;
+            border-radius: 9999px;
+            background: var(--m3-track);
+        }
+        .dongle-gain-range::-moz-range-progress {
+            height: 4px;
+            border-radius: 9999px;
+            background: var(--m3-slider);
+        }
+        .dongle-gain-range::-moz-range-thumb {
+            width: 4px;
+            height: 14px;
+            border: 0;
+            border-radius: 2px;
+            background: var(--m3-slider);
+        }
+        .dongle-gain-range:hover::-moz-range-thumb {
+            box-shadow: 0 0 0 4px color-mix(in srgb, var(--m3-slider) 20%, transparent);
+        }
+        .dongle-gain-save {
+            flex: 0 0 auto;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 1.5rem;
+            height: 1.5rem;
+            padding: 0;
+            border: 1px solid var(--border-primary);
+            border-radius: 0.4rem;
+            background: var(--bg-primary);
+            color: var(--text-secondary);
+            cursor: pointer;
+        }
+        .dongle-gain-save svg { width: 12px; height: 12px; }
+        .dongle-gain-save:hover {
+            color: var(--text-primary);
+            border-color: var(--m3-slider, var(--accent-color));
+        }
+        .dongle-gain-save:disabled { cursor: wait; opacity: 0.5; }
+        .dongle-card-footer {
+            flex-wrap: wrap;
+            row-gap: 0.5rem;
+            min-height: 2.75rem;
+        }
+        .dongle-routing-trunk:hover {
+            border-color: var(--border-primary);
+            box-shadow: none;
+            transform: none;
+        }
+
+        /* Keep routing as content, not a nested card: only trunk/route buttons
+           carry their own surfaces. */
+        .dongle-routing-panel,
+        .dongle-device-card .dongle-routing-panel,
+        .dongle-device-card[class*="dongle-state-"] .dongle-routing-panel,
+        html.light-theme .dongle-device-card[class*="dongle-state-"] .dongle-routing-panel {
+            background: transparent !important;
+            background-color: transparent !important;
+            border: 0 !important;
+            box-shadow: none !important;
+        }
+        .dongle-routing-panel { padding: 0; }
+</style>
 </head>
 <body class="flex flex-col md:flex-row min-h-screen m-0 p-0">
     <%- include('sidebar') %>
@@ -4570,41 +4930,66 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                             </div>`;
                     }
 
-                    const routeCount = trunks.reduce((total, trunk) => total + (Array.isArray(trunk?.routes) ? trunk.routes.length : 0), 0);
                     return `
                         <div class="dongle-routing-panel">
-                            <div class="flex items-center justify-between gap-2 mb-1.5">
-                                <div class="flex items-center gap-2 min-w-0">
-                                    <svg class="text-sky-400 shrink-0" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-                                    <span class="text-[9px] font-black uppercase tracking-wider text-[var(--text-secondary)]">${isRtl ? 'الربط الصادر عبر IMEI' : 'IMEI-Linked Outbound Routing'}</span>
-                                </div>
-                                <span class="text-[8px] font-mono font-bold text-sky-400 shrink-0">${trunks.length} ${isRtl ? 'مسار' : 'trunk'} · ${routeCount} ${isRtl ? 'وجهة' : 'routes'}</span>
-                            </div>
                             <div class="space-y-1.5">
                                 ${trunks.map(trunk => {
                                     if (!trunk) return '';
                                     const routes = Array.isArray(trunk.routes) ? trunk.routes.filter(Boolean) : [];
                                     const trunkUrl = `/config?tab=trunks&highlightTrunk=${encodeURIComponent(trunk.trunkId || '')}`;
                                     return `
-                                        <a href="${trunkUrl}" class="dongle-routing-trunk group/trunk block" title="${isRtl ? 'عرض وتحديد خط الربط هذا في إعدادات المقسم' : 'Click to view and highlight this trunk in PBX Configuration'}">
-                                            <div class="flex items-center justify-between gap-2 mb-1">
-                                                <div class="min-w-0 flex items-center gap-1.5">
-                                                    <span class="text-[10px] font-extrabold text-[var(--text-primary)] group-hover/trunk:text-red-400 transition-colors truncate block">${escapeHtml(trunk.name || `Trunk #${trunk.trunkId || ''}`)}</span>
-                                                    <span class="text-[8px] text-[var(--text-muted)] font-mono">Trunk #${escapeHtml(trunk.trunkId || '')}</span>
-                                                    <svg class="w-2.5 h-2.5 text-[var(--text-muted)] group-hover/trunk:text-red-400 transition-colors shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                                        <div class="dongle-routing-trunk">
+                                            <a href="${trunkUrl}" class="dongle-trunk-button group/trunk" title="${isRtl ? 'فتح خط الربط في إعدادات المقسم' : 'Open this trunk in PBX Configuration'}">
+                                                <div class="dongle-trunk-top">
+                                                    <span class="dongle-trunk-icon">
+                                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                                                    </span>
+                                                    <span class="dongle-trunk-copy">
+                                                        <span class="dongle-trunk-name">${escapeHtml(trunk.name || `Trunk #${trunk.trunkId || ''}`)}</span>
+                                                        <span class="dongle-trunk-id">Trunk #${escapeHtml(trunk.trunkId || '')}</span>
+                                                    </span>
+                                                    <span class="dongle-trunk-status ${trunk.disabled ? 'is-disabled' : 'is-enabled'}">
+                                                        ${trunk.disabled ? (isRtl ? 'معطل' : 'Disabled') : (isRtl ? 'مفعل' : 'Enabled')}
+                                                    </span>
+                                                    <svg class="dongle-trunk-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
                                                 </div>
-                                                <span class="px-1.5 py-0.5 rounded-full border text-[8px] font-bold shrink-0 ${trunk.disabled ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'}">
-                                                    ${trunk.disabled ? (isRtl ? 'معطل' : 'Disabled') : (isRtl ? 'مفعل' : 'Enabled')}
-                                                </span>
-                                            </div>
-                                            <div class="dongle-dial-string font-mono mb-1.5" title="${escapeHtml(trunk.dialString || '')}">${escapeHtml(trunk.dialString || '-')}</div>
-                                            <div class="flex flex-wrap items-center gap-1">
-                                                <span class="text-[8px] font-bold uppercase tracking-wider text-[var(--text-muted)]">${isRtl ? 'المسارات الصادرة' : 'Outbound Routes'}</span>
+                                                <div class="dongle-dial-string" title="${escapeHtml(trunk.dialString || '')}">${escapeHtml(trunk.dialString || '-')}</div>
+                                            </a>
+                                            <div class="dongle-route-list">
+                                                <div class="dongle-route-list-head">
+                                                    <span>${isRtl ? 'المسارات الصادرة' : 'Outbound Routes'}</span>
+                                                    <span>${routes.length}</span>
+                                                </div>
                                                 ${routes.length > 0
-                                                    ? routes.map(route => `<span class="dongle-route-chip"><span class="truncate">${escapeHtml(route.name || `Route #${route.routeId || ''}`)}</span><span class="opacity-60 ms-1 shrink-0">#${escapeHtml(route.routeId || '')}</span></span>`).join('')
-                                                    : `<span class="text-[8px] italic text-[var(--text-muted)]">${isRtl ? 'غير مرتبط بأي مسار صادر' : 'Not assigned to an outbound route'}</span>`}
+                                                    ? (() => {
+                                                        const seenRoutes = new Set();
+                                                        return routes.map(route => {
+                                                            const routeId = route.routeId ?? route.id;
+                                                            const routeName = route.name || `Route #${routeId || ''}`;
+                                                            const routeKey = routeId !== null && routeId !== undefined && routeId !== ''
+                                                                ? `id:${String(routeId)}`
+                                                                : `name:${String(routeName).toLowerCase()}`;
+                                                            if (seenRoutes.has(routeKey)) return '';
+                                                            seenRoutes.add(routeKey);
+                                                            const inner = `
+                                                                <span class="dongle-route-icon">
+                                                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v12a3 3 0 0 0 3 3h9"/><path d="M15 15l3 3-3 3"/><circle cx="6" cy="3" r="1"/></svg>
+                                                                </span>
+                                                                <span class="dongle-route-copy">
+                                                                    <span class="dongle-route-name">${escapeHtml(routeName)}</span>
+                                                                    <span class="dongle-route-id">Route #${escapeHtml(routeId || '')}</span>
+                                                                </span>
+                                                                <svg class="dongle-route-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>`;
+                                                            if (routeId === null || routeId === undefined || routeId === '') {
+                                                                return `<div class="dongle-route-button is-static">${inner}</div>`;
+                                                            }
+                                                            const routeUrl = `/config?tab=outbound&highlightRoute=${encodeURIComponent(routeId)}`;
+                                                            return `<a href="${routeUrl}" class="dongle-route-button" title="${isRtl ? 'فتح هذا المسار الصادر في إعدادات المقسم' : 'Open this outbound route in PBX Configuration'}">${inner}</a>`;
+                                                        }).join('');
+                                                    })()
+                                                    : `<span class="dongle-route-empty">${isRtl ? 'غير مرتبط بأي مسار صادر' : 'Not assigned to an outbound route'}</span>`}
                                             </div>
-                                        </a>`;
+                                        </div>`;
                                 }).join('')}
                             </div>
                         </div>`;
@@ -4652,6 +5037,80 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                         </div>
                     </div>`;
             }
+
+            function renderDongleGainControls(dev, key, rawId) {
+                if (!dev || dev.slotOnly || dev.isRemote) return '';
+                const rx = Math.max(-10, Math.min(10, parseInt(dev.rxgain, 10) || 0));
+                const tx = Math.max(-10, Math.min(10, parseInt(dev.txgain, 10) || 0));
+                const safeKey = String(key).replace(/[^a-zA-Z0-9_-]/g, '_');
+                const rxId = `gainRx_${safeKey}`;
+                const txId = `gainTx_${safeKey}`;
+                const rxBadge = `gainRxVal_${safeKey}`;
+                const txBadge = `gainTxVal_${safeKey}`;
+                const signed = value => `${value > 0 ? '+' : ''}${value}`;
+                const fill = value => `${((value + 10) / 20) * 100}%`;
+                return `
+                    <div class="dongle-gain-panel" data-dongle-gain-panel onclick="event.stopPropagation()">
+                        <div class="dongle-gain-pair">
+                            <div class="dongle-gain-control">
+                                <div class="dongle-gain-head">
+                                    <span class="dongle-gain-label">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>
+                                        <span>${isRtl ? 'السماعة' : 'Speaker'}</span>
+                                    </span>
+                                    <span class="dongle-gain-value" id="${rxBadge}" title="${signed(rx)} dB">${signed(rx)}</span>
+                                </div>
+                                <input type="range" id="${rxId}" min="-10" max="10" step="1" value="${rx}" style="--gain-pct:${fill(rx)}"
+                                    aria-label="${isRtl ? 'مستوى السماعة' : 'Speaker volume'}"
+                                    oninput="document.getElementById('${rxBadge}').textContent = (this.value > 0 ? '+' : '') + this.value; this.style.setProperty('--gain-pct', ((this.valueAsNumber + 10) / 20 * 100) + '%')"
+                                    class="dongle-gain-range">
+                            </div>
+                            <div class="dongle-gain-control">
+                                <div class="dongle-gain-head">
+                                    <span class="dongle-gain-label">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="22"></line></svg>
+                                        <span>${isRtl ? 'الميكروفون' : 'Mic'}</span>
+                                    </span>
+                                    <span class="dongle-gain-value" id="${txBadge}" title="${signed(tx)} dB">${signed(tx)}</span>
+                                </div>
+                                <input type="range" id="${txId}" min="-10" max="10" step="1" value="${tx}" style="--gain-pct:${fill(tx)}"
+                                    aria-label="${isRtl ? 'مستوى الميكروفون' : 'Microphone volume'}"
+                                    oninput="document.getElementById('${txBadge}').textContent = (this.value > 0 ? '+' : '') + this.value; this.style.setProperty('--gain-pct', ((this.valueAsNumber + 10) / 20 * 100) + '%')"
+                                    class="dongle-gain-range">
+                            </div>
+                            <button type="button" class="dongle-gain-save" onclick="saveDongleGain('${escapeHtml(rawId)}', '${rxId}', '${txId}', this); event.stopPropagation();"
+                                title="${isRtl ? 'حفظ مستوى الصوت' : 'Save volume'}" aria-label="${isRtl ? 'حفظ مستوى الصوت' : 'Save volume'}">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                            </button>
+                        </div>
+                    </div>`;
+            }
+
+            window.saveDongleGain = async function(rawId, rxInputId, txInputId, button) {
+                const rxInput = document.getElementById(rxInputId);
+                const txInput = document.getElementById(txInputId);
+                if (!rxInput || !txInput) return;
+                const rxgain = Math.max(-10, Math.min(10, parseInt(rxInput.value, 10) || 0));
+                const txgain = Math.max(-10, Math.min(10, parseInt(txInput.value, 10) || 0));
+                if (button) button.disabled = true;
+                try {
+                    const response = await fetch('/api/config/modem/gain', {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                        body: JSON.stringify({ dongleId: rawId, rxgain, txgain })
+                    });
+                    const data = await response.json().catch(() => ({}));
+                    if (!response.ok || data.success === false) throw new Error(data.error || `HTTP ${response.status}`);
+                    const device = loadedDevices.find(item => String(item.ID || '') === String(rawId));
+                    if (device) { device.rxgain = rxgain; device.txgain = txgain; }
+                    showToast(isRtl ? 'تم حفظ الصوت' : 'Volume saved', `${rawId} · RX ${rxgain > 0 ? '+' : ''}${rxgain} dB · TX ${txgain > 0 ? '+' : ''}${txgain} dB`, 'success');
+                } catch (error) {
+                    showToast(isRtl ? 'فشل حفظ الصوت' : 'Volume save failed', error.message, 'error');
+                } finally {
+                    if (button) button.disabled = false;
+                }
+            };
 
             function isDongleStopped(dev) {
                 const raw = String((dev && (dev.State || dev.state)) || '');
@@ -4845,7 +5304,8 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.2"><path d="M21 12a9 9 0 11-2.64-6.36L21 8M21 3v5h-5"/></svg>
                                     <span>${escapeHtml(words.refreshBtn)}</span>
                                 </button>
-                            </div>`;
+                            </div>
+                            ${renderDongleGainControls(dev, id, rawId)}`;
                     } else if (currentViewMode === 'compact') {
                         card.className = `dongle-device-card dongle-compact-card dongle-state-${state.color} rounded-2xl cursor-pointer flex flex-col h-full min-w-0`;
                         if (id === selectedDongleId) card.classList.add('selected-row');
@@ -4922,6 +5382,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
 
                                     ${renderDongleRouting(dev)}
                                 </div>
+                                ${renderDongleGainControls(dev, id, rawId)}
                             </div>
 
                             <div class="dongle-card-footer px-3.5 sm:px-4 py-2.5 w-full">
@@ -4982,6 +5443,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                                 </div>
 
                                 ${renderDongleRouting(dev)}
+                                ${renderDongleGainControls(dev, id, rawId)}
                             </div>
                             <div class="dongle-card-footer px-3.5 sm:px-4 py-2.5 w-full">
                                 ${renderDongleActions(id, hasValidHardware, isDongleStopped(dev))}

@@ -1158,6 +1158,7 @@
                     url.searchParams.set('tab', tabId);
                     if (tabId !== 'trunks' && tabId !== 'outbound') {
                         url.searchParams.delete('highlightTrunk');
+                        url.searchParams.delete('highlightRoute');
                         url.searchParams.delete('trunkId');
                         url.searchParams.delete('highlight');
                     }
@@ -5632,9 +5633,17 @@
             if (!tbody) return;
             tbody.innerHTML = '';
             const list = loadedOutboundRoutesList || [];
-            const highlightTrunkId = new URLSearchParams(window.location.search).get('highlightTrunk');
+            const routeParams = new URLSearchParams(window.location.search);
+            const highlightRouteId = routeParams.get('highlightRoute');
+            const highlightTrunkId = routeParams.get('highlightTrunk');
             const highlightedRouteIds = new Set();
-            if (highlightTrunkId) {
+            if (highlightRouteId) {
+                list.forEach(route => {
+                    if (String(route.route_id) === String(highlightRouteId)) {
+                        highlightedRouteIds.add(String(route.route_id));
+                    }
+                });
+            } else if (highlightTrunkId) {
                 list.forEach(route => {
                     if (Array.isArray(route.trunks) && route.trunks.some(trunk => String(trunk.trunk_id) === String(highlightTrunkId))) {
                         highlightedRouteIds.add(String(route.route_id));
@@ -5784,12 +5793,13 @@
                     });
                     try {
                         const url = new URL(window.location.href);
+                        url.searchParams.delete('highlightRoute');
                         url.searchParams.delete('highlightTrunk');
                         url.searchParams.delete('trunkId');
                         url.searchParams.delete('highlight');
                         window.history.replaceState({}, '', url.toString());
                     } catch (_) {}
-                }, 7000);
+                }, highlightRouteId ? 5000 : 7000);
             }
         }
 

@@ -10669,6 +10669,23 @@ function parseDongleConfGain() {
     return { defaults, dongles };
 }
 
+// Attach the configured RX/TX gain to local live devices so the GSM cards can
+// edit them without opening the separate Modem Conf tab.
+function attachLocalDongleGains(devices) {
+    if (!Array.isArray(devices)) return devices;
+    try {
+        const { dongles } = parseDongleConfGain();
+        devices.forEach(device => {
+            if (!device || device.isRemote) return;
+            const gain = dongles[String(device.ID || '')];
+            if (!gain) return;
+            device.rxgain = Math.max(-10, Math.min(10, parseInt(gain.rxgain, 10) || 0));
+            device.txgain = Math.max(-10, Math.min(10, parseInt(gain.txgain, 10) || 0));
+        });
+    } catch (_) {}
+    return devices;
+}
+
 // Slots actually declared in dongle.conf. Analytics rows for anything else are
 // orphans left behind by removed/renamed slots; they must never reach the UI.
 // Returns null when the config cannot be read, so callers neither hide nor
@@ -12687,6 +12704,7 @@ app.get('/gsm-dongles', async (req, res) => {
 
         const devices = isCentral ? [...localDevices, ...remoteDevices] : localDevices;
         const visibleDevices = res.locals.isRootUser ? devices : stripDongleWarnings(devices);
+        attachLocalDongleGains(visibleDevices);
         res.render('gsm-dongles', {
             devices: visibleDevices,
             fedDongleNodes: renderedNodes,
@@ -12718,6 +12736,7 @@ app.get('/api/gsm-dongles', async (req, res) => {
             ? live.devices.filter(device => isDeviceAllowedForDongles(device, allowedDongles))
             : live.devices;
         const visibleDevices = res.locals.isRootUser ? devices : stripDongleWarnings(devices);
+        attachLocalDongleGains(visibleDevices);
         res.json({
             success: true,
             devices: visibleDevices,
