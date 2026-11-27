@@ -401,12 +401,15 @@ const CDR_CALL_SCOPE_CASE = `
 //      34/38/41/42/44 congestion family => CONGESTION.
 //   2. Heuristic fallback for legacy rows (no userfield): a call that rang >=5s and was
 //      released without answer over GSM reports CONGESTION/BUSY — report NO ANSWER.
+// Federation calls keep their shared call id in `userfield` and append the
+// Q.850 cause after a '|', so the cause is the last segment.
+const CDR_CAUSE_SQL = "SUBSTRING_INDEX(c.userfield, '|', -1)";
 const CDR_DISPOSITION_SQL = `
     CASE
         WHEN c.billsec > 0 THEN c.disposition
-        WHEN c.userfield = '17' OR c.userfield = '21' THEN 'BUSY'
-        WHEN c.userfield IN ('18', '19') THEN 'NO ANSWER'
-        WHEN c.userfield IN ('34', '38', '41', '42', '44') THEN 'CONGESTION'
+        WHEN ${CDR_CAUSE_SQL} = '17' OR ${CDR_CAUSE_SQL} = '21' THEN 'BUSY'
+        WHEN ${CDR_CAUSE_SQL} IN ('18', '19') THEN 'NO ANSWER'
+        WHEN ${CDR_CAUSE_SQL} IN ('34', '38', '41', '42', '44') THEN 'CONGESTION'
         WHEN c.disposition IN ('CONGESTION', 'BUSY') AND c.duration >= 5 THEN 'NO ANSWER'
         ELSE c.disposition
     END
@@ -477,6 +480,21 @@ function buildCdrHistoryFiltersSql(sourceTable, options = {}) {
     // In the federated union the same uniqueid can exist on two PBXs, so the
     // duplicate-segment probe must stay inside one node.
     const nodeScope = options.isUnion ? ' AND cx.node_site_code = c.node_site_code' : '';
+    // A call that crosses the federation is written once per PBX. Both rows now
+    // carry the shared call id (SOKRAT_FED:<id>); the receiving node marks its
+    // copy as a mirrored leg. Drop the mirrored copy only when the originating
+    // leg is present in the same (fleet-wide) result set, so a call is never
+    // lost when one side failed to write its CDR.
+    const legDedup = options.isUnion && options.dedupFederationLegs ? `
+    AND NOT (
+        c.fed_leg = 1
+        AND c.global_call_id IS NOT NULL
+        AND EXISTS (
+            SELECT 1 FROM ${table} v
+            WHERE v.global_call_id = c.global_call_id
+              AND v.fed_leg = 0
+        )
+    )` : '';
     return `
     AND c.dst NOT IN ('ussd','sms','report','s','*87','*88','*89','hangup')
     AND c.channel NOT LIKE 'Local/%'
@@ -487,7 +505,7 @@ function buildCdrHistoryFiltersSql(sourceTable, options = {}) {
         SELECT 1 FROM ${table} cx
         WHERE cx.uniqueid = c.uniqueid${nodeScope}
           AND (cx.duration > c.duration OR (cx.duration = c.duration AND cx.sequence > c.sequence))
-    )
+    )${legDedup}
 `;
 }
 
@@ -534,7 +552,7 @@ function buildCdrSource(scope) {
     return {
         table: FEDERATION_CDR_VIEW,
         isUnion: true,
-        filtersSql: buildCdrHistoryFiltersSql(FEDERATION_CDR_VIEW, { isUnion: true }),
+        filtersSql: buildCdrHistoryFiltersSql(FEDERATION_CDR_VIEW, { isUnion: true, dedupFederationLegs: !restrict }),
         nodeFilterSql: restrict ? ' AND c.node_site_code IN (?)' : '',
         nodeFilterParams: restrict ? [selected] : [],
         sites: selected
@@ -25298,8 +25316,10 @@ async function getFederationNodeMetrics() {
 
 async function getFederationCallsToday() {
     try {
+        // Same filters as Call History, otherwise the node card reports calls
+        // the list does not show (raw cdr also holds Local/short segments).
         const [rows] = await pool.query(
-            'SELECT COUNT(*) AS total FROM `asteriskcdrdb`.`cdr` WHERE `calldate` >= CURDATE()'
+            `SELECT COUNT(*) AS total FROM ${tables.cdr} c WHERE c.calldate >= CURDATE() ${CDR_HISTORY_FILTERS_SQL}`
         );
         return Number(rows[0]?.total) || 0;
     } catch (_) {
@@ -25839,10 +25859,10 @@ app.get('/api/federation/v1/cdr', async (req, res) => {
                    ${CDR_CALL_SCOPE_CASE} AS call_scope,
                    CASE
                        WHEN c.userfield LIKE 'SOKRAT_FED:%'
-                       THEN SUBSTRING_INDEX(SUBSTRING_INDEX(c.userfield, ':', 2), ':', -1)
+                       THEN SUBSTRING_INDEX(SUBSTRING_INDEX(SUBSTRING_INDEX(c.userfield, '|', 1), ':', 2), ':', -1)
                        ELSE NULL
                    END AS global_call_id,
-                   CASE WHEN c.userfield LIKE 'SOKRAT_FED:%:leg' THEN 1 ELSE 0 END AS fed_leg
+                   CASE WHEN SUBSTRING_INDEX(SUBSTRING_INDEX(c.userfield, '|', 1), ':', -1) = 'leg' THEN 1 ELSE 0 END AS fed_leg
             FROM ${tables.cdr} c
             WHERE c.calldate BETWEEN ? AND ?
             ${CDR_HISTORY_FILTERS_SQL}

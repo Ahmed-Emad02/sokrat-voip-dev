@@ -18,9 +18,12 @@ test('canceled GSM calls are never rendered as FAILED', () => {
 
 test('persisted hangup cause (userfield) drives authoritative dispositions', () => {
     // Q.850 cause mapping captured by the cdr-cause-capture hangup handler
-    assert.ok(serverJs.includes("WHEN c.userfield = '17' OR c.userfield = '21' THEN 'BUSY'"), 'Causes 17/21 must map to BUSY');
-    assert.ok(serverJs.includes("WHEN c.userfield IN ('18', '19') THEN 'NO ANSWER'"), 'Causes 18/19 must map to NO ANSWER');
-    assert.ok(serverJs.includes("WHEN c.userfield IN ('34', '38', '41', '42', '44') THEN 'CONGESTION'"), 'Congestion family must map to CONGESTION');
+    // Federation calls keep the shared call id in userfield and append the cause
+    // after '|', so the cause is read from the last segment.
+    assert.ok(serverJs.includes("SUBSTRING_INDEX(c.userfield, '|', -1)"), 'Cause must be read from the last userfield segment');
+    assert.ok(serverJs.includes("= '17' OR ${CDR_CAUSE_SQL} = '21' THEN 'BUSY'"), 'Causes 17/21 must map to BUSY');
+    assert.ok(serverJs.includes("IN ('18', '19') THEN 'NO ANSWER'"), 'Causes 18/19 must map to NO ANSWER');
+    assert.ok(serverJs.includes("IN ('34', '38', '41', '42', '44') THEN 'CONGESTION'"), 'Congestion family must map to CONGESTION');
     assert.ok(serverJs.match(/WHEN c\.billsec > 0 THEN c\.disposition/), 'Answered calls keep their raw disposition');
 
     // Dialplan captures causes on all monitored paths and survives reinstalls

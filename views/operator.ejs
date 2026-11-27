@@ -962,13 +962,13 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
                 var isCentralRole = (typeof federationCentral !== 'undefined' && federationCentral);
                 var localSiteCode = (typeof federationSettings !== 'undefined' && federationSettings.local_site_code) ? federationSettings.local_site_code : '10';
                 var localNodeName = (typeof federationSettings !== 'undefined' && federationSettings.local_node_name) ? federationSettings.local_node_name : 'Main PBX';
-                var fedScope = (typeof federationScope !== 'undefined' && federationScope) ? federationScope : null;
-                var fedScopeSites = (fedScope && Array.isArray(fedScope.sites) && fedScope.sites.length)
-                    ? fedScope.sites.map(String)
-                    : null;
-                var includeLocalSite = !fedScopeSites || fedScopeSites.indexOf(String(localSiteCode)) !== -1;
+                // The Live Panel has its own per-node filter buttons and must always
+                // render every connected PBX. The global report scope (fed_scope
+                // cookie) used to hide whole nodes here, so after a role switch an
+                // old "local only" selection made remote extensions silently vanish.
+                var includeLocalSite = true;
 
-                var allRoster = !includeLocalSite ? [] : (roster || []).map(function(emp) {
+                var allRoster = (roster || []).map(function(emp) {
                     return Object.assign({}, emp, {
                         siteCode: localSiteCode,
                         nodeName: localNodeName,
@@ -983,12 +983,6 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
                 fedPeersList.forEach(function(p) { peerMap[p.id] = p; });
 
                 var fedRemote = (isCentralRole && typeof federationRemoteExtensions !== 'undefined') ? federationRemoteExtensions : [];
-                if (fedScopeSites) {
-                    fedRemote = fedRemote.filter(function(re) {
-                        var p = peerMap[re.peer_id] || {};
-                        return fedScopeSites.indexOf(String(p.site_code || '20')) !== -1;
-                    });
-                }
 
                 if (isCentralRole) {
                     fedRemote.forEach(function(re) {
@@ -1056,7 +1050,6 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
                 if (isCentralRole) {
                     fedPeersList.forEach(function(p) {
                         var siteCode = String(p.site_code || '20');
-                        if (fedScopeSites && fedScopeSites.indexOf(siteCode) === -1) return;
                         if (!serversMap[siteCode]) {
                             serversMap[siteCode] = {
                                 siteCode: siteCode,
@@ -1124,7 +1117,12 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
                         </div>
                         <div class="extension-group-grid grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-2">
                             <% groupMembers.forEach(function(emp) {
-                                const live = activeCalls[emp.extension] || activeCalls[emp.cardId];
+                                // Remote cards are keyed by site_extension: a bare
+                                // extension would collide with the same number on
+                                // this PBX and show the wrong call.
+                                const live = emp.isRemote
+                                    ? (activeCalls[emp.cardId] || null)
+                                    : (activeCalls[emp.extension] || activeCalls[emp.cardId]);
                                 let callState = 'idle';
                                 let partnerNum = '';
                                 let startTimeStamp = '';
@@ -1527,6 +1525,10 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
 
             socket.on('initialState', (calls) => {
                 document.querySelectorAll('[id^="card-"]').forEach(card => {
+                    // Remote cards are driven by operator:federation_state. The
+                    // local snapshot has no key for them, and resetting them here
+                    // made every remote card flash offline on page load.
+                    if (card.dataset.siteCode && card.dataset.siteCode !== FED_LOCAL_SITE) return;
                     const ext = card.id.replace('card-', '');
                     const callData = (calls && calls[ext]) ? calls[ext] : null;
                     localCallStatus[ext] = callData;
@@ -1731,19 +1733,17 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
                 activeDialerPopData = null;
             };
 
-            function handleCallUpdate(data) {
-                const { extension, callData } = data;
-                localCallStatus[extension] = callData;
-                if (window.refreshIntercomRosterIfOpen) window.refreshIntercomRosterIfOpen();
-                if (window.refreshTransferRosterIfOpen) window.refreshTransferRosterIfOpen();
+            // Draw one card from a call/state pair. Shared by local AMI updates and
+            // the federation state feed so a remote card gets the same partner,
+            // duration and status text as a local one.
+            function applyCardCallState(extension, callData, isOnline) {
                 const card = document.getElementById('card-' + extension);
                 const badge = document.getElementById('badge-' + extension);
                 const status = document.getElementById('status-' + extension);
                 const partner = document.getElementById('partner-' + extension);
                 const timer = document.getElementById('timer-' + extension);
-                if (!card || !badge || !status || !partner || !timer) return;
+                if (!card || !badge || !status || !partner || !timer) return false;
 
-                const isOnline = !!localPeerStatus[extension];
                 const callState = callData?.state || 'Idle';
                 updateCardStateClass(extension, isOnline, callState);
 
@@ -1783,6 +1783,15 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
                     partner.classList.add('hidden');
                     timer.classList.add('hidden');
                 }
+                return true;
+            }
+
+            function handleCallUpdate(data) {
+                const { extension, callData } = data;
+                localCallStatus[extension] = callData;
+                if (window.refreshIntercomRosterIfOpen) window.refreshIntercomRosterIfOpen();
+                if (window.refreshTransferRosterIfOpen) window.refreshTransferRosterIfOpen();
+                applyCardCallState(extension, callData, !!localPeerStatus[extension]);
             }
 
             function launchSipUrl(url) {
@@ -2106,6 +2115,7 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
 
                     const isOnline = ext.status === 'online';
                     localPeerStatus[cardKey] = isOnline;
+                    localCallStatus[cardKey] = ext.activeCall || null;
 
                     const sipBadge = document.getElementById('sipBadge-' + cardKey);
                     const sipLabel = document.getElementById('sipLabel-' + cardKey);
@@ -2113,12 +2123,7 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
                         sipLabel.textContent = isOnline ? '<%= t.online %>' : '<%= t.offline %>';
                     }
 
-                    let callState = 'idle';
-                    if (ext.activeCall) {
-                        callState = ext.activeCall.state === 'In Call' ? 'incall' : 'ringing';
-                    }
-
-                    updateCardStateClass(cardKey, isOnline, callState);
+                    applyCardCallState(cardKey, ext.activeCall || null, isOnline);
                 });
             });
             <% } %>
