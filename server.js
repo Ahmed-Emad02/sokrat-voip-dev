@@ -12688,10 +12688,20 @@ app.get('/gsm-dongles', async (req, res) => {
     }
 });
 
+// A peer that is also a central would answer /api/gsm-dongles with its own
+// aggregated view, echoing the caller's dongles back (and growing on every
+// cache refresh). Federation-authenticated reads therefore always answer from
+// local inventory only.
+function federationReadScope(scope, isFederationRequest) {
+    if (!isFederationRequest) return scope;
+    const localSite = String((scope && scope.localSiteCode) || '10');
+    return { ...(scope || {}), mode: 'local', sites: [localSite], includeRemote: false };
+}
+
 // API Endpoint to fetch latest device status
 app.get('/api/gsm-dongles', async (req, res) => {
     try {
-        const scope = res.locals.federationScope;
+        const scope = federationReadScope(res.locals.federationScope, req.isFederationAuthenticated);
         const includeLocal = federationScopeIncludesLocal(scope);
         const [allowedDongles, enriched] = await Promise.all([
             getUserAllowedDongles(req),
@@ -12701,7 +12711,7 @@ app.get('/api/gsm-dongles', async (req, res) => {
             ? (allowedDongles !== null ? enriched.filter(d => isDeviceAllowedForDongles(d, allowedDongles)) : enriched)
             : [];
         // A user with no dongle grants must not trigger (or receive) peer reads.
-        const canReadPeers = !(Array.isArray(allowedDongles) && allowedDongles.length === 0);
+        const canReadPeers = !req.isFederationAuthenticated && !(Array.isArray(allowedDongles) && allowedDongles.length === 0);
         const live = await getFederationLiveDongleModel(req, scope, filteredDevices, { readPeers: canReadPeers });
         const devices = allowedDongles !== null
             ? live.devices.filter(device => isDeviceAllowedForDongles(device, allowedDongles))
@@ -16416,8 +16426,8 @@ app.get('/api/gsm-dongles/sms', async (req, res) => {
                 return allowedDongles.some(d => d.toLowerCase() === msgDongle);
             });
         }
-        const canReadPeers = !(Array.isArray(allowedDongles) && allowedDongles.length === 0);
-        const live = await getFederationLiveSms(req, res.locals.federationScope, inbox, { readPeers: canReadPeers });
+        const canReadPeers = !req.isFederationAuthenticated && !(Array.isArray(allowedDongles) && allowedDongles.length === 0);
+        const live = await getFederationLiveSms(req, federationReadScope(res.locals.federationScope, req.isFederationAuthenticated), inbox, { readPeers: canReadPeers });
         const messages = allowedDongles !== null
             ? live.messages.filter(msg => {
                 const msgDongle = String(msg.dongleId || '').toLowerCase().trim();
@@ -25543,12 +25553,21 @@ async function getFederationLiveDongleModel(req, scope, localDevices, options = 
         readPeers: options.readPeers !== false
     });
     const devices = [];
+    const seen = new Set();
+    const addUnique = (tagged) => {
+        const unique = tagged.filter(device => {
+            if (seen.has(device.fedKey)) return false;
+            seen.add(device.fedKey);
+            return true;
+        });
+        devices.push(...unique);
+        return unique.length;
+    };
     let localCount = 0;
     for (const node of nodes) {
         if (node.is_local) {
             const tagged = (localDevices || []).map(device => tagFederationDongleDevice(device, node));
-            localCount = tagged.length;
-            devices.push(...tagged);
+            localCount = addUnique(tagged);
             node.dongle_count = localCount;
             continue;
         }
@@ -25557,8 +25576,7 @@ async function getFederationLiveDongleModel(req, scope, localDevices, options = 
             ? read.data.devices
             : [];
         const tagged = remoteDevices.map(device => tagFederationDongleDevice(device, node));
-        node.dongle_count = tagged.length;
-        devices.push(...tagged);
+        node.dongle_count = addUnique(tagged);
     }
     return { localSite, nodes, devices };
 }

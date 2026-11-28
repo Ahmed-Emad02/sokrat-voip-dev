@@ -475,3 +475,17 @@ test('Live panel: every connected PBX is rendered regardless of the report scope
     assert.match(operator, /var includeLocalSite = true;/, 'Local extensions always render');
     assert.match(operator, /federationRemoteExtensions[^\n]*: \[\]/, 'Remote extensions always render on a central node');
 });
+
+test('Federated dongle reads return local inventory only and collapse duplicates', () => {
+    const src = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+    assert.match(src, /function federationReadScope\(scope, isFederationRequest\)/,
+        'federation-authenticated read scope helper must exist');
+    assert.match(src, /includeRemote: false/, 'federated reads must not recurse into peer aggregation');
+    assert.match(src, /const scope = federationReadScope\(res\.locals\.federationScope, req\.isFederationAuthenticated\)/,
+        'GSM device reads must be local-only when called by a peer');
+    assert.match(src, /const canReadPeers = !req\.isFederationAuthenticated/,
+        'a peer read must never trigger another peer read');
+    assert.match(src, /federationReadScope\(res\.locals\.federationScope, req\.isFederationAuthenticated\), inbox/,
+        'SMS reads must use the same local-only scope');
+    assert.match(src, /seen\.has\(device\.fedKey\)/, 'duplicate dongle rows must collapse by site-scoped key');
+});
