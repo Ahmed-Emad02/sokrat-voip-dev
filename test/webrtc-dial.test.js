@@ -242,3 +242,14 @@ test('pairing only treats extensions as FreePBX PJSIP when the devices table agr
     assert.match(source, /\.filter\(isFreepbxPjsip\)/, 'cleanup skips extensions FreePBX no longer defines as PJSIP');
     assert.match(source, /if \(isFreepbxPjsip\(ext\)\) \{\n\s+const requiredWebrtcParams/, 'a SIP extension gets its own line, not post-config params');
 });
+
+test('upgrader normalises legacy spy dialplans before ChanSpy', () => {
+    const upgrade = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'safe-upgrade.sh'), 'utf8');
+    assert.ok(upgrade.includes("for _spy_code in ('222', '223', '224')"),
+        'upgrader must patch every supervisor spy code');
+    const [execIf, cut] = SPY_NORMALISE('EXTEN:3');
+    assert.ok(upgrade.includes(execIf), 'upgrader must insert the active-leg override');
+    assert.ok(upgrade.includes(cut), 'upgrader must insert the dial-string cut');
+    assert.ok(upgrade.includes("ExecIf($[\"${CHANNELS(^PJSIP/${EXTEN:3}-)}\""),
+        'upgrader must detect an already-normalised block to stay idempotent');
+});

@@ -1640,6 +1640,26 @@ same => n(done),Hangup()
             count=1
         )
 
+    # Ensure supervisor spy codes resolve the live WebRTC/mobile leg. FreePBX
+    # stores a forked dial string as "SIP/<ext>&PJSIP/<ext>"; ChanSpy accepts
+    # one prefix, so prefer the active PJSIP channel and cut the list to its
+    # first entry. Existing installs upgraded from older releases only have
+    # the raw DEVICE dial string, so fix each code independently and skip any
+    # code that already carries the normalisation.
+    for _spy_code in ('222', '223', '224'):
+        _spy_need = ('exten => _' + _spy_code + 'X.,n,GotoIf($["${spyee_dial}" = ""]?fallback)')
+        if _spy_need not in content:
+            continue
+        if ('exten => _' + _spy_code + 'X.,n,ExecIf($["${CHANNELS(^PJSIP/${EXTEN:3}-)}"') in content:
+            continue
+        content = content.replace(
+            _spy_need,
+            _spy_need + '\n'
+            + 'exten => _' + _spy_code + 'X.,n,ExecIf($["${CHANNELS(^PJSIP/${EXTEN:3}-)}" != ""]?Set(spyee_dial=PJSIP/${EXTEN:3}))\n'
+            + 'exten => _' + _spy_code + 'X.,n,Set(spyee_dial=${CUT(spyee_dial,&,1)})',
+            1
+        )
+
     # Ensure ChanSpy volume boost for supervisor listening (qv(2))
     content = re.sub(r'ChanSpy\(([^,)]+),q\)', r'ChanSpy(\1,qv(2))', content)
     content = re.sub(r'ChanSpy\(([^,)]+),qw\)', r'ChanSpy(\1,qwv(2))', content)
