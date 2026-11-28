@@ -201,7 +201,7 @@ test('PUT extension route validates jitter mode before writes and persists adapt
         tables: { employeeExtras: 'employee_extras' },
         WEBRTC_SIP_OPTIONS: [], WEBRTC_SIP_OPTION_KEYS: [],
         agentStatusService: { isPjsipTech: () => false },
-        withWebrtcFork: require('../lib/webrtc-dial').withWebrtcFork,
+        syncWebrtcLineDevices: async () => [],
         applyVoicemailState: () => {},
         updatePjsipCustomConfig: () => {},
         reloadPjsip: () => {},

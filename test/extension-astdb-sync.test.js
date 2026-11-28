@@ -129,6 +129,12 @@ function fixture(native = null) {
         execPromise: async () => {},
         applyVoicemailState: () => {}, updateVoicemailConf: () => {},
         updatePjsipCustomConfig: () => {}, reloadPjsip: () => {},
+        // No CRM/mobile WebRTC lines in this fixture: keep the host's real
+        // pjsip_custom.conf out of the result.
+        hasWebrtcEndpoint: () => false,
+        webrtcDeviceList: require('../lib/webrtc-dial').deviceList,
+        webrtcDeviceCommands: require('../lib/webrtc-dial').webrtcDeviceCommands,
+        syncWebrtcLineDevices: async () => [],
         reloadPbxConfigPromise: async () => {}, syncExtensionCallPickupGroups: async () => {},
         io: { emit: () => {} }, sipPresence: {}, pjsipPresence: {}, pendingOffline: {},
     });

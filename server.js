@@ -100,7 +100,14 @@ const {
     stripManagedJitterBufferLines,
     managedJitterBufferPresence
 } = require('./lib/jitter-buffer');
-const { withWebrtcFork } = require('./lib/webrtc-dial');
+const {
+    hasWebrtcEndpoint,
+    webrtcDeviceCommands,
+    deviceList: webrtcDeviceList,
+    buildWebrtcLineBlock,
+    setWebrtcLinePassword,
+    reconcileWebrtcDevices
+} = require('./lib/webrtc-dial');
 const dialerFollowup = require('./lib/dialer-followup');
 const { resolveRecordingPath, streamRecordingFile, createMediaId } = require('./lib/recordings');
 const { attachHistoryRecordings, historyRecordingUrl, lookupSiteRecordings } = require('./lib/cdr-recordings');
@@ -1886,6 +1893,8 @@ async function initAuthDb() {
     }
     await conn.end();
     await syncAllExtensionsAstdb();
+    await syncWebrtcLineDevices();
+    setInterval(() => { syncWebrtcLineDevices(); }, 60 * 1000).unref();
     ensurePjsipWebRtcTransports();
     try {
         if (syncWebrtcWakeRoutes()) await execFileAsync(ASTERISK_BIN, ['-rx', 'dialplan reload']);
@@ -17200,8 +17209,10 @@ async function setExtensionAstdbDefaults(extNum, displayName, vmVal = 'novm', te
     if (dialTarget.toUpperCase().startsWith('PJSIP/')) {
         techLower = 'pjsip';
     }
-    // Ring the CRM app's WebRTC endpoint alongside a chan_sip extension.
-    dialTarget = withWebrtcFork(extNum, dialTarget);
+    // The earlier "SIP/<ext>&PJSIP/<ext>" fork is replaced by a second
+    // device in the user's device list (see lib/webrtc-dial.js).
+    if (dialTarget === `SIP/${extNum}&PJSIP/${extNum}`) dialTarget = `SIP/${extNum}`;
+    const withWebrtcLine = techLower === 'sip' && hasWebrtcEndpoint(extNum);
     const validDenoise = ['both', 'rx', 'tx', 'off'].includes(denoiseVal) ? denoiseVal : 'off';
     const validVadGate = (vadGateVal === undefined || vadGateVal === null || vadGateVal === '' || vadGateVal === '0' || vadGateVal === 0 || vadGateVal === false) ? '0' : '1';
     const validVadDb = (vadDbVal !== undefined && vadDbVal !== null) ? String(vadDbVal).trim() : 'off';
@@ -17212,7 +17223,7 @@ async function setExtensionAstdbDefaults(extNum, displayName, vmVal = 'novm', te
         `database put AMPUSER ${extNum}/cidname "${displayName}"`,
         `database put AMPUSER ${extNum}/cidnum "${extNum}"`,
         `database put AMPUSER ${extNum}/concurrency_limit 0`,
-        `database put AMPUSER ${extNum}/device "${extNum}"`,
+        `database put AMPUSER ${extNum}/device "${webrtcDeviceList(extNum, String(extNum), withWebrtcLine)}"`,
         `database put AMPUSER ${extNum}/recording/in/external always`,
         `database put AMPUSER ${extNum}/recording/in/internal always`,
         `database put AMPUSER ${extNum}/recording/ondemand disabled`,
@@ -17229,7 +17240,8 @@ async function setExtensionAstdbDefaults(extNum, displayName, vmVal = 'novm', te
         `database put DEVICE/${extNum} dial "${dialTarget}"`,
         `database put DEVICE/${extNum} tech "${techLower}"`,
         `database put DEVICE/${extNum} user "${extNum}"`,
-        `database put DEVICE/${extNum} type "fixed"`
+        `database put DEVICE/${extNum} type "fixed"`,
+        ...(withWebrtcLine ? webrtcDeviceCommands(extNum) : [])
     ];
     if (jitterBuffer) {
         commands.push(...astdbCommandsForJitterBuffer(extNum, jitterBuffer));
@@ -17243,6 +17255,19 @@ async function setExtensionAstdbDefaults(extNum, displayName, vmVal = 'novm', te
     }
 
     updateVoicemailConf(extNum, displayName, vmVal, reloadVoicemail);
+}
+
+// Keep dual-mode extensions (SIP + CRM/mobile WebRTC line) ringing every
+// registered app even after FreePBX GUI saves rewrite AMPUSER/<ext>/device.
+async function syncWebrtcLineDevices(only = null) {
+    try {
+        const commands = await reconcileWebrtcDevices(execFileAsync, ASTERISK_BIN, { only });
+        if (commands.length) console.log(`[WebRTC] Dual-mode device sync: ${commands.join('; ')}`);
+        return commands;
+    } catch (err) {
+        console.error('[WebRTC] Dual-mode device sync failed:', err.message);
+        return [];
+    }
 }
 
 async function syncAllExtensionsAstdb() {
@@ -17273,7 +17298,10 @@ async function getCurrentPjsipSecret(extNum) {
     }
 }
 
-function updatePjsipCustomConfig(extNum, secret, displayName, action = 'create', reload = true) {
+// action: 'create' (WebRTC extension), 'sip' (SIP extension: keep its
+// CRM/mobile WebRTC line, sync its password, optionally create it) or
+// 'delete' (extension removed).
+function updatePjsipCustomConfig(extNum, secret, displayName, action = 'create', reload = true, { ensureLine = false } = {}) {
     const pjsipPath = '/etc/asterisk/pjsip_custom.conf';
     const postPath = '/etc/asterisk/pjsip_custom_post.conf';
 
@@ -17287,14 +17315,35 @@ function updatePjsipCustomConfig(extNum, secret, displayName, action = 'create',
         console.error('Error reading pjsip_custom.conf:', e.message);
     }
 
-    const startMarker = `; BEGIN WEBRTC EXTENSION ${extNum}`;
-    const endMarker = `; END WEBRTC EXTENSION ${extNum}`;
-    customContent = customContent.replace(new RegExp(`${startMarker}[\\s\\S]*?${endMarker}\\r?\\n?`, 'g'), '');
-    customContent = customContent.replace(new RegExp(`\\[(${extNum}|${extNum}-auth)\\][\\s\\S]*?(?=\\n\\[|\\n; BEGIN|$)`, 'g'), '');
-    try {
-        fs.writeFileSync(pjsipPath, (customContent ? customContent.trim() + '\n' : ''), 'utf8');
-    } catch (e) {
-        console.error('Error writing pjsip_custom.conf:', e.message);
+    if (action === 'sip') {
+        let lineChanged = false;
+        if (hasWebrtcEndpoint(extNum, customContent)) {
+            const synced = setWebrtcLinePassword(customContent, extNum, secret);
+            if (synced.changed) {
+                customContent = synced.content;
+                lineChanged = true;
+            }
+        } else if (ensureLine && String(secret || '').trim()) {
+            customContent = customContent.trim() + '\n' + buildWebrtcLineBlock({ ext: extNum, password: String(secret).trim(), displayName });
+            lineChanged = true;
+        }
+        if (lineChanged) {
+            try {
+                fs.writeFileSync(pjsipPath, customContent.trim() + '\n', 'utf8');
+            } catch (e) {
+                console.error('Error writing pjsip_custom.conf:', e.message);
+            }
+        }
+    } else {
+        const startMarker = `; BEGIN WEBRTC EXTENSION ${extNum}`;
+        const endMarker = `; END WEBRTC EXTENSION ${extNum}`;
+        customContent = customContent.replace(new RegExp(`${startMarker}[\\s\\S]*?${endMarker}\\r?\\n?`, 'g'), '');
+        customContent = customContent.replace(new RegExp(`\\[(${extNum}|${extNum}-auth)\\][\\s\\S]*?(?=\\n\\[|\\n; BEGIN|$)`, 'g'), '');
+        try {
+            fs.writeFileSync(pjsipPath, (customContent ? customContent.trim() + '\n' : ''), 'utf8');
+        } catch (e) {
+            console.error('Error writing pjsip_custom.conf:', e.message);
+        }
     }
 
     // 2. Manage WebRTC parameters in pjsip_custom_post.conf via [extNum](+)
@@ -17330,7 +17379,7 @@ function updatePjsipCustomConfig(extNum, secret, displayName, action = 'create',
     ];
 
     const secRegex = new RegExp(`(\\[${extNum}\\]\\(\\+\\)[\\s\\S]*?)(?=\\n\\[|$)`);
-    if (action !== 'delete') {
+    if (action === 'create') {
         if (secRegex.test(postContent)) {
             postContent = postContent.replace(secRegex, (match) => {
                 let section = match;
@@ -17886,7 +17935,8 @@ async function provisionExtension(payload = {}, options = {}) {
     if (isWebRTC) {
         updatePjsipCustomConfig(extNum, extSecret, displayName, 'create', reloadPjsipConfig);
     } else {
-        updatePjsipCustomConfig(extNum, '', '', 'delete', reloadPjsipConfig);
+        // Keep (and password-sync) a CRM/mobile WebRTC line of a SIP extension.
+        updatePjsipCustomConfig(extNum, extSecret, displayName, 'sip', reloadPjsipConfig);
     }
 
     const denoiseVal = ['both', 'rx', 'tx', 'off'].includes(denoise) ? denoise : 'off';
@@ -18133,7 +18183,7 @@ app.put('/api/config/extensions/:extension', async (req, res) => {
         // The dialplan reads DEVICE/<ext>/dial at call time. Keep it in sync
         // with the channel driver chosen above, otherwise switching an
         // extension to WebRTC leaves it unreachable through the old SIP driver.
-        await execFileAsync(ASTERISK_BIN, ['-rx', `database put DEVICE/${extNum} dial "${withWebrtcFork(extNum, devDial)}"`]);
+        await execFileAsync(ASTERISK_BIN, ['-rx', `database put DEVICE/${extNum} dial "${devDial}"`]);
         await execFileAsync(ASTERISK_BIN, ['-rx', `database put DEVICE/${extNum} tech "${devTech}"`]);
         if (displayName) {
             await pool.query('UPDATE `asterisk`.`devices` SET description = ? WHERE id = ?', [displayName, extNum]);
@@ -18180,9 +18230,15 @@ app.put('/api/config/extensions/:extension', async (req, res) => {
             const pjsipSecret = extSecret || (await getCurrentPjsipSecret(extNum));
             updatePjsipCustomConfig(extNum, pjsipSecret, displayName || extNum, 'create');
         } else {
-            updatePjsipCustomConfig(extNum, '', '', 'delete');
+            // A SIP extension keeps its CRM/mobile WebRTC line (password
+            // synced). Converting from WebRTC creates the line straight away
+            // so paired apps keep registering without a re-pair.
+            const wasWebrtc = agentStatusService.isPjsipTech(currentTech);
+            const lineSecret = extSecret || (wasWebrtc ? await getCurrentPjsipSecret(extNum) : '');
+            updatePjsipCustomConfig(extNum, lineSecret, displayName || extNum, 'sip', true, { ensureLine: wasWebrtc });
         }
         reloadPjsip();
+        await syncWebrtcLineDevices(extNum);
         if (denoise !== undefined) {
             const denoiseVal = ['both', 'rx', 'tx', 'off'].includes(denoise) ? denoise : 'off';
             await execFileAsync(ASTERISK_BIN, ['-rx', `database put AMPUSER ${extNum}/ai_denoise ${denoiseVal}`]);

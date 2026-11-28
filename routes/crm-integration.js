@@ -27,7 +27,7 @@ const contactsStore = require('../lib/contacts');
 const agentStatusService = require('../lib/agent-status');
 const { getPhoneVariants, cleanPhoneString } = require('../lib/phone-normalization');
 const callLifecycle = require('../lib/call-events');
-const { ensureWebrtcDialFork } = require('../lib/webrtc-dial');
+const { buildWebrtcLineBlock, reconcileWebrtcDevices } = require('../lib/webrtc-dial');
 
 // Rate limiting map for pairing attempts (IP -> timestamps array)
 const pairingRateLimitMap = new Map();
@@ -1770,8 +1770,19 @@ results['pjsip_reload_out'] = (stdout || '') + (stderr || '');
                     let custC = fs.existsSync(custConfPath) ? fs.readFileSync(custConfPath, 'utf8') : '';
                     let postC = fs.existsSync(postConfPath) ? fs.readFileSync(postConfPath, 'utf8') : '';
 
-                    // 1. Clean up any duplicate extensions from pjsip_custom.conf that are already in pjsip_additional.conf
-                    const addExts = (addC.match(/^\[([0-9]{2,5})\]/gm) || []).map(s => s.replace(/[\[\]]/g, ''));
+                    // pjsip_additional.conf is regenerated only by the next
+                    // retrieve_conf, so right after a WebRTC -> SIP change it
+                    // still lists the extension. FreePBX's devices table is
+                    // updated synchronously; trust it when it is readable.
+                    let pjsipDevices = null;
+                    try {
+                        const [devRows] = await pool.query("SELECT id FROM `asterisk`.`devices` WHERE LOWER(tech) = 'pjsip'");
+                        pjsipDevices = new Set(devRows.map(r => String(r.id)));
+                    } catch (_) {}
+                    const isFreepbxPjsip = (e) => addC.includes(`[${e}]`) && (!pjsipDevices || pjsipDevices.has(String(e)));
+
+                    // 1. Clean up any duplicate extensions from pjsip_custom.conf that FreePBX now defines itself
+                    const addExts = (addC.match(/^\[([0-9]{2,5})\]/gm) || []).map(s => s.replace(/[\[\]]/g, '')).filter(isFreepbxPjsip);
                     let custModified = false;
                     for (const dExt of addExts) {
                         const mReg = new RegExp(`; BEGIN WEBRTC EXTENSION ${dExt}[\\s\\S]*?; END WEBRTC EXTENSION ${dExt}\\r?\\n?`, 'g');
@@ -1784,7 +1795,7 @@ results['pjsip_reload_out'] = (stdout || '') + (stderr || '');
                     }
 
                     // 2. If extension is already defined by FreePBX in pjsip_additional.conf, ensure WebRTC DTLS parameters are appended via (+) in pjsip_custom_post.conf
-                    if (addC.includes(`[${ext}]`)) {
+                    if (isFreepbxPjsip(ext)) {
                         const requiredWebrtcParams = [
                             'transport=transport-wss',
                             'webrtc=yes',
@@ -1827,9 +1838,7 @@ results['pjsip_reload_out'] = (stdout || '') + (stderr || '');
                         await execFileAsync(ASTERISK_BIN, ['-rx', 'pjsip reload']);
                     } else {
                         // 3. Extension is NOT in pjsip_additional.conf: provision it cleanly in pjsip_custom.conf
-                        const startMarker = `; BEGIN WEBRTC EXTENSION ${ext}`;
-                        const endMarker = `; END WEBRTC EXTENSION ${ext}`;
-                        const block = `\n${startMarker}\n[${ext}]\ntype = endpoint\ncontext = from-internal\ndisallow = all\nallow = opus,ulaw,alaw\ndtls_auto_generate_cert = yes\nwebrtc = yes\ndirect_media = no\nrtp_symmetric = yes\nmedia_encryption = dtls\ndtls_verify = fingerprint\ndtls_setup = actpass\nice_support = yes\nuse_avpf = yes\nrtcp_mux = yes\nforce_rport = yes\nrewrite_contact = yes\nrtp_timeout = 30\nrtp_timeout_hold = 60\nrtp_keepalive = 5\ntimers = yes\ntimers_min_se = 90\ntimers_sess_expires = 1800\nauth = ${ext}-auth\naors = ${ext}\ncallerid = ${displayName} <${ext}>\n\n[${ext}-auth]\ntype = auth\nauth_type = userpass\nusername = ${ext}\npassword = ${password}\n\n[${ext}]\ntype = aor\nmax_contacts = 10\nremove_existing = no\nremove_unavailable = yes\nqualify_frequency = 30\nqualify_timeout = 5\n${endMarker}\n`;
+                        const block = buildWebrtcLineBlock({ ext, password, displayName });
                         if (!custC.includes(`[${ext}-auth]`)) {
                             custC += block;
                             fs.writeFileSync(custConfPath, custC.trim() + '\n', 'utf8');
@@ -1839,12 +1848,13 @@ results['pjsip_reload_out'] = (stdout || '') + (stderr || '');
                 } catch (provErr) {
                     console.error('[CRM] Error auto-provisioning WebRTC PJSIP extension:', provErr.message);
                 }
-                // FreePBX dials DEVICE/<ext>/dial, which stays "SIP/<ext>" for
-                // chan_sip extensions; fork it so the CRM app rings too.
+                // A chan_sip extension rings its WebRTC line as a second
+                // FreePBX device (see lib/webrtc-dial.js); apply it now
+                // instead of waiting for the periodic sync.
                 try {
-                    await ensureWebrtcDialFork(ext, execFileAsync, ASTERISK_BIN);
-                } catch (forkErr) {
-                    console.error(`[CRM] Failed to fork dial string for ${ext}:`, forkErr.message);
+                    await reconcileWebrtcDevices(execFileAsync, ASTERISK_BIN, { only: ext });
+                } catch (syncErr) {
+                    console.error(`[CRM] Failed to sync WebRTC device for ${ext}:`, syncErr.message);
                 }
             }
             let policy = { auto_answer: 'user_choice', dnd: 'user_choice', disable_outbound_ringing_cancel: 0 };
