@@ -100,6 +100,7 @@ const {
     stripManagedJitterBufferLines,
     managedJitterBufferPresence
 } = require('./lib/jitter-buffer');
+const { withWebrtcFork } = require('./lib/webrtc-dial');
 const dialerFollowup = require('./lib/dialer-followup');
 const { resolveRecordingPath, streamRecordingFile, createMediaId } = require('./lib/recordings');
 const gitHistoryService = require('./backend/git-history-service');
@@ -17354,6 +17355,8 @@ async function setExtensionAstdbDefaults(extNum, displayName, vmVal = 'novm', te
     if (dialTarget.toUpperCase().startsWith('PJSIP/')) {
         techLower = 'pjsip';
     }
+    // Ring the CRM app's WebRTC endpoint alongside a chan_sip extension.
+    dialTarget = withWebrtcFork(extNum, dialTarget);
     const validDenoise = ['both', 'rx', 'tx', 'off'].includes(denoiseVal) ? denoiseVal : 'off';
     const validVadGate = (vadGateVal === undefined || vadGateVal === null || vadGateVal === '' || vadGateVal === '0' || vadGateVal === 0 || vadGateVal === false) ? '0' : '1';
     const validVadDb = (vadDbVal !== undefined && vadDbVal !== null) ? String(vadDbVal).trim() : 'off';
@@ -18285,7 +18288,7 @@ app.put('/api/config/extensions/:extension', async (req, res) => {
         // The dialplan reads DEVICE/<ext>/dial at call time. Keep it in sync
         // with the channel driver chosen above, otherwise switching an
         // extension to WebRTC leaves it unreachable through the old SIP driver.
-        await execFileAsync(ASTERISK_BIN, ['-rx', `database put DEVICE/${extNum} dial "${devDial}"`]);
+        await execFileAsync(ASTERISK_BIN, ['-rx', `database put DEVICE/${extNum} dial "${withWebrtcFork(extNum, devDial)}"`]);
         await execFileAsync(ASTERISK_BIN, ['-rx', `database put DEVICE/${extNum} tech "${devTech}"`]);
         if (displayName) {
             await pool.query('UPDATE `asterisk`.`devices` SET description = ? WHERE id = ?', [displayName, extNum]);

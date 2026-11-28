@@ -27,6 +27,7 @@ const contactsStore = require('../lib/contacts');
 const agentStatusService = require('../lib/agent-status');
 const { getPhoneVariants, cleanPhoneString } = require('../lib/phone-normalization');
 const callLifecycle = require('../lib/call-events');
+const { ensureWebrtcDialFork } = require('../lib/webrtc-dial');
 
 // Rate limiting map for pairing attempts (IP -> timestamps array)
 const pairingRateLimitMap = new Map();
@@ -1837,6 +1838,13 @@ results['pjsip_reload_out'] = (stdout || '') + (stderr || '');
                     }
                 } catch (provErr) {
                     console.error('[CRM] Error auto-provisioning WebRTC PJSIP extension:', provErr.message);
+                }
+                // FreePBX dials DEVICE/<ext>/dial, which stays "SIP/<ext>" for
+                // chan_sip extensions; fork it so the CRM app rings too.
+                try {
+                    await ensureWebrtcDialFork(ext, execFileAsync, ASTERISK_BIN);
+                } catch (forkErr) {
+                    console.error(`[CRM] Failed to fork dial string for ${ext}:`, forkErr.message);
                 }
             }
             let policy = { auto_answer: 'user_choice', dnd: 'user_choice', disable_outbound_ringing_cancel: 0 };
