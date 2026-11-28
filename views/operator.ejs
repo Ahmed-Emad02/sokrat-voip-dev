@@ -2105,8 +2105,24 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
             };
 
             <% if (typeof federationCentral !== 'undefined' && federationCentral) { %>
+            let remoteActiveCards = new Set();
+            let remoteCallExpiry;
+
+            function clearRemoteCall(cardKey) {
+                localCallStatus[cardKey] = null;
+                applyCardCallState(cardKey, null, !!localPeerStatus[cardKey]);
+            }
+
+            function expireRemoteCalls() {
+                clearTimeout(remoteCallExpiry);
+                for (const cardKey of remoteActiveCards) clearRemoteCall(cardKey);
+                remoteActiveCards.clear();
+            }
+
+            socket.on('disconnect', expireRemoteCalls);
             socket.on('operator:federation_state', (fedState) => {
                 if (!fedState || !Array.isArray(fedState.extensions)) return;
+                const nextActiveCards = new Set();
                 fedState.extensions.forEach(ext => {
                     if (ext.isLocal) return;
                     const cardKey = ext.siteCode + '_' + ext.extension;
@@ -2116,6 +2132,7 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
                     const isOnline = ext.status === 'online';
                     localPeerStatus[cardKey] = isOnline;
                     localCallStatus[cardKey] = ext.activeCall || null;
+                    if (ext.activeCall) nextActiveCards.add(cardKey);
 
                     const sipBadge = document.getElementById('sipBadge-' + cardKey);
                     const sipLabel = document.getElementById('sipLabel-' + cardKey);
@@ -2125,6 +2142,15 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
 
                     applyCardCallState(cardKey, ext.activeCall || null, isOnline);
                 });
+
+                // This is a full snapshot, not a delta: an omitted extension
+                // does not get to keep its previous call running on screen.
+                for (const cardKey of remoteActiveCards) {
+                    if (!nextActiveCards.has(cardKey) && localCallStatus[cardKey]) clearRemoteCall(cardKey);
+                }
+                remoteActiveCards = nextActiveCards;
+                clearTimeout(remoteCallExpiry);
+                if (remoteActiveCards.size) remoteCallExpiry = setTimeout(expireRemoteCalls, 30000);
             });
             <% } %>
         });

@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { parseCallStateLines } = require('../lib/call-state');
+const { parseCallStateLines, readEndpointCallSnapshot } = require('../lib/call-state');
 
 const caller = (target, uniqueId = '1794062878.41628') =>
     `PJSIP/103-00000088!macro-dialout-trunk!s!35!Ring!Dial!dongle/i:354300023801570/${target},300,Tr!103!!!3!0!!${uniqueId}`;
@@ -69,4 +69,31 @@ test('ignores another extension and malformed input', () => {
         callerChannel: null,
         trunkChannel: null,
     });
+});
+
+test('a surviving federation Local leg does not keep the ended endpoint call active', () => {
+    const previous = { 103: { channel: 'PJSIP/103-00000088', state: 'In Call', start: 1000 } };
+    const snapshot = readEndpointCallSnapshot([
+        'Local/103@peer_20-00000001;2!peer_20!103!4!Up!Dial!IAX2/fed_out_site20/103!103!!!3!30!!55.2',
+        'IAX2/fed_out_site20-8058!peer_20!103!4!Up!AppDial!(Outgoing Line)!103!!!3!30!!55.3',
+        'Asterisk ending (0).'
+    ].join('\n'), previous, 31000);
+    assert.deepEqual([...snapshot.keys()], []);
+});
+
+test('reconciliation can replace a vanished channel with the new ringing leg for the same extension', () => {
+    const previous = {
+        112: { channel: 'PJSIP/112-00000088', state: 'In Call', start: 12000, partner: '101' }
+    };
+    const row = local('112').replace('!112!!!3!0!!', '!117!!!3!2!!');
+    const snapshot = readEndpointCallSnapshot(row, previous, 50000);
+    assert.deepEqual(snapshot.get('112'), {
+        channel: 'PJSIP/112-00000090', state: 'Ringing', partner: '117', start: 48000
+    });
+});
+
+test('reconciliation distinguishes a failed CLI read from a valid empty PBX', () => {
+    assert.equal(readEndpointCallSnapshot('', {}, 50000), null);
+    assert.equal(readEndpointCallSnapshot('No such command\nAsterisk ending (0).', {}, 50000), null);
+    assert.equal(readEndpointCallSnapshot('Asterisk ending (0).\n', {}, 50000).size, 0);
 });

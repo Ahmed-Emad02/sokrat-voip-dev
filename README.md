@@ -235,6 +235,8 @@ Sokrat VoIP features an enterprise-grade REST and Telephony API with **259 docum
 * 🌐 **Multi-Site Federation**: Inter-branch clustering, IAX2 trunking, distributed GSM pooling.
 * 🤖 **AI Speech-to-Text (STT)**: Call & voicemail automated transcription (Whisper, Vosk, Google).
 
+On a central PBX, the Live Panel refreshes call state independently of report and inventory sync. If live updates stop, remote call timers clear rather than continuing from an old snapshot. Federated Call History looks for recordings on linked legs from the PBX that owns them; a missing playback link on one leg does not necessarily mean the call was not captured.
+
 👉 **[Read the Complete API Documentation (API_DOCUMENTATION.md)](API_DOCUMENTATION.md)**
 
 👉 **[Read the Inbound Call Webhook Integration Guide (WEBHOOK_INTEGRATION.md)](WEBHOOK_INTEGRATION.md)** — step-by-step guide for CRM developers receiving real-time call notifications.

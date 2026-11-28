@@ -10,7 +10,7 @@ const serverSrc = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
 
 function loadServerHelpers() {
     const f1_start = serverSrc.indexOf('function getExtensionFromChannel(');
-    const f1_end = serverSrc.indexOf('\nfunction getEndpointExtensionFromChannel(');
+    const f1_end = serverSrc.indexOf('\n}', f1_start) + 2;
     const f1 = serverSrc.slice(f1_start, f1_end);
 
     const f2_start = serverSrc.indexOf('function resolvePhoneName(');

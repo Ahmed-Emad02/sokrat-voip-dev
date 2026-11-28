@@ -225,6 +225,72 @@ test('Federation Hub: Multi-Node state engine partitions memory by composite key
     hub.stopPolling();
 });
 
+test('a hung-up call clears on the next federation snapshot while CDR sync is pending', { timeout: 3000 }, async t => {
+    const http = require('node:http');
+    const previousAllowHttp = process.env.SOKRAT_FEDERATION_ALLOW_HTTP;
+    process.env.SOKRAT_FEDERATION_ALLOW_HTTP = '1';
+    const cdrStarted = Promise.withResolvers();
+    const cdrFinished = Promise.withResolvers();
+    const activeCall = { state: 'In Call', partner: '102', start: 1000 };
+    let peerCalls = { 101: activeCall };
+    let pendingCdrResponse;
+    const peerApi = http.createServer((req, res) => {
+        res.setHeader('Content-Type', 'application/json');
+        if (req.url === '/api/federation/v1/live') {
+            res.end(JSON.stringify({ peerStatus: { 101: true }, activeCalls: peerCalls }));
+        } else if (req.url.startsWith('/api/federation/v1/cdr?')) {
+            pendingCdrResponse = res;
+            cdrStarted.resolve();
+        } else {
+            res.writeHead(404).end('{}');
+        }
+    });
+    t.after(async () => {
+        peerApi.closeAllConnections();
+        await new Promise(resolve => peerApi.close(resolve));
+        if (previousAllowHttp === undefined) delete process.env.SOKRAT_FEDERATION_ALLOW_HTTP;
+        else process.env.SOKRAT_FEDERATION_ALLOW_HTTP = previousAllowHttp;
+    });
+    await new Promise(resolve => peerApi.listen(0, '127.0.0.1', resolve));
+
+    const snapshots = [];
+    const hub = new FederationHub({
+        pool: {
+            async query(sql, params) {
+                if (sql.includes('SELECT native_extension')) {
+                    return [[{ native_extension: '101', display_name: 'Remote 101' }]];
+                }
+                if (sql.includes('INSERT INTO') && sql.includes('sokrat_federation_sync_state') &&
+                    params?.[1] === 'cdr' && ['ok', 'error'].includes(params?.[2])) {
+                    cdrFinished.resolve();
+                }
+                return [[]];
+            }
+        },
+        io: { emit: (event, data) => { if (event === 'operator:federation_state') snapshots.push(data); } },
+        decryptFn: () => 'test-key',
+        getLocalLiveStateFn: async () => ({ extensions: [{ extension: '101', status: 'online' }], activeCalls: { 101: activeCall } })
+    });
+    hub.peersMap.set(8242, { id: 8242, site_code: '20', api_base_url: `http://127.0.0.1:${peerApi.address().port}` });
+    hub.lastInventorySync.set(8242, Date.now());
+
+    try {
+        await hub.aggregateAllNodes();
+        await cdrStarted.promise;
+        assert.deepEqual(snapshots[0].extensions.find(ext => ext.compositeKey === '20:101').activeCall, activeCall);
+        peerCalls = {};
+        await hub.aggregateAllNodes();
+        const calls = new Map(snapshots[1].extensions.map(ext => [ext.compositeKey, ext.activeCall]));
+        assert.equal(calls.get('20:101'), null);
+        assert.deepEqual(calls.get('10:101'), activeCall);
+    } finally {
+        if (pendingCdrResponse) {
+            pendingCdrResponse.end('{"rows":[]}');
+            await cdrFinished.promise;
+        }
+    }
+});
+
 test('Federation Bootstrap: lib/federation-bootstrap.js exports core functions and resolves system binaries', () => {
     const bootstrap = require('../lib/federation-bootstrap');
     assert.equal(typeof bootstrap.bootstrapPeer, 'function', 'bootstrapPeer must be exported');

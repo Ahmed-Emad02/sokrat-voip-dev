@@ -50,7 +50,7 @@ const { createDongleSlotsRouter } = require('./routes/dongle-slots');
 const dongleGroupsConfig = require('./lib/dongle-groups');
 const createExtensionContactsRouter = require('./routes/extension-contacts');
 const { requireExtensionSignature } = require('./lib/extension-auth');
-const { parseCallStateLines } = require('./lib/call-state');
+const { parseCallStateLines, getEndpointExtensionFromChannel, readEndpointCallSnapshot } = require('./lib/call-state');
 const {
     findDongle,
     evaluateRestartHealth,
@@ -103,6 +103,8 @@ const {
 const { withWebrtcFork } = require('./lib/webrtc-dial');
 const dialerFollowup = require('./lib/dialer-followup');
 const { resolveRecordingPath, streamRecordingFile, createMediaId } = require('./lib/recordings');
+const { attachHistoryRecordings, historyRecordingUrl, lookupSiteRecordings } = require('./lib/cdr-recordings');
+const { canAccessHistoryAudio, LOOKUP_PATH: HISTORY_RECORDING_LOOKUP, registerHistoryRecordingRoutes } = require('./lib/cdr-recording-routes');
 const gitHistoryService = require('./backend/git-history-service');
 const {
     initApiKeyTables,
@@ -3994,12 +3996,6 @@ function getExtensionFromChannel(channelName) {
     if (m) return m[1];
     return null;
 }
-function getEndpointExtensionFromChannel(channelName) {
-    if (!channelName) return null;
-    let m = String(channelName).match(/^(?:SIP|PJSIP|IAX2)\/(\d{2,5})(?:[-@:;]|$)/i);
-    if (m) return m[1];
-    return null;
-}
 let amiClient = null;
 
 // --- AUTO-DETECT DONGLE IMEI/SIM & CONFIGURE TRUNKS ---
@@ -4058,6 +4054,7 @@ async function detectDonglesAndSetTrunkCID() {
 // --- ASTERISK AMI REAL-TIME MONITORING ---
 function connectAMI() {
     activeCalls = {};
+    liveCallExtensions = new Set();
     sipPresence = {};
     pjsipPresence = {};
     iaxPresence = {};
@@ -4418,7 +4415,7 @@ function connectAMI() {
                     fireInboundCallWebhook(event.CallerIDNum, calledNum, inboundDongleId);
                 }
 
-                let exten = getExtensionFromChannel(event.Channel);
+                let exten = getEndpointExtensionFromChannel(event.Channel);
                 if (exten) {
                     let partner = 'Connecting...';
                     if (event.CallerIDNum && event.CallerIDNum !== exten) {
@@ -4442,7 +4439,7 @@ function connectAMI() {
 
             // State updates for existing calls — update partner and preserve start time
             if (event.Event === 'Newstate') {
-                let exten = getExtensionFromChannel(event.Channel);
+                let exten = getEndpointExtensionFromChannel(event.Channel);
                 if (exten) {
                     let desc = String(event.ChannelStateDesc || event.State || '').toLowerCase();
                     let stateNum = String(event.ChannelState || '');
@@ -4465,14 +4462,6 @@ function connectAMI() {
                     }
                     activeCalls[exten] = { state: calculatedState, partner, start, channel: event.Channel || existing?.channel };
 
-                    if (isUp && partner && partner !== 'Connecting...' && activeCalls[partner]) {
-                        activeCalls[partner].state = 'In Call';
-                        // The partner side has to show the same duration, so it
-                        // needs the same start time and its own update.
-                        if (!activeCalls[partner].start) activeCalls[partner].start = start;
-                        io.emit('callUpdate', { extension: partner, callData: activeCalls[partner] });
-                    }
-
                     notifyCrmLiveBroadcaster();
                     io.emit('callUpdate', { extension: exten, callData: activeCalls[exten] });
                     scheduleExtensionStatusTracking(exten);
@@ -4485,7 +4474,7 @@ function connectAMI() {
             if (event.Event === 'BridgeEnter' || event.Event === 'Bridge' || event.Event === 'Link') {
                 let channels = [event.Channel, event.Channel1, event.Channel2, event.DestinationChannel].filter(Boolean);
                 channels.forEach(ch => {
-                    let exten = getExtensionFromChannel(ch);
+                    let exten = getEndpointExtensionFromChannel(ch);
                     if (exten) {
                         let existing = activeCalls[exten];
                         let partner = existing?.partner || 'Connecting...';
@@ -4523,7 +4512,7 @@ function connectAMI() {
                             (event.Channel1 && call.channel === event.Channel1) ||
                             (event.Channel2 && call.channel === event.Channel2)) {
                             extsToClear.add(e);
-                        } else if (!call.channel && getExtensionFromChannel(eventChan) === e && event.Event === 'Hangup') {
+                        } else if (!call.channel && getEndpointExtensionFromChannel(eventChan) === e && event.Event === 'Hangup') {
                             extsToClear.add(e);
                         }
                     }
@@ -4563,85 +4552,47 @@ setInterval(() => {
 }, 60000);
 
 // Periodic reconciliation of active calls against Asterisk live channels (every 4 seconds)
+let activeCallReconciliationRunning = false;
 async function reconcileActiveCallsWithAsterisk() {
+    if (activeCallReconciliationRunning) return;
+    activeCallReconciliationRunning = true;
+    const tracked = activeCalls;
+    const before = { ...tracked };
     try {
-        const output = await execFileAsync(ASTERISK_BIN, ['-rx', 'core show channels concise']);
-        const liveLines = output.split('\n').filter(Boolean);
-        const liveExts = new Set();
-        const liveChans = new Set();
-        // The earliest start per extension - the channel duration is the
-        // authoritative age of the call.
-        const liveStarts = new Map();
+        const output = await execFileAsync(ASTERISK_BIN, ['-rx', 'core show channels concise'], { timeout: 3000 });
+        const snapshot = readEndpointCallSnapshot(output, before, Date.now());
+        if (!snapshot || tracked !== activeCalls) return;
 
-        for (const line of liveLines) {
-            const parts = line.split('!');
-            const chan = parts[0] || '';
-            if (chan) liveChans.add(chan);
-            const ext = getExtensionFromChannel(chan);
-            if (ext) {
-                liveExts.add(ext);
-                const durationSec = parseInt(parts[11], 10) || 0;
-                if (durationSec > 0) {
-                    const startTs = Date.now() - (durationSec * 1000);
-                    const known = liveStarts.get(ext);
-                    if (known === undefined || startTs < known) liveStarts.set(ext, startTs);
-                }
-                // Automatically discover ongoing calls not yet in activeCalls (e.g. across server restart)
-                if (!activeCalls[ext]) {
-                    const stateDesc = parts[4] || '';
-                    const isUp = stateDesc.toLowerCase() === 'up';
-                    let partner = 'Connecting...';
-                    if (parts[7] && parts[7] !== ext && parts[7] !== '(None)') {
-                        partner = parts[7];
-                    } else if (parts[2] && parts[2] !== ext && parts[2] !== 's' && parts[2].length >= 3) {
-                        partner = parts[2];
-                    }
-                    // `core show channels concise` field 11 is the channel
-                    // DURATION - field 10 is a constant. Reading the wrong
-                    // field made every re-discovered call look 3 seconds old.
-                    const durationSec = parseInt(parts[11], 10) || 0;
-                    const startTs = Date.now() - (durationSec * 1000);
-                    activeCalls[ext] = {
-                        state: isUp ? 'In Call' : 'Ringing',
-                        partner: partner,
-                        start: startTs,
-                        channel: chan
-                    };
-                    notifyCrmLiveBroadcaster();
-                    io.emit('callUpdate', { extension: ext, callData: activeCalls[ext] });
-                }
+        liveCallExtensions = new Set(snapshot.keys());
+        let changed = false;
+        const publish = (extension, callData) => {
+            changed = true;
+            io.emit('callUpdate', { extension, callData });
+            scheduleExtensionStatusTracking(extension);
+        };
+        for (const [ext, next] of snapshot) {
+            const current = tracked[ext];
+            // An AMI event during the CLI read is newer than this snapshot.
+            if (current !== before[ext]) continue;
+            if (!current || current.channel !== next.channel || current.state !== next.state ||
+                current.start !== next.start || current.partner !== next.partner) {
+                tracked[ext] = next;
+                publish(ext, next);
             }
         }
-
-        // A call entry can be recreated (after a status flap) with a fresh
-        // start time, which made the live panel timer jump back to zero on a
-        // call that had been running for hours. The channel duration is the
-        // truth, so correct any entry that drifted.
-        liveCallExtensions = liveExts;
-        for (const [ext, startTs] of liveStarts) {
-            const call = activeCalls[ext];
-            if (!call) continue;
-            if (Math.abs((call.start || 0) - startTs) > 5000) {
-                call.start = startTs;
-                notifyCrmLiveBroadcaster();
-                io.emit('callUpdate', { extension: ext, callData: call });
-            }
+        for (const ext of Object.keys(before)) {
+            if (tracked[ext] !== before[ext] || snapshot.has(ext)) continue;
+            delete tracked[ext];
+            publish(ext, null);
+            scheduleCampOnCheck(ext);
         }
-
-        const activeExts = Object.keys(activeCalls);
-        for (const ext of activeExts) {
-            const call = activeCalls[ext];
-            const storedChan = call?.channel;
-            const isChanLive = storedChan ? liveChans.has(storedChan) : false;
-            const isExtLive = liveExts.has(ext);
-
-            if (!isChanLive && !isExtLive) {
-                delete activeCalls[ext];
-                notifyCrmLiveBroadcaster(); io.emit('callUpdate', { extension: ext, callData: null });
-            }
-        }
+        if (changed) notifyCrmLiveBroadcaster();
         broadcastTrunkStatus();
-    } catch (_) {}
+    } catch (_) {
+        // Keep the last valid state on CLI failure; the next snapshot retries.
+    } finally {
+        activeCallReconciliationRunning = false;
+    }
 }
 setInterval(reconcileActiveCallsWithAsterisk, 4000);
 setInterval(broadcastTrunkStatus, 2000);
@@ -8207,7 +8158,8 @@ app.get('/cdr', async (req, res) => {
         let countParams = [startDate, endDate, ...(tenantAccountcode ? [tenantAccountcode] : []), ...cdrSource.nodeFilterParams];
 
         let query = `
-            SELECT c.calldate, c.src, c.dst, c.dcontext, c.lastdata, c.duration, c.billsec, ${CDR_DISPOSITION_SQL} as disposition, c.uniqueid, c.recordingfile, c.channel, c.dstchannel, c.did, c.userfield,
+            SELECT c.calldate, c.src, c.dst, c.dcontext, c.lastdata, c.duration, c.billsec, ${CDR_DISPOSITION_SQL} as disposition, c.uniqueid, c.linkedid, c.sequence, c.recordingfile, c.channel, c.dstchannel, c.did, c.userfield,
+            ${cdrSource.isUnion ? 'c.global_call_id' : 'NULL'} AS global_call_id,
             COALESCE(u.name, NULLIF(TRIM(c.cnam), ''), 'No Name') as src_name,
             COALESCE(u_dst.name, 'No Name') as dst_name${nodeColumns},
             (stt.uniqueid IS NOT NULL) as has_transcript, stt.status as stt_status, stt.duration_sec as stt_duration, stt.language as stt_lang,
@@ -8314,37 +8266,26 @@ app.get('/cdr', async (req, res) => {
             rgRows.forEach(r => ringGroupSet.add(String(r.grpnum)));
         } catch (_) {}
 
-        // Sokrat Universal Recording: resolve recordingfile from linked legs for transferred/split calls
-        const rowsMissingRec = rows.filter(r => (!r.recordingfile || !r.recordingfile.trim()) && (r.uniqueid || r.linkedid));
-        if (rowsMissingRec.length > 0) {
-            try {
-                const idsToCheck = [...new Set(rowsMissingRec.flatMap(r => [r.uniqueid, r.linkedid].filter(Boolean)))];
-                if (idsToCheck.length > 0) {
-                    const [recLegs] = await pool.query(
-                        `SELECT uniqueid, linkedid, recordingfile FROM \`asteriskcdrdb\`.\`cdr\`
-                         WHERE (uniqueid IN (?) OR linkedid IN (?))
-                           AND recordingfile IS NOT NULL AND recordingfile != ''
-                         ORDER BY billsec DESC, calldate DESC`,
-                        [idsToCheck, idsToCheck]
-                    );
-                    const recMap = new Map();
-                    recLegs.forEach(rl => {
-                        const rec = rl.recordingfile ? rl.recordingfile.trim() : '';
-                        if (rec) {
-                            if (rl.linkedid && !recMap.has(rl.linkedid)) recMap.set(rl.linkedid, rec);
-                            if (rl.uniqueid && !recMap.has(rl.uniqueid)) recMap.set(rl.uniqueid, rec);
-                        }
+        if (canAccessHistoryAudio(req, isSuperAdmin)) {
+            const scope = res.locals.federationScope;
+            const localSite = String(scope?.localSiteCode || '10');
+            const peers = cdrSource.isUnion && rows.some(row => row.disposition === 'ANSWERED')
+                ? await getFederationScopePeerRows(scope) : [];
+            const peersBySite = new Map(peers.map(peer => [String(peer.site_code), peer]));
+            const sites = cdrSource.sites.filter(site => site === localSite || peersBySite.has(site));
+            const visibility = { accountcode: tenantAccountcode, extensions: scopedExts };
+            await attachHistoryRecordings(rows, sites, localSite, async (site, keys) => {
+                try {
+                    if (site === localSite) return await lookupSiteRecordings(pool, tables.cdr, keys, visibility);
+                    const result = await federationRequest(peersBySite.get(site), HISTORY_RECORDING_LOOKUP, {
+                        method: 'POST', body: { keys, visibility }, localSiteCode: localSite, decryptFn: decrypt
                     });
-                    rows.forEach(r => {
-                        if (!r.recordingfile || !r.recordingfile.trim()) {
-                            const found = (r.linkedid && recMap.get(r.linkedid)) || (r.uniqueid && recMap.get(r.uniqueid));
-                            if (found) {
-                                r.recordingfile = found;
-                            }
-                        }
-                    });
+                    return Array.isArray(result.recordings) ? result.recordings : [];
+                } catch (error) {
+                    console.warn(`[CDR] Recording lookup unavailable on site ${site}:`, error.message);
+                    return [];
                 }
-            } catch (_) {}
+            });
         }
 
         let extMap = new Map();
@@ -8358,6 +8299,8 @@ app.get('/cdr', async (req, res) => {
         const formattedRows = rows.map(row => {
             return {
                 ...row,
+                recordingUrl: row.recording ? historyRecordingUrl(row.recording) : null,
+                recordingIsLocal: row.recording?.site === String(res.locals.federationScope?.localSiteCode || '10'),
                 src_raw: row.src,
                 dst_raw: row.dst,
                 src: formatSource(row, extMap, contactMap),
@@ -16369,116 +16312,18 @@ app.post('/api/gsm-dongles/call-forwarding', async (req, res) => {
 });
 
 
-// --- ROUTE 5: AUDIO STREAM / DOWNLOAD PIPELINE ---
-app.get('/audio/:uniqueid', requireAuth, requireCdrReadAccess, async (req, res) => {
-    try {
-        const { uniqueid } = req.params;
-        const scopedExts = getUserScopedExtensions(req);
-        const [rows] = await pool.query(
-            `SELECT calldate, recordingfile, src, dst, cnum, channel, dstchannel FROM ${tables.cdr} WHERE uniqueid = ? AND recordingfile IS NOT NULL AND recordingfile != '' ORDER BY billsec DESC, calldate ASC LIMIT 1`,
-            [uniqueid]
-        );
-        if (!rows.length || !rows[0].recordingfile) return res.status(404).send("Audio not found.");
-
-        if (scopedExts && scopedExts.length > 0) {
-            const r = rows[0];
-            const channelMatches = (ch, ext) => {
-                if (!ch || !ext) return false;
-                const reg = new RegExp(`^[A-Za-z0-9_]+/(${ext.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})([^0-9]|$)`);
-                return reg.test(ch);
-            };
-            const isAuthorized = scopedExts.some(ext => {
-                return (String(r.src || '').trim() === ext) ||
-                       (String(r.dst || '').trim() === ext) ||
-                       (String(r.cnum || '').trim() === ext) ||
-                       channelMatches(r.channel, ext) ||
-                       channelMatches(r.dstchannel, ext);
-            });
-            if (!isAuthorized) {
-                return res.status(403).send("Forbidden: Access denied to call recording.");
-            }
-        }
-        const isDownload = req.query.download === '1';
-        const perms = req.session.userPermissions || [];
-        if (!isSuperAdmin(req)) {
-            if (isDownload && !perms.includes('cdr-audio-download')) {
-                return res.status(403).send("Forbidden: Missing cdr-audio-download permission.");
-            }
-            if (!isDownload && !perms.includes('cdr-audio-listen') && !perms.includes('call_history') && !perms.includes('cdr')) {
-                return res.status(403).send("Forbidden: Missing cdr-audio-listen permission.");
-            }
-        }
-
-        const callDate = moment(rows[0].calldate);
-        const rawFilename = rows[0].recordingfile;
-        const baseName = path.basename(rawFilename);
-
-        const possibleDirs = [
-            path.join(RECORDING_ROOT, callDate.format('YYYY'), callDate.format('MM'), callDate.format('DD')),
-            path.join(RECORDING_ROOT, callDate.format('YYYY/MM/DD')),
-            RECORDING_ROOT
-        ];
-
-        const ext = path.extname(baseName);
-        const nameWithoutExt = ext ? baseName.slice(0, -ext.length) : baseName;
-        const possibleExts = ext ? [ext, ext.toUpperCase(), ext.toLowerCase()] : ['.wav', '.WAV', '.gsm', '.mp3', '.ogg', '.sln'];
-
-        let targetPath = null;
-        for (const dir of possibleDirs) {
-            for (const e of possibleExts) {
-                const candidate = path.join(dir, nameWithoutExt + e);
-                if (fs.existsSync(candidate)) {
-                    targetPath = candidate;
-                    break;
-                }
-            }
-            if (targetPath) break;
-        }
-
-        if (!targetPath && fs.existsSync(rawFilename)) {
-            targetPath = rawFilename;
-        }
-
-        if (!targetPath) return res.status(404).send("Audio file missing on server.");
-
-        const stat = fs.statSync(targetPath);
-        const fileSize = stat.size;
-        const fileExt = path.extname(targetPath).toLowerCase();
-        const mimeTypes = { '.wav': 'audio/wav', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.wma': 'audio/x-ms-wma', '.sln': 'audio/wav', '.wav49': 'audio/wav', '.gsm': 'audio/x-gsm' };
-        const contentType = mimeTypes[fileExt] || 'audio/wav';
-
-        // const isDownload = req.query.download === '1';
-        if (isDownload) {
-            res.setHeader('Content-Type', contentType);
-            return res.download(targetPath, baseName, (err) => {
-                if (err && !res.headersSent) {
-                    res.status(500).send("Audio Download Error: " + err.message);
-                }
-            });
-        }
-        const range = req.headers.range;
-        if (range) {
-            const parts = range.replace(/bytes=/, '').split('-');
-            const start = parseInt(parts[0], 10);
-            const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-            const chunkSize = end - start + 1;
-            res.writeHead(206, {
-                'Content-Range': `bytes ${start}-${end}/${fileSize}`,
-                'Accept-Ranges': 'bytes',
-                'Content-Length': chunkSize,
-                'Content-Type': contentType
-            });
-            fs.createReadStream(targetPath, { start, end }).pipe(res);
-        } else {
-            res.writeHead(200, {
-                'Content-Length': fileSize,
-                'Content-Type': contentType,
-                'Accept-Ranges': 'bytes',
-                'Content-Disposition': `inline; filename="${baseName}"`
-            });
-            fs.createReadStream(targetPath).pipe(res);
-        }
-    } catch (err) { res.status(500).send("Audio Error: " + err.message); }
+registerHistoryRecordingRoutes(app, {
+    getPool: () => pool,
+    table: tables.cdr,
+    root: RECORDING_ROOT,
+    requireAuth,
+    requireCdrReadAccess,
+    isSuperAdmin,
+    getVisibility: req => ({ accountcode: getTenantAccountcode(req), extensions: getUserScopedExtensions(req) }),
+    getReportSites: scope => buildCdrSource(scope).sites,
+    getPeers: getFederationScopePeerRows,
+    federationRequest,
+    decrypt
 });
 
 const SMS_INBOX_FILE = path.join(__dirname, 'sms_inbox.json');
